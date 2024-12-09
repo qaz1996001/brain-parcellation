@@ -111,7 +111,7 @@ from scipy.ndimage import binary_dilation, generate_binary_structure, iterate_st
 # from scipy.ndimage.morphology import binary_dilation, generate_binary_structure, iterate_structure, \
 #     distance_transform_edt
 
-# select lib  pytorch or tensorflow
+# select lib  numpy or tensorflow
 try:
     import torch
 
