@@ -1,3 +1,27 @@
+import os
+import tensorflow as tf
+
+
+def set_gpu(gpu_id='0'):
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
+
+    physical_devices = tf.config.list_physical_devices('GPU')
+    for device in physical_devices:
+        print(device)
+
+    # select single GPU to use
+    try:  # allow GPU memory growth
+        tf.config.experimental.set_memory_growth(device=physical_devices[0], enable=True)
+    except:
+        pass
+
+    tf.config.set_visible_devices(devices=physical_devices[0], device_type='GPU')
+    logical_devices = tf.config.list_logical_devices('GPU')
+    print('Seleted logical_devices:', logical_devices)
+
+    tf.debugging.set_log_device_placement(True)
+    tf.config.set_soft_device_placement(enabled=True)
+
 import argparse
 import gc
 import os
@@ -21,6 +45,26 @@ class ProcessingStrategy:
 
 # Concrete Strategy for Processing with Template
 class TemplateProcessingStrategy(ProcessingStrategy):
+    # (
+    #     f'flirt -in "{synthseg33_file}" -ref "{template_synthseg33_file}" -out '
+    #     f'"{template_coregistration_file_name}" -dof 6 -cost corratio -omat '
+    #     f'"{template_coregistration_file_name}.mat" -interp nearestneighbour'
+    # )
+    flirt_cmd_base = (
+        'flirt -in "{0}" -ref "{1}" -out '
+        '"{2}" -dof 6 -cost corratio -omat '
+        '"{2}.mat" -interp nearestneighbour'
+    )
+    #             f'flirt -in "{cmb_file}" -ref "{template_synthseg33_file}" '
+    #             f'-out "{cmb_coregistration_file_name}" '
+    #             f'-init "{coregistration_file_name}.mat" '
+    #             f'-applyxfm -interp nearestneighbour'
+    flirt_cmd_apply = (
+        'flirt -in "{0}" -ref "{1}" '
+        '-out "{2}" -init "{3}.mat" '
+        '-applyxfm -interp nearestneighbour'
+    )
+
     def process(self, args, file_list: List[pathlib.Path], template_file_list: Optional[List[pathlib.Path]]):
         synth_seg = SynthSeg()
         depth_number = args.depth_number or 5
@@ -50,11 +94,9 @@ class TemplateProcessingStrategy(ProcessingStrategy):
 
             except Exception as e:
                 log_error(file, e)
-
             gc.collect()
-            break
 
-    def resample_and_segment(self, synth_seg, file, resample_file, synthseg_file, synthseg33_file):
+    def resample_and_segment(self, synth_seg:SynthSeg, file, resample_file, synthseg_file, synthseg33_file):
         resample_one(str(file), str(resample_file))
         synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
                       path_segmentations33=str(synthseg33_file))
@@ -79,21 +121,17 @@ class TemplateProcessingStrategy(ProcessingStrategy):
                           path_segmentations33=str(template_synthseg33_file))
 
             # Co-registration using FLIRT
-            template_synthseg33_basename = replace_suffix(template_synthseg33_file.name, '')
-            synthseg33_basename = replace_suffix(synthseg33_file.name, '')
-            template_coregistration_file_name = f'{template_synthseg33_basename}_from_{synthseg33_basename}'
+            template_synthseg33_basename : pathlib.Path = template_synthseg33_file.parent.joinpath(
+                replace_suffix(template_synthseg33_file.name, ''))
+            synthseg33_basename :str               = replace_suffix(synthseg33_file.name, '')
+            template_coregistration_file_name :str = f'{template_synthseg33_basename}_from_{synthseg33_basename}'
 
-            flirt_cmd_str = (
-                f'flirt -in "{synthseg33_file}" -ref "{template_synthseg33_file}" -out '
-                f'"{template_coregistration_file_name}" -dof 6 -cost corratio -omat '
-                f'"{template_coregistration_file_name}.mat" -interp nearestneighbour'
-            )
+            flirt_cmd_str = self.flirt_cmd_base.format(synthseg33_file, template_synthseg33_file,template_coregistration_file_name)
             print('FSL flirt：', flirt_cmd_str)
             os.system(flirt_cmd_str)
 
             # Apply transformations for CMB, DWI, and other optional outputs
-            apply_transform(args, template_coregistration_file_name, synthseg33_file,
-                            cmb_file=args.cmb_file_list[index], dwi_file=args.dwi_file_list[index])
+            apply_transform(args, template_coregistration_file_name, template_synthseg33_file,index)
 
         except Exception as e:
             log_error(file, e)
@@ -131,7 +169,7 @@ class NoTemplateProcessingStrategy(ProcessingStrategy):
             except Exception as e:
                 log_error(file, e)
             gc.collect()
-            break
+            # break
 
 
 # Context class to use the strategy
@@ -200,13 +238,14 @@ def prepare_output_file_list(file_list, suffix, output_dir=None):
         replace_suffix(x.name, suffix)) for x in file_list]
 
 
-def apply_transform(args, coregistration_file_name:str, synthseg33_file:Optional[pathlib.Path],
-                    cmb_file :Optional[pathlib.Path], dwi_file:Optional[pathlib.Path]):
+def apply_transform(args, coregistration_file_name:pathlib.Path, template_synthseg33_file:Optional[pathlib.Path],index:int):
     if args.cmb:
+        cmb_file = args.cmb_file_list[index]
         cmb_basename = replace_suffix(cmb_file.name,'')
-        cmb_coregistration_file_name = f'{synthseg33_file.name.replace("synthseg33.nii.gz.nii.gz", f"{cmb_basename}.nii.gz")}'
+        cmb_coregistration_file_name = template_synthseg33_file.parent.joinpath(
+            f'{template_synthseg33_file.name.replace("synthseg33.nii.gz", f"from_{cmb_basename}.nii.gz")}')
         flirt_cmd_str = (
-            f'flirt -in "{cmb_file}" -ref "{synthseg33_file}" '
+            f'flirt -in "{cmb_file}" -ref "{template_synthseg33_file}" '
             f'-out "{cmb_coregistration_file_name}" '
             f'-init "{coregistration_file_name}.mat" '
             f'-applyxfm -interp nearestneighbour'
@@ -215,6 +254,7 @@ def apply_transform(args, coregistration_file_name:str, synthseg33_file:Optional
         os.system(flirt_cmd_str)
 
     if args.dwi:
+        dwi_file = args.dwi_file_list[index]
         dwi_basename = dwi_file.replace('.nii.gz', '')
         dwi_coregistration_file_name = f'{dwi_basename}_{synthseg33_file.replace(".nii.gz", "")}'
         flirt_cmd_str = (
@@ -279,15 +319,15 @@ def main(args):
     args.wmh_file_list = prepare_output_file_list(args.resample_file_list, f'_{args.wmh_file}.nii.gz',
                                                   output_dir) if args.wmh else []
 
-    print(args)
     processor = FileProcessor(strategy)
     processor.execute(args, file_list, template_file_list)
 
 
 if __name__ == '__main__':
+    set_gpu(gpu_id='0')
     parser = argparse.ArgumentParser()
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name BRAVO.nii
-    # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB
+    # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True
 
     parser.add_argument('-i', '--input', dest='input', type=str, required=True, help="input file or folder path.")
     parser.add_argument('--input_name', dest='input_name', type=str, help="Filter files by name.")
