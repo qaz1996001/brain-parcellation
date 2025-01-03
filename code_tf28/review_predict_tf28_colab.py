@@ -759,8 +759,7 @@ class PostProcessContext:
     def execute(self, post_patch_seg, post_patch_parc):
         seg_patch, post_patch_seg = self.segmentation_strategy.process(post_patch_seg, self.return_seg,
                                                                        self.return_posteriors)
-        seg_patch = self.parcellation_strategy.process(post_patch_parc, seg_patch, self.return_seg,
-                                                       self.return_posteriors)
+        seg_patch = self.parcellation_strategy.process(post_patch_parc, seg_patch, self.return_seg)
         seg, posteriors = self.segmentation_strategy.paste_back(seg_patch, post_patch_seg, self.return_seg,
                                                                 self.return_posteriors)
 
