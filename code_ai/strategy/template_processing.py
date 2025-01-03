@@ -8,6 +8,7 @@ from typing import List, Optional
 import nibabel as nib
 import numpy as np
 from .base import ProcessingStrategy
+from .config import InferenceEnum
 from . import run_with_WhiteMatterParcellation, resample_one, SynthSeg, RequestIn,CMBProcess,DWIProcess,run_wmh
 
 
@@ -27,37 +28,6 @@ class TemplateProcessingStrategy(ProcessingStrategy):
         pass
 
 
-    # def process(self, args, file_list: List[pathlib.Path], template_file_list: Optional[List[pathlib.Path]]):
-    #     synth_seg = SynthSeg()
-    #     depth_number = args.depth_number or 5
-    #     # CMB file SWAN
-    #     for i, file in enumerate(file_list):
-    #         try:
-    #             # CMB BRAVO
-    #             resample_file = args.resample_file_list[i]
-    #             synthseg_file = args.synthseg_file_list[i]
-    #             synthseg33_file = args.synthseg33_file_list[i]
-    #             template_file = template_file_list[i]
-    #
-    #             self.resample_and_segment(synth_seg, template_file, resample_file, synthseg_file, synthseg33_file)
-    #             synthseg_nii = nib.load(synthseg_file)
-    #             synthseg_array = np.array(synthseg_nii.dataobj)
-    #             synthseg33_nii = nib.load(synthseg33_file)
-    #             synthseg33_array = np.array(synthseg33_nii.dataobj)
-    #
-    #             seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-    #                 synthseg_array, synthseg33_array, depth_number)
-    #
-    #             self.save_output_files(args, synthseg_nii, synthseg_array, seg_array, synthseg_array_wm, i)
-    #
-    #             self.process_with_template(
-    #                 args=args, synth_seg=synth_seg, file=file, template_file=template_file,
-    #                 synthseg33_file=synthseg33_file, index=i)
-    #
-    #         except Exception as e:
-    #             log_error(file, e)
-    #         gc.collect()
-
 
 class NoTemplateProcessingStrategy(ProcessingStrategy):
     def process(self,request: RequestIn,model):
@@ -65,9 +35,9 @@ class NoTemplateProcessingStrategy(ProcessingStrategy):
         synthseg_file   = replace_suffix(resample_file,'_synthseg.nii.gz')
         synthseg33_file = replace_suffix(resample_file,'_synthseg33.nii.gz')
         wm_file         = replace_suffix(resample_file, '_david.nii.gz')
-        cmb_file        = replace_suffix(resample_file, '_CMB.nii.gz')
-        dwi_file        = replace_suffix(resample_file, '_DWI.nii.gz')
-        wmh_file        = replace_suffix(resample_file, '_WMH.nii.gz')
+        cmb_file        = replace_suffix(resample_file, '_CMB.nii.gz') if request.inference_mode == InferenceEnum.CMB else None
+        dwi_file        = replace_suffix(resample_file, '_DWI.nii.gz') if request.inference_mode == InferenceEnum.DWI else None
+        wmh_file        = replace_suffix(resample_file, '_WMH.nii.gz') if request.inference_mode == InferenceEnum.WMH else None
         resample_one(str(request.input_file), str(resample_file))
         model.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
                   path_segmentations33=str(synthseg33_file))
@@ -79,8 +49,8 @@ class NoTemplateProcessingStrategy(ProcessingStrategy):
 
         seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
             synthseg_array, synthseg33_array, request.depth_number)
-        self.save(synthseg_nii,synthseg_file,seg_array,synthseg_array_wm,5,
-                  )
+        self.save(synthseg_nii,synthseg_file,seg_array,synthseg_array_wm,request.depth_number,
+                  wm_file,cmb_file,dwi_file,wmh_file)
 
     @classmethod
     def save(cls, synthseg_nii, synthseg_array, seg_array, synthseg_array_wm,depth_number,
