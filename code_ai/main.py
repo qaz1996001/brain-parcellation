@@ -32,8 +32,9 @@ import traceback
 from typing import List, Optional
 
 import nibabel as nib
+import nibabel.processing
 import numpy as np
-from utils_resample import resample_one, resample_to_original
+from utils_resample import resample_one, resampleSynthSEG2original
 from utils_parcellation import CMBProcess, DWIProcess, run_wmh, run_with_WhiteMatterParcellation
 from utils_synthseg import SynthSeg
 
@@ -41,6 +42,31 @@ from utils_synthseg import SynthSeg
 class ProcessingStrategy:
     def process(self, args, file_list: List[pathlib.Path], template_file_list: Optional[List[pathlib.Path]]):
         raise NotImplementedError("Subclasses should implement this!")
+
+    @staticmethod
+    def data_translate_back(img, nii):
+        header = nii.header.copy()  # 抓出nii header 去算體積
+        pixdim = header['pixdim']  # 可以借此從nii的header抓出voxel size
+        if pixdim[0] > 0:
+            img = np.flip(img, 1)
+        img = np.flip(img, -1)
+        img = np.flip(img, 0)
+        img = np.swapaxes(img, 1, 0)
+        # img = np.expand_dims(np.expand_dims(img, axis=0), axis=4)
+        return img
+    @staticmethod
+    # 會使用到的一些predict技巧
+    def data_translate(img, nii):
+        img = np.swapaxes(img, 0, 1)
+        img = np.flip(img, 0)
+        img = np.flip(img, -1)
+        header = nii.header.copy()  # 抓出nii header 去算體積
+        pixdim = header['pixdim']  # 可以借此從nii的header抓出voxel size
+        if pixdim[0] > 0:
+            img = np.flip(img, 1)
+            # img = np.expand_dims(np.expand_dims(img, axis=0), axis=4)
+        return img
+
 
 
 # Concrete Strategy for Processing with Template
@@ -96,7 +122,16 @@ class TemplateProcessingStrategy(ProcessingStrategy):
                 log_error(file, e)
             gc.collect()
 
-    def resample_and_segment(self, synth_seg:SynthSeg, file, resample_file, synthseg_file, synthseg33_file):
+    def resample_and_segment(self, synth_seg:SynthSeg,
+                             file:pathlib.Path, resample_file:pathlib.Path,
+                             synthseg_file:pathlib.Path, synthseg33_file:pathlib.Path):
+        if not resample_file.parent.exists():
+            resample_file.parent.mkdir(parents=True, exist_ok=True)
+        if not synthseg_file.parent.exists():
+            synthseg_file.parent.mkdir(parents=True, exist_ok=True)
+        if not synthseg33_file.parent.exists():
+            synthseg33_file.parent.mkdir(parents=True, exist_ok=True)
+
         resample_one(str(file), str(resample_file))
         synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
                       path_segmentations33=str(synthseg33_file))
@@ -150,6 +185,12 @@ class NoTemplateProcessingStrategy(ProcessingStrategy):
                 synthseg33_file = args.synthseg33_file_list[i]
                 # synthseg_file = resample_file.parent.joinpath(replace_suffix(resample_file.name, '_synthseg.nii.gz'))
                 # synthseg33_file = resample_file.parent.joinpath(replace_suffix(resample_file.name, '_synthseg33.nii.gz'))
+                if not resample_file.parent.exists():
+                    resample_file.parent.mkdir(parents=True, exist_ok=True)
+                if not synthseg_file.parent.exists():
+                    synthseg_file.parent.mkdir(parents=True, exist_ok=True)
+                if not synthseg33_file.parent.exists():
+                    synthseg33_file.parent.mkdir(parents=True, exist_ok=True)
 
                 resample_one(str(file), str(resample_file))
                 synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
@@ -166,11 +207,18 @@ class NoTemplateProcessingStrategy(ProcessingStrategy):
 
                 FileSaver.save(args, synthseg_nii, synthseg_array, seg_array, synthseg_array_wm, i)
 
+                #
+                self.resample_to_original(file,resample_file,args.wm_file_list[ i])
+
             except Exception as e:
                 log_error(file, e)
             gc.collect()
             # break
-
+    def resample_to_original(self,raw_file:pathlib.Path,
+                             resample_image_file:pathlib.Path,
+                             resample_seg_file:pathlib.Path):
+        resampleSynthSEG2original(raw_file,resample_image_file,resample_seg_file)
+        pass
 
 # Context class to use the strategy
 class FileProcessor:
@@ -234,7 +282,7 @@ def get_file_list(input_path, suffixes, filter_name=None):
 
 
 def prepare_output_file_list(file_list, suffix, output_dir=None):
-    return [output_dir.joinpath(f'{x.parent.name}_{x.name}') if output_dir else x.parent.joinpath(
+    return [output_dir.joinpath(x.parent.name,replace_suffix(f'{x.name}',suffix)) if output_dir else x.parent.joinpath(
         replace_suffix(x.name, suffix)) for x in file_list]
 
 
@@ -288,9 +336,15 @@ def main(args):
     assert file_list, 'No files found with .nii or .nii.gz extension'
 
     output_dir = pathlib.Path(args.output) if args.output else None
-    if output_dir and not output_dir.is_dir():
+    print('if output_dir and output_dir.is_file()',(output_dir and output_dir.is_file()))
+    if output_dir and output_dir.is_file():
         output_dir = output_dir.parent
         os.makedirs(output_dir, exist_ok=True)
+    elif output_dir :
+        os.makedirs(output_dir, exist_ok=True)
+    else:
+        pass
+
     template_file_list = None
     strategy = NoTemplateProcessingStrategy()
 
@@ -319,6 +373,14 @@ def main(args):
     args.wmh_file_list = prepare_output_file_list(args.resample_file_list, f'_{args.wmh_file}.nii.gz',
                                                   output_dir) if args.wmh else []
 
+    print(args.synthseg_file_list)
+    print(args.synthseg33_file_list)
+    print(args.wm_file_list)
+    print(args.cmb_file_list)
+    print(args.dwi_file_list)
+    print(args.wmh_file_list)
+    print(file_list)
+
     processor = FileProcessor(strategy)
     processor.execute(args, file_list, template_file_list)
 
@@ -327,6 +389,7 @@ if __name__ == '__main__':
     set_gpu(gpu_id='0')
     parser = argparse.ArgumentParser()
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name BRAVO.nii
+    # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True
 
     parser.add_argument('-i', '--input', dest='input', type=str, required=True, help="input file or folder path.")

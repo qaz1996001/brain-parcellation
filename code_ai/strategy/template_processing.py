@@ -3,13 +3,17 @@ import os
 import pathlib
 import re
 import sys
+import tempfile
 import traceback
 from typing import List, Optional
 import nibabel as nib
 import numpy as np
-from .base import ProcessingStrategy
 from .config import InferenceEnum
 from . import run_with_WhiteMatterParcellation, resample_one, SynthSeg, RequestIn,CMBProcess,DWIProcess,run_wmh
+
+class ProcessingStrategy:
+    def process(self,request: RequestIn,model,temp_output_dir:tempfile.TemporaryDirectory):
+        raise NotImplementedError("Subclasses should implement this!")
 
 
 class TemplateProcessingStrategy(ProcessingStrategy):
@@ -24,33 +28,36 @@ class TemplateProcessingStrategy(ProcessingStrategy):
         '-applyxfm -interp nearestneighbour'
     )
 
-    def process(self,request: RequestIn):
+    def process(self,request: RequestIn,model,temp_output_dir:tempfile.TemporaryDirectory):
         pass
 
 
 
 class NoTemplateProcessingStrategy(ProcessingStrategy):
-    def process(self,request: RequestIn,model):
-        resample_file   = replace_suffix(request.input_file,'_resample.nii.gz')
+    def process(self,request: RequestIn,model,temp_output_dir):
+        input_file = os.path.join(temp_output_dir, request.input_file.filename)
+        resample_file   = replace_suffix(input_file,'_resample.nii.gz')
         synthseg_file   = replace_suffix(resample_file,'_synthseg.nii.gz')
         synthseg33_file = replace_suffix(resample_file,'_synthseg33.nii.gz')
         wm_file         = replace_suffix(resample_file, '_david.nii.gz')
         cmb_file        = replace_suffix(resample_file, '_CMB.nii.gz') if request.inference_mode == InferenceEnum.CMB else None
         dwi_file        = replace_suffix(resample_file, '_DWI.nii.gz') if request.inference_mode == InferenceEnum.DWI else None
         wmh_file        = replace_suffix(resample_file, '_WMH.nii.gz') if request.inference_mode == InferenceEnum.WMH else None
-        resample_one(str(request.input_file), str(resample_file))
-        model.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
-                  path_segmentations33=str(synthseg33_file))
-
-        synthseg_nii = nib.load(synthseg_file)
-        synthseg33_nii = nib.load(synthseg33_file)
-        synthseg_array = np.array(synthseg_nii.dataobj)
-        synthseg33_array = np.array(synthseg33_nii.dataobj)
-
-        seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-            synthseg_array, synthseg33_array, request.depth_number)
-        self.save(synthseg_nii,synthseg_file,seg_array,synthseg_array_wm,request.depth_number,
-                  wm_file,cmb_file,dwi_file,wmh_file)
+        resample_one(str(input_file), str(resample_file))
+        print('str(input_file)',str(input_file))
+        print('str(resample_file)', str(input_file))
+        # model.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
+        #           path_segmentations33=str(synthseg33_file))
+        #
+        # synthseg_nii = nib.load(synthseg_file)
+        # synthseg33_nii = nib.load(synthseg33_file)
+        # synthseg_array = np.array(synthseg_nii.dataobj)
+        # synthseg33_array = np.array(synthseg33_nii.dataobj)
+        #
+        # seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
+        #     synthseg_array, synthseg33_array, request.depth_number)
+        # self.save(synthseg_nii,synthseg_file,seg_array,synthseg_array_wm,request.depth_number,
+        #           wm_file,cmb_file,dwi_file,wmh_file)
 
     @classmethod
     def save(cls, synthseg_nii, synthseg_array, seg_array, synthseg_array_wm,depth_number,

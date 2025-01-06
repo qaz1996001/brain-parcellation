@@ -9,6 +9,7 @@ class InferenceEnum(str,enum.Enum):
     CMB = 'CMB'
     DWI = 'DWI'
     WMH = 'WMH'
+    Area = 'Area'
 
 
 class RequestIn(BaseModel):
