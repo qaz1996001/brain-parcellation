@@ -133,7 +133,7 @@ def save_volume(volume, aff, header, path, res=None, dtype=None, n_dims=3):
     n_dims is automatically inferred.
     """
 
-    # mkdir(os.path.dirname(path))
+    mkdir(os.path.dirname(path))
     if '.npz' in path:
         np.savez_compressed(path, vol_data=volume)
     else:
