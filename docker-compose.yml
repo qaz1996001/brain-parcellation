@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  rabbitmq_server:
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_VHOST=/
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=pass.123
+      - RABBITMQ_ERLANG_COOKIE= yowkotest
+    volumes:
+      - /mnt/d/wsl_ubuntu/rabbitmq:/var/lib/rabbitmq
+    ports:
+      # Expose the port for the worker to add/get tasks
+      - 5672:5672
+      # OPTIONAL: Expose the GUI port
+      - 15672:15672

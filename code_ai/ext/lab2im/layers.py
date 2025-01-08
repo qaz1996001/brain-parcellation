@@ -42,12 +42,12 @@ import keras.backend as K
 from keras.layers import Layer
 
 # project imports
-from ext.lab2im import utils
-from ext.lab2im import edit_tensors as l2i_et
+from . import utils
+from . import edit_tensors as l2i_et
 
 # third-party imports
-from ext.neuron import utils as nrn_utils
-import ext.neuron.layers as nrn_layers
+from code_ai.ext.neuron import utils as nrn_utils
+import code_ai.ext.neuron.layers as nrn_layers
 
 
 class RandomSpatialDeformation(Layer):

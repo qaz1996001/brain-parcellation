@@ -2440,6 +2440,7 @@ def str_to_bool(v):
     else:
         raise argparse.ArgumentTypeError("Bool value expected")
 
+
 def main(args):
     """Main function to process input arguments and run the parcellation."""
     # Prepare input and output paths

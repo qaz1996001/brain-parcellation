@@ -8,6 +8,7 @@ import argparse
 from typing import List, Optional, Dict, Any
 import orjson
 
+
 def run_model(study_key:str, model_key:str, file_list:List,output_path:pathlib.Path ):
     output_study_path = output_path.joinpath(study_key)
     if output_study_path.exists():
@@ -45,7 +46,6 @@ def main(intput_json :str = r'/mnt/c/Users/tmu3090/Desktop/Task/dicom2nii/src/ma
 
 
 if __name__ == '__main__':
-    set_gpu(gpu_id='0')
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name BRAVO.nii
     # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True

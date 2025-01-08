@@ -3,22 +3,45 @@ import numpy as np
 import tensorflow as tf
 import keras.layers as KL
 from keras.models import Model
-from ext.lab2im import utils, layers, edit_volumes
-from ext.neuron import models as nrn_models
+from .ext.lab2im import utils, layers, edit_volumes
+from .ext.neuron import models as nrn_models
 
-from SynthSeg.predict import get_flip_indices
+from .SynthSeg.predict import get_flip_indices
+
 
 
 # Setup TensorFlow GPU configuration
-gpus = tf.config.experimental.list_physical_devices('GPU')
-if gpus:
-    try:
-        tf.config.experimental.set_virtual_device_configuration(
-            gpus[0],
-            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8192)]
-        )
-    except RuntimeError as e:
-        print(e)
+# gpus = tf.config.experimental.list_physical_devices('GPU')
+# if gpus:
+#     try:
+#         tf.config.experimental.set_virtual_device_configuration(
+#             gpus[0],
+#             [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8192)]
+#         )
+#     except RuntimeError as e:
+#         print(e)
+
+
+
+def set_gpu(gpu_id='0'):
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
+
+    physical_devices = tf.config.list_physical_devices('GPU')
+    for device in physical_devices:
+        print(device)
+
+    # select single GPU to use
+    try:  # allow GPU memory growth
+        tf.config.experimental.set_memory_growth(device=physical_devices[0], enable=True)
+    except:
+        pass
+
+    tf.config.set_visible_devices(devices=physical_devices[0], device_type='GPU')
+    logical_devices = tf.config.list_logical_devices('GPU')
+    print('Seleted logical_devices:', logical_devices)
+
+    tf.debugging.set_log_device_placement(True)
+    tf.config.set_soft_device_placement(enabled=True)
 
 
 

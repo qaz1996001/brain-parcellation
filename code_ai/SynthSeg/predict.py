@@ -24,13 +24,13 @@ import keras.backend as K
 from keras.models import Model
 
 # project imports
-from SynthSeg import evaluate
+from . import evaluate
 
 # third-party imports
-from ext.lab2im import utils
-from ext.lab2im import layers
-from ext.lab2im import edit_volumes
-from ext.neuron import models as nrn_models
+from code_ai.ext.lab2im import utils
+from code_ai.ext.lab2im import layers
+from code_ai.ext.lab2im import edit_volumes
+from code_ai.ext.neuron import models as nrn_models
 
 
 def predict(path_images,
