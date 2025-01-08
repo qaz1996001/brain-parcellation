@@ -45,6 +45,7 @@ if __name__ == '__main__':
     # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True
+    # python test/tes_celey_task.py -i /mnt/d/00_Chen/Task04_git/data/ --input_name Ax_T2_FLAIR.nii  --WHM True
 
     parser.add_argument('-i', '--input', dest='input', type=str, required=True, help="input file or folder path.")
     parser.add_argument('--input_name', dest='input_name', type=str, help="Filter files by name.")
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--DWI', '--dwi', dest='dwi', type=str_to_bool, default=False, help="Output DWI Mask.")
     parser.add_argument('--DWIFile', '--dwiFile', dest='dwi_file', type=str, default='DWI', help="DWI Mask file name.")
     parser.add_argument('--WMH', '--wmh', dest='wmh', type=str_to_bool, default=False, help="Output WMH Mask.")
-    parser.add_argument('--WMHFile', '--wmhFile', dest='wmh_file', type=str, default='WMHPVS', help="WMH Mask file name.")
+    parser.add_argument('--WMHFile', '--wmhFile', dest='wmh_file', type=str, default='WMH', help="WMH Mask file name.")
     parser.add_argument('--depth_number', dest='depth_number', default=5, type=int, choices=[4, 5, 6, 7, 8, 9, 10],
                         help="Deep white matter parameter.")
 

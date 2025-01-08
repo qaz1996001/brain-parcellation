@@ -1,4 +1,4 @@
-from celery import Celery, group, chain
+from celery import Celery, group, chain,chord
 
 import pathlib
 import nibabel as nib
@@ -88,14 +88,14 @@ def resample_task(file, resample_file):
 
 
 # @app.task(bind=True,rate_limit='1/m')
-@app.task(bind=True,rate_limit='30/s')
+@app.task(bind=True,rate_limit='30/s',priority=50)
 def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
     """
         限制同時只能執行一個的任務。
         """
     if acquire_lock():
         try:
-            synth_seg = SynthSeg()
+            synth_seg = app.conf.CELERY_CONTEXT['synth_seg']
             synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
                           path_segmentations33=str(synthseg33_file))
             gc.collect()
@@ -133,12 +133,10 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file,wm_file)
 @app.task
 def resample_to_original_task(intpu_tuple,raw_file, resample_image_file, resample_seg_file):
     print('resample_to_original_task')
-    print('intpu_tuple',intpu_tuple)
     print('raw_file', raw_file)
     print('resample_image_file', resample_image_file)
     print('resample_seg_file', resample_seg_file)
-    resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)
-    return True
+    return resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)
 
 @app.task
 @shared_task
@@ -182,13 +180,20 @@ def wmh_save_task(synthseg_array, synthseg_array_wm, affine, header, depth_numbe
 
 
 @app.task
+def clear_tensorflow_backend():
+    import tensorflow as tf
+    tf.keras.backend.clear_session()
+    return True
+
+@app.task
 def save_file_tasks(synthseg_david_tuple, intput_args, index):
     print('synthseg_david_tuple',synthseg_david_tuple)
-    print('intpu_args', intput_args)
     print('index',index)
     tasks = []
     synthseg_file = intput_args.synthseg_file_list[index]
     synthseg_nii = nib.load(synthseg_file)
+    affine = synthseg_nii.affine
+    header = synthseg_nii.header
 
     david_file = intput_args.david_file_list[index]
     david_nii = nib.load(david_file)
@@ -203,12 +208,16 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     # 添加 WM 保存任务
     if intput_args.wm_file:
         wm_file = intput_args.wm_file_list[index]
-        tasks.append(wm_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, wm_file))
+        tasks.append((wm_save_task.s(seg_array, affine, header, wm_file) |
+                     resample_to_original_task.s(raw_file=file,
+                                                 resample_image_file=resample_file,
+                                                 resample_seg_file=wm_file))
+                     )
 
     # 添加 CMB 保存任务
     if intput_args.cmb:
         cmb_file = intput_args.cmb_file_list[index]
-        tasks.append((cmb_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, cmb_file)|
+        tasks.append((cmb_save_task.s(seg_array, affine, header,  cmb_file) |
                       resample_to_original_task.s(raw_file=file,
                                                   resample_image_file=resample_file,
                                                   resample_seg_file=cmb_file)
@@ -217,24 +226,30 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     # 添加 DWI 保存任务
     if intput_args.dwi:
         dwi_file = intput_args.dwi_file_list[index]
-        tasks.append(dwi_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, dwi_file))
+        tasks.append((dwi_save_task.s(seg_array, affine, header, dwi_file) |
+                     resample_to_original_task.s(raw_file=file,
+                                                 resample_image_file=resample_file,
+                                                 resample_seg_file=dwi_file)))
 
     # 添加 WMH 保存任务
     if intput_args.wmh:
         wmh_file = intput_args.wmh_file_list[index]
         tasks.append(
-            wmh_save_task.s(
+            (wmh_save_task.s(
                 synthseg_array=synthseg_nii.get_fdata(),
                 synthseg_array_wm=synthseg_array_wm,
-                affine=synthseg_nii.affine,
-                header=synthseg_nii.header,
+                affine=affine,
+                header=header,
                 depth_number=intput_args.depth_number,
-                wmh_file=wmh_file,
-            )
-        )
+                wmh_file=wmh_file,)|
+             resample_to_original_task.s(raw_file=file,
+                                         resample_image_file=resample_file,
+                                         resample_seg_file=wmh_file)
+             ))
 
     # 组合任务并执行
-    return group(tasks).apply_async()
+    # return group(tasks).apply_async()
+    return group([group(tasks),clear_tensorflow_backend.s()]).apply_async()
 
 
 def build_celery_workflow(args, file_list):
@@ -260,3 +275,4 @@ def build_celery_workflow(args, file_list):
             log_error_task.s(file, str(e))
 
     return group(workflows)
+

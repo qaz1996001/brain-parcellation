@@ -164,7 +164,9 @@ def resampleSynthSEG2original(raw_file:pathlib.Path,
 
     new_array_save = data_translate_back(new_array, img_nii)
     new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
-    nib.save(new_SynthSeg_nii, resample_seg_file.parent.joinpath(resample_seg_file.name.replace('resample','original')))
+    original_seg_file = resample_seg_file.parent.joinpath(f"synthseg_{resample_seg_file.name.replace('resample', 'original')}")
+    nib.save(new_SynthSeg_nii,original_seg_file )
+    return original_seg_file
 
 
 def data_translate(img, nii):
