@@ -1,9 +1,11 @@
+import re
 import shutil
 import os
 import pathlib
 import traceback
 from typing import List
 
+import dcm2niix
 from pydicom import dcmread
 from pydicom.errors import InvalidDicomError, BytesLengthException
 
@@ -17,54 +19,81 @@ from code_ai.dicom2nii.convert import MRAVRBrainProcessingStrategy,MRAVRNeckProc
 from code_ai.dicom2nii.convert import T2ProcessingStrategy, ASLProcessingStrategy,DSCProcessingStrategy
 from code_ai.dicom2nii.convert import RestingProcessingStrategy, DTIProcessingStrategy, CVRProcessingStrategy
 from code_ai.dicom2nii.convert import NullEnum
+from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 
-@app.task
-def read_dicom_file(instance_path):
+
+
+
+@app.task(bind=True,rate_limit='250/s')
+def rename_dicom_file(self,instance_path, processing_strategy_list,modality_processing_strategy,mr_acquisition_type_processing_strategy):
     try:
-        dicom_ds = dcmread(str(instance_path), stop_before_pixels=True)
-        return dicom_ds
+        with open(instance_path, mode='rb') as dcm:
+            dicom_ds = dcmread(dcm, stop_before_pixels=True)
+        if dicom_ds is None:
+            return tuple(['',''])
+        # Simulating renaming logic
+        modality_enum = modality_processing_strategy.process(dicom_ds=dicom_ds)
+        mr_acquisition_type_enum = mr_acquisition_type_processing_strategy.process(dicom_ds=dicom_ds)
+        for processing_strategy in processing_strategy_list:
+            if modality_enum == processing_strategy.modality:
+                for mr_acquisition_type in processing_strategy.mr_acquisition_type:
+                    if mr_acquisition_type_enum == mr_acquisition_type:
+                        series_enum = processing_strategy.process(dicom_ds=dicom_ds)
+                        if series_enum is not NullEnum.NULL:
+                            output_study = get_output_study(dicom_ds)
+                            return series_enum.value,output_study
+        return tuple(['',''])
     except (InvalidDicomError, BytesLengthException):
         print(f"Invalid DICOM file: {instance_path}")
         return None
+    except Exception as e:
+        self.retry(countdown=5, max_retries=5)  # 重試任務
 
 
-@app.task
-def get_output_study(dicom_ds, output_path):
+def get_output_study(dicom_ds):
     if dicom_ds is None:
         return None
     study_folder_name = get_study_folder_name(dicom_ds)
     if not study_folder_name:
         return None
-    output_study = output_path.joinpath(study_folder_name)
-    return output_study
+    return study_folder_name
 
 
-@app.task
-def rename_dicom_file(dicom_ds, processing_strategy_list,modality_processing_strategy,mr_acquisition_type_processing_strategy):
-    if dicom_ds is None:
-        return ''
-    # Simulating renaming logic
-    modality_enum = modality_processing_strategy.process(dicom_ds=dicom_ds)
-    mr_acquisition_type_enum = mr_acquisition_type_processing_strategy.process(dicom_ds=dicom_ds)
-    for processing_strategy in processing_strategy_list:
-        if modality_enum == processing_strategy.modality:
-            for mr_acquisition_type in processing_strategy.mr_acquisition_type:
-                if mr_acquisition_type_enum == mr_acquisition_type:
-                    series_enum = processing_strategy.process(dicom_ds=dicom_ds)
-                    if series_enum is not NullEnum.NULL:
-                        return series_enum.value
-    return ''
+@app.task(bind=True,rate_limit='100/s')
+def copy_dicom_file(self,input_tuple,instance_path,output_path):
+    try:
+        if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
+            return
+        rename_series = input_tuple[0]
+        output_study = input_tuple[1]
+        output_study_series = output_path.joinpath(output_study,rename_series)
+        output_study_series.mkdir(exist_ok=True,parents=True)
+        os.makedirs(output_study_series, exist_ok=True)
+        output_study_instance:pathlib.Path = output_study_series.joinpath(instance_path.name)
+        if output_study_series.is_dir():
+            if output_study_instance.exists():
+                return
+            else:
+                with open(instance_path,mode='rb') as instance:
+                    with open(output_study_instance,'wb+') as output_instance:
+                        shutil.copyfileobj(instance,output_instance)
+
+    except Exception as e:
+        print('input_tuple',input_tuple)
+        self.retry(countdown=5, max_retries=5)  # 重試任務
+    except OSError :
+        self.retry(countdown=30, max_retries=5)
 
 
-@app.task
-def copy_dicom_file(instance_path, output_study, rename_series):
-    if len(rename_series) == 0 or output_study is None:
-        return
-    os.makedirs(output_study, exist_ok=True)
-    output_study_series = output_study.joinpath(rename_series)
-    os.makedirs(output_study_series, exist_ok=True)
-    output_study_instance = output_study_series.joinpath(instance_path.name)
-    shutil.copyfile(instance_path, output_study_instance)
+@app.task(bind=True,rate_limit='10/s')
+def dicom_2_nii_file(self,input_tuple,study_path,output_path):
+    try:
+        pass
+    except Exception as e:
+        print('input_tuple',input_tuple)
+        self.retry(countdown=5, max_retries=5)  # 重試任務
+    except OSError :
+        self.retry(countdown=30, max_retries=5)
 
 
 def get_study_folder_name(dicom_ds):
@@ -112,24 +141,26 @@ class ConvertManager:
 
     def run(self):
         is_dir_flag = all(list(map(lambda x: x.is_dir(), self.input_path.iterdir())))
+        print('is_dir_flag', is_dir_flag)
         if is_dir_flag:
-            for sub_dir in self.input_path.iterdir():
+            for sub_dir in list(self.input_path.iterdir()):
                 instances_list = list(sub_dir.rglob('*.dcm'))
-                self.process_instances(instances_list, sub_dir.name)
+                for chunk in chunk_list(instances_list, 64):
+                    self.process_instances(chunk, sub_dir.name)
         else:
             instances_list = list(self.input_path.rglob('*.dcm'))
             # Process in chunks of 1000 instances
-            for chunk in chunk_list(instances_list, 1000):
+            for chunk in chunk_list(instances_list, 64):
                 self.process_instances(chunk, self.input_path.name)
 
     def process_instances(self, instances_list, dir_name):
         workflows = []
         for instance in instances_list:
-            workflow = chain(
-                read_dicom_file.s(instance),
-                get_output_study.s(self.output_path),
-                rename_dicom_file.s(self.processing_strategy_list),
-                copy_dicom_file.s(instance)
+            workflow = chain(rename_dicom_file.s(instance,
+                                                 self.processing_strategy_list,
+                                                 self.modality_processing_strategy,
+                                                 self.mr_acquisition_type_processing_strategy),
+                             copy_dicom_file.s(instance,self.output_path)
             )
             workflows.append(workflow)
 
@@ -145,3 +176,150 @@ class ConvertManager:
     def input_path(self, value):
         self._input_path = pathlib.Path(value)
 
+
+class Dicm2NiixConverter:
+    exclude_set = {
+        MRSeriesRenameEnum.MRAVR_BRAIN.value,
+        MRSeriesRenameEnum.MRAVR_NECK.value,
+
+        # DSCSeriesRenameEnum.DSC.value,
+        # DSCSeriesRenameEnum.rCBV.value,
+        # DSCSeriesRenameEnum.rCBF.value,
+        # DSCSeriesRenameEnum.MTT.value,
+        #
+        # ASLSEQSeriesRenameEnum.ASLSEQ.value,
+        # ASLSEQSeriesRenameEnum.ASLPROD.value,
+        #
+        # ASLSEQSeriesRenameEnum.ASLSEQATT.value,
+        # ASLSEQSeriesRenameEnum.ASLSEQATT_COLOR.value,
+        #
+        # ASLSEQSeriesRenameEnum.ASLSEQCBF.value,
+        # ASLSEQSeriesRenameEnum.ASLSEQCBF_COLOR.value,
+        #
+        # ASLSEQSeriesRenameEnum.ASLSEQPW.value,
+    }
+
+    def __init__(self, input_path, output_path):
+        """
+        Initialize the Dcm2NiixConverter.
+
+        Parameters
+        ----------
+        input_path : str or pathlib.Path
+            Path to the input DICOM files.
+        output_path : str or pathlib.Path
+            Path to the output directory for NIfTI files.
+        """
+        self.input_path = pathlib.Path(input_path)
+        self.output_path = pathlib.Path(output_path)
+
+
+#
+# class Dicm2NiixConverter:
+#     def __init__(self, input_path, output_path):
+#         """
+#         Initialize the Dcm2NiixConverter.
+#
+#         Parameters
+#         ----------
+#         input_path : str or pathlib.Path
+#             Path to the input DICOM files.
+#         output_path : str or pathlib.Path
+#             Path to the output directory for NIfTI files.
+#         """
+#         self.input_path = pathlib.Path(input_path)
+#         self.output_path = pathlib.Path(output_path)
+#         self.exclude_set = {
+#             MRSeriesRenameEnum.MRAVR_BRAIN.value,
+#             MRSeriesRenameEnum.MRAVR_NECK.value,
+#
+#             # DSCSeriesRenameEnum.DSC.value,
+#             # DSCSeriesRenameEnum.rCBV.value,
+#             # DSCSeriesRenameEnum.rCBF.value,
+#             # DSCSeriesRenameEnum.MTT.value,
+#             #
+#             # ASLSEQSeriesRenameEnum.ASLSEQ.value,
+#             # ASLSEQSeriesRenameEnum.ASLPROD.value,
+#             #
+#             # ASLSEQSeriesRenameEnum.ASLSEQATT.value,
+#             # ASLSEQSeriesRenameEnum.ASLSEQATT_COLOR.value,
+#             #
+#             # ASLSEQSeriesRenameEnum.ASLSEQCBF.value,
+#             # ASLSEQSeriesRenameEnum.ASLSEQCBF_COLOR.value,
+#             #
+#             # ASLSEQSeriesRenameEnum.ASLSEQPW.value,
+#         }
+#
+#     def run_cmd(self, output_series_path, series_path):
+#         """
+#         Run the dcm2niix command to convert DICOM to NIfTI.
+#
+#         Parameters
+#         ----------
+#         output_series_path : pathlib.Path
+#             Path to the output series.
+#         series_path : pathlib.Path
+#             Path to the input DICOM series.
+#
+#         Returns
+#         -------
+#         str
+#             The result of the conversion.
+#         """
+#         output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
+#         cmd_str = f'{dcm2niix.bin} -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
+#
+#         completed_process = subprocess.run(cmd_str, capture_output=True)
+#         pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
+#         match_result = pattern.search(completed_process.stdout.decode())
+#         str_result = match_result.groups()[0]
+#         dcm2niix_output_path = pathlib.Path(f'{str_result}.nii.gz')
+#
+#         if dcm2niix_output_path.name != output_series_path:
+#             try:
+#                 # Rename the output file and corresponding JSON file
+#                 dcm2niix_output_path.rename(output_series_file_path)
+#                 dcm2niix_json_path = pathlib.Path(str(dcm2niix_output_path).replace('.nii.gz', '.json'))
+#                 output_series_json_path = pathlib.Path(str(output_series_file_path).replace('.nii.gz', '.json'))
+#                 dcm2niix_json_path.rename(output_series_json_path)
+#             except FileExistsError:
+#                 print(rf'FileExistsError {series_path}')
+#         return str_result
+#
+#     def copy_meta_dir(self, study_path: pathlib.Path):
+#         meta_path = study_path.joinpath('.meta')
+#         output_study_path = pathlib.Path(f'{str(study_path).replace(str(study_path.parent), str(self.output_path))}')
+#         if meta_path.exists():
+#             shutil.copytree(meta_path,output_study_path.joinpath('.meta'),dirs_exist_ok=True)
+#
+#     def convert_dicom_to_nifti(self, executor: Executor = None):
+#         """
+#         Convert DICOM files to NIfTI format.
+#
+#         Parameters
+#         ----------
+#         executor : concurrent.futures.Executor, optional
+#             Executor for parallel execution.
+#         """
+#         instances = list(self.input_path.rglob('*.dcm'))
+#         study_list = list(set(list(map(lambda x: x.parent.parent, instances))))
+#         future_list = []
+#         for study_path in study_list:
+#             series_list = list(filter(lambda series_path : series_path.name != '.meta' ,study_path.iterdir()))
+#             for series_path in series_list:
+#                 if series_path.name in self.exclude_set:
+#                     continue
+#                 output_series_path = pathlib.Path(
+#                     f'{str(series_path).replace(str(study_path.parent), str(self.output_path))}')
+#                 output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
+#                 if output_series_file_path.exists():
+#                     print(output_series_file_path)
+#                     continue
+#                 else:
+#                     os.makedirs(output_series_path.parent, exist_ok=True)
+#                     if executor:
+#                         future = executor.submit(self.run_cmd, output_series_path, series_path)
+#                         future_list.append(future)
+#                     else:
+#                         self.run_cmd(output_series_path=output_series_path, series_path=series_path)
+#             self.copy_meta_dir(study_path=study_path)

@@ -120,6 +120,7 @@ def resampleSynthSEG2original_(path, case_name, series, SynthSEGmodel):
 
     return new_array
 
+
 def resampleSynthSEG2original(raw_file:pathlib.Path,
                               resample_image_file:pathlib.Path,
                               resample_seg_file:pathlib.Path):
@@ -165,7 +166,7 @@ def resampleSynthSEG2original(raw_file:pathlib.Path,
     new_array_save = data_translate_back(new_array, img_nii)
     new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
     original_seg_file = resample_seg_file.parent.joinpath(f"synthseg_{resample_seg_file.name.replace('resample', 'original')}")
-    nib.save(new_SynthSeg_nii,original_seg_file )
+    nib.save(new_SynthSeg_nii,original_seg_file)
     return original_seg_file
 
 
