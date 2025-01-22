@@ -1,6 +1,8 @@
 version: "3.9"
 services:
   rabbitmq_server:
+    restart: always
+    container_name: rabbitmq_server
     image: rabbitmq:3-management
     environment:
       - RABBITMQ_DEFAULT_VHOST=/
@@ -14,3 +16,11 @@ services:
       - 5672:5672
       # OPTIONAL: Expose the GUI port
       - 15672:15672
+  redis_server:
+    restart: always
+    container_name: redis_server
+    image: redis:7.4-alpine
+    ports:
+      - 10079:6379
+    volumes:
+      - /data/redis-data:/data

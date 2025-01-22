@@ -45,21 +45,25 @@ if __name__ == '__main__':
                         help="input the raw dicom folder.\r\n")
     parser.add_argument('--output_dicom', dest='output_dicom', type=str,
                         help="output the rename dicom folder.\r\n")
-
+    parser.add_argument('--output_nifti', dest='output_nifti', type=str,
+                        help="rename dicom output to nifti folder.\r\n"
+                             "Example ： python main.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
+                             "--output_nifti output_nifti_path")
     # python test/tes_dicom2nii_task.py --input_dicom /mnt/d/00_Chen/Task04_git/data_dicom/raw --output_dicom /mnt/d/00_Chen/Task04_git/data_dicom/rename
+
+    # python test/tes_dicom2nii_task.py --input_dicom /mnt/d/00_Chen/Task08/data/MRIProtocol --output_dicom /mnt/e/rename_dicom
+
+    # python test/tes_dicom2nii_task.py --input_dicom /mnt/e/raw_dicom/02695350_21210300104 --output_dicom /mnt/e/rename_dicom --output_nifti /mnt/e/rename_nifti
+
 
     args = parser.parse_args()
     input_dicom_path = args.input_dicom
     output_dicom_path = args.output_dicom
+    output_nifti_path = args.output_nifti
 
-    convert_manager = ConvertManager(input_dicom_path, output_dicom_path)
+    convert_manager = ConvertManager(input_dicom_path = input_dicom_path,
+                                     output_dicom_path=output_dicom_path,
+                                     output_nifti_path=output_nifti_path)
     print(convert_manager.run())
     print(100000000)
-
-
-    # workflow_group = build_celery_workflow(args, file_list)
-    # result = workflow_group.apply_async()
-    # print('result',result)
-    # result.get()
-    # print('result.get()',result.get())
 

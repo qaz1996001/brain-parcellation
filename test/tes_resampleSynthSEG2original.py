@@ -1,32 +1,15 @@
-import pathlib
-
-from code_ai.utils_resample import resampleSynthSEG2original
 
 if __name__ == '__main__':
-    raw_file = pathlib.Path()
-    #
-    raw_file = pathlib.Path('d:/00_Chen/Task04_git/data/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO.nii')
-    resample_image_file = pathlib.Path('d:/00_Chen/Task04_git/data_0106/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO_resample.nii.gz')
-    resample_seg_file   = pathlib.Path('d:/00_Chen/Task04_git/data_0106/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO_resample_synthseg.nii.gz')
-    resampleSynthSEG2original(raw_file,
-                              resample_image_file,
-                              resample_seg_file)
-
-    resample_seg_file = pathlib.Path(
-        'd:/00_Chen/Task04_git/data_0106/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO_resample_synthseg.nii.gz')
-    resampleSynthSEG2original(raw_file,
-                              resample_image_file,
-                              resample_seg_file)
-    print(10000)
-
-    resample_seg_file = pathlib.Path(
-        'd:/00_Chen/Task04_git/data_0106/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz')
-    resampleSynthSEG2original(raw_file,
-                              resample_image_file,
-                              resample_seg_file)
-
-    resample_seg_file = pathlib.Path(
-        'd:/00_Chen/Task04_git/data_0106/20151006_02794664_31097_P002_out/Sag_FSPGR_BRAVO_resample_david.nii.gz')
-    resampleSynthSEG2original(raw_file,
-                              resample_image_file,
-                              resample_seg_file)
+    app = Celery('tasks',
+                 broker='pyamqp://guest:guest@localhost:5672/celery',
+                 backend='redis://localhost:10079/1'
+                 )
+    # args = {}
+    # app.config_from_object('code_ai.celery_config')
+    # result = app.send_task('code_ai.task.task_synthseg.resample_to_original_task', args=(args, file_list),
+    #                        queue='synthseg_queue',
+    #                        routing_key='celery')
+    # raw_file             =
+    # resample_image_file
+    # resample_seg_file
+    # resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)

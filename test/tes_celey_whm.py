@@ -45,7 +45,7 @@ if __name__ == '__main__':
     # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
     # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True
-    # python test/tes_celey_task.py -i /mnt/d/00_Chen/Task04_git/data/ --input_name Ax_T2_FLAIR.nii  --WHM True
+    # python test/tes_synthseg_task.py -i /mnt/d/00_Chen/Task04_git/data/ --input_name Ax_T2_FLAIR.nii  --WHM True
 
     parser.add_argument('-i', '--input', dest='input', type=str, required=True, help="input file or folder path.")
     parser.add_argument('--input_name', dest='input_name', type=str, help="Filter files by name.")
