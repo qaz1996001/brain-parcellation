@@ -33,6 +33,10 @@ app.conf.task_routes = {
     'code_ai.task.task_dicom2nii.rename_dicom_file': {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_dicom2nii.copy_dicom_file': {'queue': 'dicom2nii_queue'},
 
+    'code_ai.task.task_dicom2nii.dicom_file_processing': {'queue': 'dicom2nii_queue'},
+    'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
+    # 'code_ai.task.task_dicom2nii.call_dicom_to_nii': {'queue': 'dicom2nii_queue'},
+
 }
 
 app.conf.task_queues = {
@@ -89,3 +93,4 @@ def configure_environment(sender, **kwargs):
             model = SynthSeg()
             sender.app.conf.CELERY_CONTEXT['synth_seg'] = model
             print('CELERY_CONTEXT',sender.app.conf.CELERY_CONTEXT)
+

@@ -135,7 +135,7 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file,wm_file)
         log_error_task.s(synthseg_file_tuple, str(traceback.format_exc()))
 
 
-@app.task
+@app.task(bind=True,rate_limit='5/m',priority=20)
 def resample_to_original_task(raw_file, resample_image_file, resample_seg_file):
     original_seg_file = resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)
     outpput_raw_file = resample_seg_file.parent.joinpath(raw_file.name)
@@ -287,9 +287,9 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     if intput_args.cmb:
         cmb_file = intput_args.cmb_file_list[index]
         tasks.append(cmb_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, cmb_file))
-        tasks.append(resample_to_original_task.s(raw_file=file,
-                                                 resample_image_file=resample_file,
-                                                 resample_seg_file=cmb_file))
+        # tasks.append(resample_to_original_task.s(raw_file=file,
+        #                                          resample_image_file=resample_file,
+        #                                          resample_seg_file=cmb_file))
 
     # 添加 DWI 保存任务
     if intput_args.dwi:
@@ -316,7 +316,6 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
                                                  resample_image_file=resample_file,
                                                  resample_seg_file=wmh_file))
     # 组合任务并执行
-    # group().
     return group(tasks).delay()
 
 # def save_file_tasks(synthseg_david_tuple, intput_args, index):

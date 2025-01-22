@@ -49,7 +49,8 @@ class SynthSeg:
     LABELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resource', 'labels_classes_priors')
     MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'resource', 'models')
 
-    def __init__(self, ):
+    def __init__(self,intput_size= None ):
+        self.intput_size = intput_size
         self.args = None
         self.net_unet2 = None
         self.net_convert = None
@@ -75,6 +76,7 @@ class SynthSeg:
         self.net_unet2 = net_unet2
         self.net_convert = net_convert
         self.net_parcellation = net_parcellation
+        
 
     def prepare_output_files(self, path_images, out_seg, recompute):
         # check inputs
@@ -195,7 +197,8 @@ class SynthSeg:
     # @profile
     def build_unet_model(self, path_model_segmentation, n_labels_seg, n_groups):
         # build first UNet
-        net = nrn_models.unet(input_shape=[None, None, None, 1],
+        # net = nrn_models.unet(input_shape=[None, None, None, 1],
+        net = nrn_models.unet(input_shape=[self.intput_size, self.intput_size, self.intput_size, 1],
                               nb_labels=n_groups,
                               nb_levels=5,
                               nb_conv_per_level=2,
@@ -214,7 +217,8 @@ class SynthSeg:
 
         # build denoiser
         net = nrn_models.unet(input_model=net,
-                              input_shape=[None, None, None, 1],
+                              input_shape=[self.intput_size, self.intput_size, self.intput_size, 1],
+                            #   input_shape=[None, None, None, 1],
                               nb_labels=n_groups,
                               nb_levels=5,
                               nb_conv_per_level=2,
@@ -238,7 +242,8 @@ class SynthSeg:
 
         # build 2nd network
         net = nrn_models.unet(input_model=net,
-                              input_shape=[None, None, None, 2],
+                              input_shape=[self.intput_size, self.intput_size, self.intput_size, 2],
+                            #   input_shape=[None, None, None, 2],
                               nb_labels=n_labels_seg,
                               nb_levels=5,
                               nb_conv_per_level=2,
