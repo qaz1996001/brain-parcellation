@@ -13,8 +13,8 @@ app = Celery('tasks',
              )
 
 app.config_from_object('code_ai.celery_config')
-app.conf.task_default_retry_delay = 5  # Seconds delay between retries
-app.conf.task_max_retries = 5  # Maximum number of retries
+# app.conf.task_default_retry_delay = 5  # Seconds delay between retries
+# app.conf.task_max_retries = 5  # Maximum number of retries
 
 app.conf.task_routes = {
     'code_ai.task.task_synthseg.celery_workflow': {'queue': 'default'},
@@ -28,11 +28,15 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.cmb_save_task': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.dwi_save_task': {'queue': 'synthseg_queue'},
 
-    # 'code_ai.task.task_dicom2nii.celery_workflow': {'queue': 'dicom2nii_queue'},
-    # 'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.celery_workflow': {'queue': 'dicom_rename_queue'},
-    'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
+    'code_ai.task.task_dicom2nii.celery_workflow':  {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
+'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom2nii_queue'},
+
+    'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
+    'code_ai.task.task_dicom2nii.process_instances': {'queue': 'dicom_rename_queue'},
+
+    # 'code_ai.task.task_dicom2nii.celery_workflow': {'queue': 'dicom_rename_queue'},
+    # 'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
 
 
 }
@@ -41,6 +45,7 @@ app.conf.task_queues = {
     'synthseg_queue': {'routing_key': 'synthseg_queue'},  # 專屬synthseg_task
     'default': {'routing_key': 'default'},               # 默認隊列
     'dicom2nii_queue': {'routing_key': 'dicom2nii_queue'},    #  專屬dicom2nii_queue
+    'dicom_rename_queue': {'routing_key': 'dicom_rename_queue'},  # 專屬dicom2nii_queue
 }
 
 # 在启动Celery worker时注册任务上下文

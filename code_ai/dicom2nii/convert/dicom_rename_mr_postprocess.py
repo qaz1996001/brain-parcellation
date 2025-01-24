@@ -188,6 +188,7 @@ class MRDicomProcessingStrategy(ProcessingStrategy):
     def revise_age(self, dicom_ds: FileDataset):
         # (0010,1010) Patient Age 057Y
         age = dicom_ds.get((0x10, 0x1010))
+        flag = False
         if age:
             flag,age_value = self.validate_age(age.value)
             if flag:

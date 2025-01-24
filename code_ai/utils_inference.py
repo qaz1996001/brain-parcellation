@@ -1,3 +1,4 @@
+import argparse
 import enum
 import os
 import pathlib
@@ -9,48 +10,6 @@ import pandas as pd
 from pydantic import BaseModel, Field
 from code_ai.dicom2nii.convert.config import T1SeriesRenameEnum, MRSeriesRenameEnum, T2SeriesRenameEnum
 
-
-
-def get_file_list(input_path, suffixes, filter_name=None):
-    if any(suffix in input_path.suffixes for suffix in suffixes):
-        file_list = [input_path]
-    else:
-        file_list = sorted(list(input_path.rglob('*.nii*')))
-    if filter_name:
-        file_list = [f for f in file_list if filter_name in f.name]
-    return file_list
-
-
-
-def prepare_output_file_list(file_list, suffix, output_dir=None):
-    return [
-        output_dir.joinpath(x.parent.name, replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
-            replace_suffix(x.name, suffix)) for x in file_list]
-
-def replace_suffix(filename, new_suffix):
-    pattern = r'\.nii\.gz$|\.nii$'
-    return re.sub(pattern, new_suffix, filename)
-
-
-
-class InferenceEnum(str, enum.Enum):
-    SynthSeg = 'SynthSeg'
-    Area = 'Area'
-
-    CMB = 'CMB'
-    CMBSynthSeg = 'CMBSynthSeg'
-
-    DWI = 'DWI'
-    Infarct = 'Infarct'
-
-    WMH = 'WMH'
-    WMH_PVS = 'WMH_PVS'
-
-    Aneurysm = 'Aneurysm'
-    AneurysmSynthSeg = 'AneurysmSynthSeg'
-
-
-    # Lacune
 
 
 model_mapping_series_dict = {
@@ -81,35 +40,9 @@ model_mapping_series_dict = {
                               ]]
 }
 
+
 study_id_pattern = re.compile('^[0-9]{8}_[0-9]{8}_(MR|CT|CR|PR).*$', re.IGNORECASE)
 
-
-def check_study_id(intput_path: pathlib.Path) -> bool:
-    global study_id_pattern
-    if intput_path.is_dir():
-        result = study_id_pattern.match(intput_path.name)
-        if result is not None:
-            return True
-    return False
-
-
-def check_study_mapping_inference(study_path: pathlib.Path):
-    file_list = sorted(study_path.iterdir())
-    if any(filter(lambda x: x.name.endswith('nii.gz') or x.name.endswith('nii'), file_list)):
-        df_file = pd.DataFrame(file_list, columns=['file_path'])
-        df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
-        model_mapping_dict = {}
-        for model_name, model_mapping_series_list in model_mapping_series_dict.items():
-            for mapping_series in model_mapping_series_list:
-                mapping_series_str = list(map(lambda x: x.value, mapping_series))
-                result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
-
-                if result[0].shape[0] >= len(mapping_series_str):
-                    df_result = df_file.iloc()[result[1]]
-                    file_path = list(map(lambda x: str(x), df_result['file_path'].to_list()))
-                    model_mapping_dict.update({model_name.value: file_path})
-                    break
-        return {study_path.name: model_mapping_dict}
 
 
 class Result(BaseModel):
@@ -135,6 +68,72 @@ class Analysis(BaseModel):
 
 class Dataset(BaseModel):
     analyses: Dict[str, Analysis]
+
+
+class InferenceEnum(str, enum.Enum):
+    SynthSeg = 'SynthSeg'
+    Area = 'Area'
+
+    CMB = 'CMB'
+    CMBSynthSeg = 'CMBSynthSeg'
+
+    DWI = 'DWI'
+    Infarct = 'Infarct'
+
+    WMH = 'WMH'
+    WMH_PVS = 'WMH_PVS'
+    # Lacune
+    Aneurysm = 'Aneurysm'
+    AneurysmSynthSeg = 'AneurysmSynthSeg'
+
+
+def get_file_list(input_path, suffixes, filter_name=None):
+    if any(suffix in input_path.suffixes for suffix in suffixes):
+        file_list = [input_path]
+    else:
+        file_list = sorted(list(input_path.rglob('*.nii*')))
+    if filter_name:
+        file_list = [f for f in file_list if filter_name in f.name]
+    return file_list
+
+
+def prepare_output_file_list(file_list, suffix, output_dir=None):
+    return [
+        output_dir.joinpath(x.parent.name, replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
+            replace_suffix(x.name, suffix)) for x in file_list]
+
+
+def replace_suffix(filename, new_suffix):
+    pattern = r'\.nii\.gz$|\.nii$'
+    return re.sub(pattern, new_suffix, filename)
+
+
+def check_study_mapping_inference(study_path: pathlib.Path):
+    file_list = sorted(study_path.iterdir())
+    if any(filter(lambda x: x.name.endswith('nii.gz') or x.name.endswith('nii'), file_list)):
+        df_file = pd.DataFrame(file_list, columns=['file_path'])
+        df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
+        model_mapping_dict = {}
+        for model_name, model_mapping_series_list in model_mapping_series_dict.items():
+            for mapping_series in model_mapping_series_list:
+                mapping_series_str = list(map(lambda x: x.value, mapping_series))
+                result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
+
+                if result[0].shape[0] >= len(mapping_series_str):
+                    df_result = df_file.iloc()[result[1]]
+                    file_path = list(map(lambda x: str(x), df_result['file_path'].to_list()))
+                    model_mapping_dict.update({model_name.value: file_path})
+                    break
+        return {study_path.name: model_mapping_dict}
+
+
+def check_study_id(intput_path: pathlib.Path) -> bool:
+    global study_id_pattern
+    if intput_path.is_dir():
+        result = study_id_pattern.match(intput_path.name)
+        if result is not None:
+            return True
+    return False
 
 
 def generate_output_files(input_paths: List[str], task_name: str, base_output_path: str) -> List[str]:
@@ -182,3 +181,49 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
         case _:
             pass
     return output_files
+
+
+
+def build_Area(mode,file_dict):
+    parser = argparse.ArgumentParser(prog='build_Area')
+
+    args = parser.parse_known_args()[0]
+    args.cmb = False
+    args.wmh = False
+    args.dwi = False
+    args.wm_file = False
+    args.all = False
+    args.depth_number = 5
+    setattr(args, mode, True)
+    output_path = pathlib.Path(file_dict['output_path'])
+    args.intput_file_list = list(map(lambda x: pathlib.Path(x), file_dict['input_path_list']))
+    args.resample_file_list = prepare_output_file_list(args.intput_file_list, '_resample.nii.gz', output_path)
+    args.synthseg_file_list = prepare_output_file_list(args.resample_file_list, '_synthseg.nii.gz', output_path)
+    args.synthseg33_file_list = prepare_output_file_list(args.resample_file_list, '_synthseg33.nii.gz', output_path)
+    args.david_file_list = prepare_output_file_list(args.resample_file_list, '_david.nii.gz', output_path)
+    args.wm_file_list = prepare_output_file_list(args.resample_file_list, '_wm.nii.gz', output_path)
+    return args,args.intput_file_list
+
+
+def get_synthseg_args_file(inference_name, file_dict):
+    output_path = pathlib.Path(file_dict['output_path'])
+    match inference_name:
+        case InferenceEnum.Area:
+            args,file_list = build_Area('wm_file',file_dict)
+            return args, file_list
+        case InferenceEnum.WMH_PVS:
+            args,file_list = build_Area('wmh',file_dict)
+            args.wmh_file_list = prepare_output_file_list(args.resample_file_list, '_WMHPVS.nii.gz', output_path)
+            return args, file_list
+        case InferenceEnum.DWI:
+            args, file_list = build_Area('dwi', file_dict)
+            args.dwi_file_list = prepare_output_file_list(args.resample_file_list, '_DWI.nii.gz', output_path)
+            return args, file_list
+        case InferenceEnum.AneurysmSynthSeg:
+            args, file_list = build_Area('wm_file', file_dict)
+            return args, file_list
+
+
+
+
+

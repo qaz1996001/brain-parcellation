@@ -17,6 +17,9 @@ from code_ai.dicom2nii.convert import T2ProcessingStrategy, ASLProcessingStrateg
 from code_ai.dicom2nii.convert import RestingProcessingStrategy, DTIProcessingStrategy, CVRProcessingStrategy
 from code_ai.dicom2nii.convert import NullEnum
 from code_ai.dicom2nii.convert import MRSeriesRenameEnum
+from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
+from code_ai.utils_inference import get_synthseg_args_file
+from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
 from ..dicom2nii.convert import dicom_rename_mr_postprocess
 from ..dicom2nii.convert import convert_nifti_postprocess
 
@@ -69,124 +72,19 @@ def get_study_folder_name(dicom_ds):
     return f'{patient_id}_{study_date}_{modality}_{accession_number}'
 
 
-def chunk_list(lst, chunk_size):
+def chunk_list(lst, chunk_size,output_dicom_path):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), chunk_size):
-        yield lst[i:i + chunk_size]
+        yield (lst[i:i + chunk_size],output_dicom_path)
+
+# def chunk_list(lst, chunk_size):
+#     """Yield successive n-sized chunks from lst."""
+#     for i in range(0, len(lst), chunk_size):
+#         yield lst[i:i + chunk_size]
 
 
 
-# @app.task(bind=True,rate_limit='250/s',priority=100)
-# def rename_dicom_file(self,instance_path, processing_strategy_list,modality_processing_strategy,mr_acquisition_type_processing_strategy):
-#     try:
-#         with open(instance_path, mode='rb') as dcm:
-#             dicom_ds = dcmread(dcm, stop_before_pixels=True)
-#         if dicom_ds is None:
-#             return tuple(['',''])
-#         # Simulating renaming logic
-#         modality_enum = modality_processing_strategy.process(dicom_ds=dicom_ds)
-#         mr_acquisition_type_enum = mr_acquisition_type_processing_strategy.process(dicom_ds=dicom_ds)
-#         for processing_strategy in processing_strategy_list:
-#             if modality_enum == processing_strategy.modality:
-#                 for mr_acquisition_type in processing_strategy.mr_acquisition_type:
-#                     if mr_acquisition_type_enum == mr_acquisition_type:
-#                         series_enum = processing_strategy.process(dicom_ds=dicom_ds)
-#                         if series_enum is not NullEnum.NULL:
-#                             output_study = get_output_study(dicom_ds)
-#                             return series_enum.value,output_study
-#         return tuple(['',''])
-#     except (InvalidDicomError, BytesLengthException):
-#         print(f"Invalid DICOM file: {instance_path}")
-#         return None
-#     except Exception as e:
-#         self.retry(countdown=5, max_retries=5)  # 重試任務
-#
-#
-# @app.task(bind=True,rate_limit='100/s',priority=80)
-# def copy_dicom_file(self,input_tuple,instance_path,output_path):
-#     try:
-#         if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
-#             return
-#         rename_series = input_tuple[0]
-#         output_study = input_tuple[1]
-#         output_study_series = output_path.joinpath(output_study,rename_series)
-#         output_study_series.mkdir(exist_ok=True,parents=True)
-#         os.makedirs(output_study_series, exist_ok=True)
-#         output_study_instance:pathlib.Path = output_study_series.joinpath(instance_path.name)
-#         if output_study_series.is_dir():
-#             if output_study_instance.exists():
-#                 return
-#             else:
-#                 with open(instance_path,mode='rb') as instance:
-#                     with open(output_study_instance,'wb+') as output_instance:
-#                         shutil.copyfileobj(instance,output_instance)
-#                 return output_study_instance
-#     except Exception as e:
-#         print('input_tuple',input_tuple)
-#         self.retry(countdown=5, max_retries=5)  # 重試任務
-#     except OSError :
-#         self.retry(countdown=30, max_retries=5)
-#
-#
-# @app.task(bind=True,rate_limit='100/s',priority=70)
-# def dicom_file_processing(self,input_tuple,output_nifti_path,post_process_manager):
-#     if input_tuple is None:
-#         return
-#
-#     output_study_instance: pathlib.Path = input_tuple
-#     output_study_path = output_study_instance.parent.parent
-#     post_process_manager.post_process(output_study_path)
-#     if check_dicom_instance_number_at_last(output_study_instance):
-#         print('dicom_file_processing input_tuple ', input_tuple)
-#         print('dicom_file_processing output_nifti_path ', output_nifti_path)
-#         print('dicom_file_processing post_process_manager ', post_process_manager)
-#         output_study_series = output_study_instance.parent
-#         print('check_dicom_instance_number_at_last',output_study_series)
-#         dicom_2_nii_file.apply_async(args=(output_study_series, output_nifti_path))
-#     # try:
-#     #     pass
-#     # except :
-#     #     self.retry(countdown=5, max_retries=5)  # 重試任務
-#
-#
-# @app.task(bind=True,rate_limit='0.3/s',priority=60)
-# def dicom_2_nii_file(self,study_path,output_path):
-#     print('dicom_2_nii_file self ', self)
-#     print('dicom_2_nii_file study_path ', study_path)
-#     print('dicom_2_nii_file output_path ', output_path)
-
-
-
-#         self.retry(countdown=5, max_retries=5)  # 重試任務
-#
-#
-# @app.task(bind=True,rate_limit='100/s',priority=80)
-# def copy_dicom_file(self,input_tuple,instance_path,output_path):
-#     try:
-#         if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
-#             return
-#         rename_series = input_tuple[0]
-#         output_study = input_tuple[1]
-#         output_study_series = output_path.joinpath(output_study,rename_series)
-#         output_study_series.mkdir(exist_ok=True,parents=True)
-#         os.makedirs(output_study_series, exist_ok=True)
-#         output_study_instance:pathlib.Path = output_study_series.joinpath(instance_path.name)
-#         if output_study_series.is_dir():
-#             if output_study_instance.exists():
-#                 return
-#             else:
-#                 with open(instance_path,mode='rb') as instance:
-#                     with open(output_study_instance,'wb+') as output_instance:
-#                         shutil.copyfileobj(instance,output_instance)
-#                 return output_study_instance
-#     except Exception as e:
-#         print('input_tuple',input_tuple)
-#         self.retry(countdown=5, max_retries=5)  # 重試任務
-#     except OSError :
-#         self.retry(countdown=30, max_retries=5)
-
-
-
+@shared_task(priority=58)
 def rename_dicom_file(instance_path,
                       processing_strategy_list,
                       modality_processing_strategy,
@@ -208,7 +106,7 @@ def rename_dicom_file(instance_path,
                         return series_enum.value,output_study
 
 
-
+@shared_task(priority=58,ignore_result=True)
 def copy_dicom_file(input_tuple,instance_path,output_path):
     if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
         return
@@ -264,7 +162,7 @@ def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
 
 
 # @app.task(bind=True,rate_limit='1/s',priority=55)
-@shared_task(bind=True,rate_limit='8/s',priority=55)
+@shared_task(bind=True,rate_limit='8/s',priority=60)
 def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
     FILE_SIZE = 500
     if dicom_study_folder_path is None:
@@ -292,9 +190,12 @@ def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
 
 
 
-# @app.task(bind=True,rate_limit='500/s',priority=58)
-@shared_task(bind=True,rate_limit='500/s',priority=58,ignore_result=True)
-def process_instances(self, instances_list,output_dicom_path):
+@shared_task(bind=True,priority=58,ignore_result=True)
+def process_instances(self, input_args):
+    # @app.task(bind=True,rate_limit='500/s',priority=58)
+    # def process_instances(self, instances_list,output_dicom_path):
+    instances_list = input_args[0]
+    output_dicom_path = input_args[1]
     try:
         for instance in instances_list:
             rename_dicom_file_tuple = rename_dicom_file(instance,
@@ -307,32 +208,112 @@ def process_instances(self, instances_list,output_dicom_path):
     except:
         self.retry(countdown=60, max_retries=5)  # 重試任務
 
+    try:
+        workflows = []
+        for instance in instances_list:
+            workflow = chain(rename_dicom_file.s(instance,
+                                            ConvertManager.processing_strategy_list,
+                                            ConvertManager.modality_processing_strategy,
+                                            ConvertManager.mr_acquisition_type_processing_strategy),
+                             copy_dicom_file.s(instance,output_dicom_path),)
+            workflows.append(workflow)
+        job = group(workflows).apply()
+    except:
+        self.retry(countdown=60, max_retries=5)  # 重試任務
+
+
+
 
 @app.task(rate_limit='300/s',priority=60)
 def process_dir(sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
+    from celery.result import GroupResult,EagerResult
     instances_list = list(sub_dir.rglob('*.dcm'))
-    workflows = []
-    for chunk in chunk_list(instances_list, 64):
-        workflows.append(process_instances.s(chunk,output_dicom_path))
-    # job = group(workflows).apply()
-    from celery.result import GroupResult
-    res :GroupResult = group(workflows).apply()
-    print('res',res,res.successful())
+    res = process_instances.map(chunk_list(instances_list, 64,output_dicom_path))
+    res.apply()
+    return res
 
+
+@app.task(rate_limit='300/s',priority=60)
+def process_dir_next(input_args,sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
+    instances_list = list(sub_dir.rglob('*.dcm'))
     if len(instances_list) > 0:
         instance_path: pathlib.Path = instances_list[0]
         with open(instance_path, mode='rb') as dcm:
-
             dicom_ds = dcmread(dcm, stop_before_pixels=True)
             study_folder_name = get_study_folder_name(dicom_ds)
             study_folder_path = output_dicom_path.joinpath(study_folder_name)
             print('instance_path', instance_path)
-            print('study_folder_name', study_folder_name)
             print('study_folder_path', study_folder_path)
             file_processing(study_folder_path,
-                                  ConvertManager.dicom_post_process_manager)
+                            ConvertManager.dicom_post_process_manager)
             dicom_study_folder_path = study_folder_path
         return dicom_study_folder_path
+
+
+
+@app.task
+def process_synthseg(output_nifti,output_inference):
+    miss_inference = {InferenceEnum.CMB, InferenceEnum.AneurysmSynthSeg, InferenceEnum.Aneurysm}
+    input_dir = pathlib.Path(output_nifti)
+    base_output_path = str(pathlib.Path(output_inference))
+    input_dir_list = sorted(input_dir.iterdir())
+    study_list = list(filter(check_study_id, input_dir_list))
+    mapping_inference_list = list(map(check_study_mapping_inference, study_list))
+    analyses = {}
+    for mapping_inference in mapping_inference_list:
+        study_id = mapping_inference.keys()
+        model_dict_values = mapping_inference.values()
+        for task_dict in model_dict_values:
+            tasks = {}
+            for model_name, input_paths in task_dict.items():
+                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
+                tasks[model_name] = Task(
+                    intput_path_list=input_paths,
+                    output_path=base_output_path,
+                    result=Result(output_file=task_output_files)
+                )
+        analyses[str(study_id)] = Analysis(**tasks)
+
+    mapping_inference_data = Dataset(analyses=analyses).model_dump()
+    for study_id, mapping_inference in mapping_inference_data['analyses'].items():
+        for inference_name, file_dict in mapping_inference.items():
+            if file_dict is None:
+                continue
+            if inference_name in miss_inference:
+                continue
+
+            match inference_name:
+                case InferenceEnum.Area:
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
+                                           queue='default',
+                                           routing_key='celery')
+                case InferenceEnum.WMH_PVS:
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
+                                           queue='default',
+                                           routing_key='celery')
+                case InferenceEnum.DWI:
+                    # DWI
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
+                                           queue='default',
+                                           routing_key='celery')
+                case InferenceEnum.CMB:
+                    pass
+                case InferenceEnum.AneurysmSynthSeg:
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
+                                           queue='default',
+                                           routing_key='celery')
+                case InferenceEnum.Infarct:
+                    pass
+                case InferenceEnum.WMH:
+                    pass
+                case InferenceEnum.Aneurysm:
+                    pass
+                case _:
+                    pass
 
 
 @app.task
@@ -356,6 +337,7 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
     if is_dir_flag:
         for sub_dir in list(input_dicom_path.iterdir()):
             workflow = chain(process_dir.s(sub_dir,output_dicom_path),
+                             process_dir_next.s(sub_dir,output_dicom_path),
                              dicom_2_nii_file.s(output_nifti_path))
             workflows.append(workflow)
     else:
@@ -366,6 +348,7 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                                      dicom_2_nii_file.s(output_nifti_path)
                                      )
                     workflows.append(workflow)
+    print('workflows size',len(workflows))
     job = group(workflows).apply_async()
     return job
 
