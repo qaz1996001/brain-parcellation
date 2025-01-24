@@ -28,14 +28,12 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.cmb_save_task': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.dwi_save_task': {'queue': 'synthseg_queue'},
 
-    'code_ai.task.task_dicom2nii.read_dicom_file': {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.get_output_study': {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.rename_dicom_file': {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.copy_dicom_file': {'queue': 'dicom2nii_queue'},
-
-    'code_ai.task.task_dicom2nii.dicom_file_processing': {'queue': 'dicom2nii_queue'},
+    # 'code_ai.task.task_dicom2nii.celery_workflow': {'queue': 'dicom2nii_queue'},
+    # 'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom2nii_queue'},
+    'code_ai.task.task_dicom2nii.celery_workflow': {'queue': 'dicom_rename_queue'},
+    'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
     'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
-    # 'code_ai.task.task_dicom2nii.call_dicom_to_nii': {'queue': 'dicom2nii_queue'},
+
 
 }
 
@@ -44,19 +42,6 @@ app.conf.task_queues = {
     'default': {'routing_key': 'default'},               # 默認隊列
     'dicom2nii_queue': {'routing_key': 'dicom2nii_queue'},    #  專屬dicom2nii_queue
 }
-
-# app.conf.task_queues.update( {
-#     'synthseg_queue': {'routing_key': 'synthseg_queue'},  # 專屬synthseg_task
-#     'default': {'routing_key': 'default'},               # 默認隊列
-# })
-
-
-# app.conf.task_routes.update({
-#     'code_ai.task.task_synthseg.synthseg_task': {'queue': 'synthseg_queue'},  # 將synthseg_task指派到專屬隊列
-#     'code_ai.task.task_synthseg.resample_task': {'queue': 'default'},         # 默認處理其他任務
-#     'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'default'},
-# })
-
 
 # 在启动Celery worker时注册任务上下文
 
@@ -73,6 +58,7 @@ from celery.concurrency.solo import TaskPool
 def configure_environment(sender, **kwargs):
     import tensorflow as tf
     gpus = tf.config.experimental.list_physical_devices('GPU')
+    print(gpus)
     if gpus:
         try:
             # tf.config.experimental.set_virtual_device_configuration(

@@ -267,7 +267,8 @@ class MRDicomProcessingStrategy(ProcessingStrategy):
                 flag_age,dicom = self.revise_age(dicom_ds=dicom)
                 flag_time,dicom = self.revise_time(dicom_ds=dicom)
                 if any([flag_age,flag_time]):
-                    dicom.save_as(filename=f'{file_name}')
+                    dicom.save_as(str(file_name),
+                                  overwrite=True)
 
 
 

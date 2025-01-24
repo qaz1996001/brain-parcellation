@@ -1,19 +1,18 @@
-import sys
-sys.path.append('/mnt/d/00_Chen/Task04_git')
-print('path', sys.path)
 import argparse
 import enum
 import os
-import re
-from typing import List, Any, Dict, Optional
-
 import pathlib
+import re
+import sys
+sys.path.append('/mnt/d/00_Chen/Task04_git')
+print('path', sys.path)
+from typing import List, Any, Dict, Optional
+from celery.result import AsyncResult
+
 import numpy as np
 import pandas as pd
 from celery import Celery
-import orjson
 from pydantic import BaseModel, Field
-
 from code_ai.dicom2nii.convert.config import T1SeriesRenameEnum, MRSeriesRenameEnum, T2SeriesRenameEnum
 
 
@@ -61,35 +60,32 @@ class InferenceEnum(str, enum.Enum):
     # Lacune
 
 
-model_mapping_series_dict = {InferenceEnum.Area: [  #{T1SeriesRenameEnum.T1BRAVO_AXI,},
-    #{T1SeriesRenameEnum.T1BRAVO_SAG,},
-    # {T1SeriesRenameEnum.T1BRAVO_COR,},
-    # {T1SeriesRenameEnum.T1FLAIR_AXI,},
-    # {T1SeriesRenameEnum.T1FLAIR_SAG,},
-    #{T1SeriesRenameEnum.T1FLAIR_COR,}
-    [T1SeriesRenameEnum.T1BRAVO_AXI, ],
-    [T1SeriesRenameEnum.T1BRAVO_SAG, ],
-    [T1SeriesRenameEnum.T1BRAVO_COR, ],
-    [T1SeriesRenameEnum.T1FLAIR_AXI, ],
-    [T1SeriesRenameEnum.T1FLAIR_SAG, ],
-    [T1SeriesRenameEnum.T1FLAIR_COR, ],
-],
-    InferenceEnum.DWI: [  #[MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1BRAVO_AXI,],
+model_mapping_series_dict = {
+    InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
+                         [T1SeriesRenameEnum.T1BRAVO_SAG, ],
+                         [T1SeriesRenameEnum.T1BRAVO_COR, ],
+                         [T1SeriesRenameEnum.T1FLAIR_AXI, ],
+                         [T1SeriesRenameEnum.T1FLAIR_SAG, ],
+                         [T1SeriesRenameEnum.T1FLAIR_COR, ],],
+    InferenceEnum.DWI: [
+        #[MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1BRAVO_AXI,],
         # [MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1FLAIR_AXI,],
         [MRSeriesRenameEnum.DWI0]
     ],
     InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
+
+    #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
     InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
-                        #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
     InferenceEnum.AneurysmSynthSeg: [[MRSeriesRenameEnum.MRA_BRAIN]],
-    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,
-                             MRSeriesRenameEnum.DWI1000,
-                             MRSeriesRenameEnum.ADC], ],
-    InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
+    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,MRSeriesRenameEnum.DWI1000,MRSeriesRenameEnum.ADC],
+                            ],
+    InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
+                         ]],
 
-    InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN]]
+    InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
+                              ]]
 }
 
 study_id_pattern = re.compile('^[0-9]{8}_[0-9]{8}_(MR|CT|CR|PR).*$', re.IGNORECASE)
@@ -208,35 +204,11 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def main(args):
-    input_dir = pathlib.Path(args.input_nifti)
-    input_dir_list = sorted(input_dir.iterdir())
-    study_list = list(filter(check_study_id, input_dir_list))
-    base_output_path = "/mnt/d/00_Chen/Task04_git/output"
-    mapping_inference_list = list(map(check_study_mapping_inference, study_list))
-    analyses = {}
-    for mapping_inference in mapping_inference_list:
-
-        study_id = mapping_inference.keys()
-        model_dict_values = mapping_inference.values()
-        for task_dict in model_dict_values:
-            tasks = {}
-            for model_name, input_paths in task_dict.items():
-                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
-                # if len(task_output_files) >
-                tasks[model_name] = Task(
-                    intput_path_list=input_paths,
-                    output_path=base_output_path,
-                    result=Result(output_file=task_output_files)
-                )
-        analyses[str(study_id)] = Analysis(**tasks)
-    return Dataset(analyses=analyses).model_dump()
-
-
 
 def build_Area(mode,file_dict):
-    parser = argparse.ArgumentParser()
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(prog='build_Area')
+
+    args = parser.parse_known_args()[0]
     args.cmb = False
     args.wmh = False
     args.dwi = False
@@ -273,34 +245,32 @@ def get_synthseg_args_file(inference_name, file_dict):
             return args, file_list
 
 
-app = Celery('tasks',
-             broker='pyamqp://guest:guest@localhost:5672/celery',
-             backend='redis://localhost:10079/1'
-             )
-app.config_from_object('code_ai.celery_config')
+def model_inference(intput_args):
+    miss_inference = {InferenceEnum.CMB, InferenceEnum.AneurysmSynthSeg,InferenceEnum.Aneurysm}
+    input_dir = pathlib.Path(intput_args.output_nifti)
+    base_output_path = str(pathlib.Path(intput_args.output_inference))
+    input_dir_list = sorted(input_dir.iterdir())
+    study_list = list(filter(check_study_id, input_dir_list))
+    mapping_inference_list = list(map(check_study_mapping_inference, study_list))
+    analyses = {}
+    for mapping_inference in mapping_inference_list:
 
-if __name__ == '__main__':
-    # input_dir = pathlib.Path(r'E:\PC_3090\data\rename_nifti\PSCL_MRI')
-    # input_dir_list = sorted(input_dir.iterdir())
-    # study_list = list(filter(check_study_id, input_dir_list))
-    # mapping_inference_list = list(map(check_study_mapping_inference, study_list))
-    # with open('mapping.json', mode='wb+') as f:
-    #     f.write(orjson.dumps(mapping_inference_list))
+        study_id = mapping_inference.keys()
+        model_dict_values = mapping_inference.values()
+        for task_dict in model_dict_values:
+            tasks = {}
+            for model_name, input_paths in task_dict.items():
+                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
+                tasks[model_name] = Task(
+                    intput_path_list=input_paths,
+                    output_path=base_output_path,
+                    result=Result(output_file=task_output_files)
+                )
+        analyses[str(study_id)] = Analysis(**tasks)
 
-    # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name BRAVO.nii
-    # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
-    # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
-    # python D:\00_Chen\Task04_git\code_ai\main.py -i D:\00_Chen\Task04_git\data --input_name SWAN.nii --template_name BRAVO.nii --CMB True
-    # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data --input_name BRAVO.nii -o /mnt/d/00_Chen/Task04_git/data_0106
-    # python /mnt/d/00_Chen/Task04_git/code_ai/main.py -i /mnt/d/00_Chen/Task04_git/data -o /mnt/d/00_Chen/Task04_git/data_0106
-    args = parse_arguments()
-    print(args,type(args))
-    mapping_inference_data = main(args)
+    mapping_inference_data = Dataset(analyses=analyses).model_dump()
 
-    # miss_inference = { InferenceEnum.WMH,InferenceEnum.CMB,InferenceEnum.AneurysmSynthSeg,
-    #                    InferenceEnum.DWI,InferenceEnum.WMH_PVS}
-    miss_inference = { InferenceEnum.CMB,InferenceEnum.AneurysmSynthSeg,}
-    # miss_inference = {}
+
     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
         for inference_name, file_dict in mapping_inference.items():
             if file_dict is None:
@@ -340,33 +310,67 @@ if __name__ == '__main__':
                     pass
                 case _:
                     pass
-        # break
 
 
+app = Celery('tasks',
+             broker='pyamqp://guest:guest@localhost:5672/celery',
+             backend='redis://localhost:10079/1'
+             )
+app.config_from_object('code_ai.celery_config')
 
-# C:\Users\tmu3090\Desktop\Task\dicom2nii\src\mapping.json
-# E:\PC_3090\data\output\PSCL_MRI\08292236_20160707_MR_E42557741501
-# "E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\synthseg_DWI0_original_DWI.json",
-# intput
-# Infarct":["E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\ADC.nii.gz",
-# "E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\DWI0.nii.gz",
-# "E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\DWI1000.nii.gz",
-# "E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\synthseg_DWI0_original_DWI.nii.gz",
-# ]
-# "WMH": ["E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\T2FLAIR_AXI.nii.gz",
-#         "E:\\PC_3090\\data\\rename_nifti\\PSCL_MRI\\00003092_20201007_MR_20910070157\\synthseg_T2FLAIR_AXI_original_WMHPVS.nii.gz",
-# ],
-# output
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Infarct.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Infarct_ADCth.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Infarct_synthseg.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Infarct.json
 
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_WMH.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_WMH_synthseg.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_WMH.json
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Aneurysm.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Prob_Aneurysm.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Vessel.nii.gz
-# output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Aneurysm.json
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input_dicom', dest='input_dicom', type=str,
+                        help="input the raw dicom folder.\r\n")
+    parser.add_argument('--output_dicom', dest='output_dicom', type=str,
+                        help="output the rename dicom folder.\r\n")
+    parser.add_argument('--output_nifti', dest='output_nifti', type=str,
+                        help="rename dicom output to nifti folder.\r\n"
+                             "Example ： python tes_dicom2nii_and_synthseg_task.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
+                             "--output_nifti output_nifti_path")
+    parser.add_argument('--output_inference', dest='output_inference', type=str,
+                        help="model inference output folder.\r\n")
 
+    # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom --output_nifti /mnt/e/rename_nifti --output_inference /mnt/e/rename_nifti
+    # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/Study_Glymphatics --output_dicom /mnt/e/rename_dicom --output_nifti /mnt/e/rename_nifti --output_inference /mnt/e/rename_nifti
+    # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/study_VCI --output_dicom /mnt/e/rename_dicom --output_nifti /mnt/e/rename_nifti --output_inference /mnt/e/rename_nifti
+
+    args = parser.parse_args()
+    input_dicom_path = args.input_dicom
+    output_dicom_path = args.output_dicom
+    output_nifti_path = args.output_nifti
+    print(args.output_nifti)
+    print(args.output_inference)
+    result = app.send_task('code_ai.task.task_dicom2nii.celery_workflow', args=(input_dicom_path,
+                                                                                output_dicom_path,
+                                                                                output_nifti_path),
+                           queue='dicom2nii_queue',
+                           routing_key='celery')
+    collect_list = list(result.collect())
+    print('collect_list end')
+
+    # model_inference(args)
+
+    # 946a02a5-79ea-4b0f-9133-793fc2db9beb
+    if collect_list:
+        print('result', result, type(result))
+        print('result', type(result))
+        print('args', args)
+        model_inference(args)
+        print(10000)
+
+    # # 获取任务的 ID
+    # task_id = '65cb5a30-c480-4827-bf24-5bc2a938d867'
+    # # 创建 AsyncResult 实例
+    # result = AsyncResult(task_id)
+    # print('result',result,type(result))
+    # print(list(result.collect()))
+    # print('result', type(result))
+    # print('collect_list start')
+
+#  python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom1 --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
+# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
+
+# D:\00_Chen\Task08\data\raw_dicom\stroke
+# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1

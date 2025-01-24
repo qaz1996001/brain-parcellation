@@ -136,16 +136,20 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file,wm_file)
 
 
 @app.task(bind=True,rate_limit='5/m',priority=20)
-def resample_to_original_task(raw_file, resample_image_file, resample_seg_file):
+def resample_to_original_task(self, raw_file, resample_image_file, resample_seg_file):
     original_seg_file = resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)
     outpput_raw_file = resample_seg_file.parent.joinpath(raw_file.name)
     print('raw_file', raw_file)
     print('outpput_raw_file', outpput_raw_file)
 
-    with open(raw_file,mode='rb') as raw_file_f:
-        with open(outpput_raw_file,mode='wb') as outpput_raw_file_f:
-            shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
-    return original_seg_file
+    if str(raw_file) == str(outpput_raw_file):
+        return original_seg_file
+    else:
+        with open(raw_file,mode='rb') as raw_file_f:
+            with open(outpput_raw_file,mode='wb') as outpput_raw_file_f:
+                shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
+        return original_seg_file
+
 
 @app.task
 @shared_task
@@ -195,67 +199,6 @@ def clear_tensorflow_backend():
     tf.keras.backend.clear_session()
     return True
 
-# @app.task
-# def save_file_tasks(synthseg_david_tuple, intput_args, index):
-#     print('synthseg_david_tuple',synthseg_david_tuple)
-#     print('intput_args', intput_args)
-#     synthseg_file = intput_args.synthseg_file_list[index]
-#     synthseg_nii = nib.load(synthseg_file)
-#     affine = synthseg_nii.affine
-#     header = synthseg_nii.header
-#
-#     david_file = intput_args.david_file_list[index]
-#     david_nii = nib.load(david_file)
-#     seg_array = np.array(david_nii.dataobj)
-#
-#     wm_file  = intput_args.wm_file_list[index]
-#     synthseg_wm_nii = nib.load(wm_file)
-#     synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
-#
-#     file          = intput_args.intput_file_list[index]
-#     resample_file = intput_args.resample_file_list[index]
-#     # 添加 WM 保存任务
-#     if intput_args.wm_file:
-#         wm_file = intput_args.wm_file_list[index]
-#         print('wm_file 1000000000')
-#         chain(wm_save_task.s(seg_array, affine, header, wm_file)|
-#                       resample_to_original_task.s(raw_file=file,
-#                                                   resample_image_file=resample_file,
-#                                                   resample_seg_file=wm_file)).apply_async()
-#
-#     # 添加 CMB 保存任务
-#     if intput_args.cmb:
-#         cmb_file = intput_args.cmb_file_list[index]
-#         chain(cmb_save_task.s(seg_array, affine, header,  cmb_file) |
-#                       resample_to_original_task.s(raw_file=file,
-#                                                   resample_image_file=resample_file,
-#                                                   resample_seg_file=cmb_file)).apply_async()
-#
-#     # 添加 DWI 保存任务
-#     if intput_args.dwi:
-#         dwi_file = intput_args.dwi_file_list[index]
-#         chain(dwi_save_task.s(seg_array, affine, header, dwi_file) |
-#                      resample_to_original_task.s(raw_file=file,
-#                                                  resample_image_file=resample_file,
-#                                                  resample_seg_file=dwi_file)).apply_async()
-#
-#     # 添加 WMH 保存任务
-#     if intput_args.wmh:
-#         wmh_file = intput_args.wmh_file_list[index]
-#         chain(wmh_save_task.s(
-#             synthseg_array=synthseg_nii.get_fdata(),
-#             synthseg_array_wm=synthseg_array_wm,
-#             affine=affine,
-#             header=header,
-#             depth_number=intput_args.depth_number,
-#             wmh_file=wmh_file,),
-#          resample_to_original_task.s(raw_file=file,
-#                                      resample_image_file=resample_file,
-#                                      resample_seg_file=wmh_file)
-#          ).apply_async()
-#
-#     # 组合任务并执行
-#     return group(tasks)
 
 @app.task
 def save_file_tasks(synthseg_david_tuple, intput_args, index):
@@ -316,122 +259,8 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
                                                  resample_image_file=resample_file,
                                                  resample_seg_file=wmh_file))
     # 组合任务并执行
-    return group(tasks).delay()
-
-# def save_file_tasks(synthseg_david_tuple, intput_args, index):
-#     print('synthseg_david_tuple',synthseg_david_tuple)
-#     print('intput_args', intput_args)
-#     tasks = []
-#     synthseg_file = intput_args.synthseg_file_list[index]
-#     synthseg_nii = nib.load(synthseg_file)
-#     affine = synthseg_nii.affine
-#     header = synthseg_nii.header
-#
-#     david_file = intput_args.david_file_list[index]
-#     david_nii = nib.load(david_file)
-#     seg_array = np.array(david_nii.dataobj)
-#
-#     wm_file  = intput_args.wm_file_list[index]
-#     synthseg_wm_nii = nib.load(wm_file)
-#     synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
-#
-#     file          = intput_args.intput_file_list[index]
-#     resample_file = intput_args.resample_file_list[index]
-#
-#     # 添加 WM 保存任务
-#     if intput_args.wm_file:
-#         wm_file = intput_args.wm_file_list[index]
-#         print('wm_file 1000000000')
-#         tasks.append((wm_save_task.s(seg_array, affine, header, wm_file) |
-#                       resample_to_original_task.s(raw_file=file,
-#                                                   resample_image_file=resample_file,
-#                                                   resample_seg_file=wm_file)))
-#
-#     # 添加 CMB 保存任务
-#     if intput_args.cmb:
-#         cmb_file = intput_args.cmb_file_list[index]
-#         tasks.append((cmb_save_task.s(seg_array, affine, header,  cmb_file) |
-#                       resample_to_original_task.s(raw_file=file,
-#                                                   resample_image_file=resample_file,
-#                                                   resample_seg_file=cmb_file)))
-#
-#     # 添加 DWI 保存任务
-#     if intput_args.dwi:
-#         dwi_file = intput_args.dwi_file_list[index]
-#         tasks.append((dwi_save_task.s(seg_array, affine, header, dwi_file) |
-#                      resample_to_original_task.s(raw_file=file,
-#                                                  resample_image_file=resample_file,
-#                                                  resample_seg_file=dwi_file)))
-#
-#     # 添加 WMH 保存任务
-#     if intput_args.wmh:
-#         wmh_file = intput_args.wmh_file_list[index]
-#         tasks.append(
-#             (chain(wmh_save_task.s(
-#                 synthseg_array=synthseg_nii.get_fdata(),
-#                 synthseg_array_wm=synthseg_array_wm,
-#                 affine=affine,
-#                 header=header,
-#                 depth_number=intput_args.depth_number,
-#                 wmh_file=wmh_file,),
-#              resample_to_original_task.s(raw_file=file,
-#                                          resample_image_file=resample_file,
-#                                          resample_seg_file=wmh_file))))
-#
-#     # 组合任务并执行
-#     job = group(tasks).apply_async()
-#     print('job', job, type(job))
-#     return job
-
-
-def build_celery_workflow(args, file_list):
-    workflows = []
-    depth_number = args.depth_number or 5
-
-    for i, file in enumerate(file_list):
-        try:
-            resample_file = args.resample_file_list[i]
-            synthseg_file = args.synthseg_file_list[i]
-            synthseg33_file = args.synthseg33_file_list[i]
-            david_file = args.david_file_list[i]
-            wm_file = args.wm_file_list[i]
-
-            workflow = chain(
-                resample_task.s(file, resample_file),
-                synthseg_task.s(synthseg_file, synthseg33_file),
-                process_synthseg_task.s(depth_number=depth_number,david_file=david_file,wm_file=wm_file),
-                save_file_tasks.s(intput_args=args, index=i),
-            )
-            workflows.append(workflow)
-        except Exception as e:
-            log_error_task.s(file, str(e))
-
-    return group(workflows)
-
-#
-# def build_celery_workflow(args, file_list):
-#     workflows = []
-#     depth_number = args.depth_number or 5
-#
-#     for i, file in enumerate(file_list):
-#         try:
-#             resample_file = args.resample_file_list[i]
-#             synthseg_file = args.synthseg_file_list[i]
-#             synthseg33_file = args.synthseg33_file_list[i]
-#             david_file = args.david_file_list[i]
-#             wm_file = args.wm_file_list[i]
-#
-#             workflow = chain(
-#                 resample_task.s(file, resample_file),
-#                 synthseg_task.s(synthseg_file, synthseg33_file),
-#                 process_synthseg_task.s(depth_number=depth_number,david_file=david_file,wm_file=wm_file),
-#                 save_file_tasks.s(intput_args=args, index=i),
-#             )
-#             workflows.append(workflow)
-#         except Exception as e:
-#             log_error_task.s(file, str(e))
-#
-#     return group(workflows)
+    job = group(tasks).apply()
+    return job
 
 
 @app.task
@@ -442,18 +271,24 @@ def celery_workflow(args, file_list):
 
     for i, file in enumerate(file_list):
         try:
-            resample_file = args.resample_file_list[i]
-            synthseg_file = args.synthseg_file_list[i]
-            synthseg33_file = args.synthseg33_file_list[i]
-            david_file = args.david_file_list[i]
-            wm_file = args.wm_file_list[i]
 
-            workflow = chain(
-                resample_task.s(file, resample_file),
-                synthseg_task.s(synthseg_file, synthseg33_file),
-                process_synthseg_task.s(depth_number=depth_number, david_file=david_file, wm_file=wm_file),
-                save_file_tasks.s(intput_args=args, index=i),
-            )
+            resample_file   :pathlib.Path = args.resample_file_list[i]
+            synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
+            synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
+            david_file      :pathlib.Path = args.david_file_list[i]
+            wm_file         :pathlib.Path = args.wm_file_list[i]
+            if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists()]):
+                continue
+
+            tasks = []
+            tasks.append(resample_task.s(file, resample_file))
+            tasks.append(synthseg_task.s(synthseg_file, synthseg33_file))
+            tasks.append(process_synthseg_task.s(depth_number=depth_number,
+                                                 david_file=david_file,
+                                                 wm_file=wm_file),)
+            tasks.append(save_file_tasks.s(intput_args=args, index=i))
+
+            workflow = chain(*tasks)
             workflows.append(workflow)
         except Exception as e:
             log_error_task.s(file, str(e))
