@@ -709,3 +709,17 @@ class PostProcessContext:
             return posteriors
         else:
             return None
+
+
+
+class TemplateProcessor:
+    flirt_cmd_base = (
+        'export FSLOUTPUTTYPE=NIFTI_GZ && /home/seanho/fsl/bin/flirt -in "{0}" -ref "{1}" -out '
+        '"{2}" -dof 6 -cost corratio -omat '
+        '"{2}.mat" -interp nearestneighbour'
+    )
+    flirt_cmd_apply = (
+        'export FSLOUTPUTTYPE=NIFTI_GZ && /home/seanho/fsl/bin/flirt -in "{0}" -ref "{1}" '
+        '-out "{2}" -init "{3}.mat" '
+        '-applyxfm -interp nearestneighbour'
+    )

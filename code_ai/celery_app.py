@@ -20,9 +20,9 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.celery_workflow': {'queue': 'default'},
     'code_ai.task.task_synthseg.resample_task': {'queue': 'default'},  # 默認處理其他任務
     'code_ai.task.task_synthseg.log_error_task': {'queue': 'default'},
+    'code_ai.task.task_synthseg.post_process_synthseg_task': {'queue': 'default'},
 
     'code_ai.task.task_synthseg.synthseg_task': {'queue': 'synthseg_queue'},  # 將synthseg_task指派到專屬隊列
-    'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.process_synthseg_task': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.save_file_tasks': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.cmb_save_task': {'queue': 'synthseg_queue'},
@@ -30,7 +30,11 @@ app.conf.task_routes = {
 
     'code_ai.task.task_dicom2nii.celery_workflow':  {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
-'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom2nii_queue'},
+    'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom2nii_queue'},
+
+
+    'code_ai.task.task_dicom2nii.inference_synthseg': {'queue': 'dicom2nii_queue'},
+    'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'dicom2nii_queue'},
 
     'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
     'code_ai.task.task_dicom2nii.process_instances': {'queue': 'dicom_rename_queue'},

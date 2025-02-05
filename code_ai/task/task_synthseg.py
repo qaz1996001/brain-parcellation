@@ -1,4 +1,6 @@
 import shutil
+import subprocess
+from typing import List
 
 from celery import Celery, group, chain,chord
 
@@ -8,7 +10,7 @@ import numpy as np
 import gc
 import os
 import traceback
-from . import SynthSeg
+from . import TemplateProcessor
 from . import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
 from . import resample_one,resampleSynthSEG2original
 from . import app
@@ -17,6 +19,8 @@ from . import app
 from celery import shared_task
 from kombu import Connection, Exchange, Queue, Message, Producer
 from kombu.exceptions import NotBoundError
+
+from ..utils_inference import replace_suffix
 
 # RabbitMQ 鎖配置
 RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"
@@ -134,6 +138,35 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file,wm_file)
     except:
         log_error_task.s(synthseg_file_tuple, str(traceback.format_exc()))
 
+@app.task
+def post_process_synthseg_task(args,intput_args, ):
+    print('post_process_synthseg_task',args)
+    print('intput_args', intput_args)
+    if intput_args.cmb:
+        original_cmb_file_list: List[pathlib.Path] = list(map(lambda x:x.parent.joinpath(f"synthseg_{x.name.replace('resample', 'original')}"),intput_args.cmb_file_list))
+        if original_cmb_file_list[0].name .startswith('synthseg_SWAN'):
+            swan_file = original_cmb_file_list[0]
+            t1_file = original_cmb_file_list[1]
+        else:
+            swan_file = original_cmb_file_list[1]
+            t1_file = original_cmb_file_list[0]
+        print('original_cmb_file_list', original_cmb_file_list)
+        print('swan_file', swan_file)
+        print('t1_file', t1_file)
+        template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
+        synthseg_basename: str = replace_suffix(swan_file.name, '')
+        template_coregistration_file_name= swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
+        cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
+        print('cmd_str', cmd_str)
+        # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
+
+        process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        print('stdout', stdout)
+    return intput_args
+
+
 
 @app.task(bind=True,rate_limit='5/m',priority=20)
 def resample_to_original_task(self, raw_file, resample_image_file, resample_seg_file):
@@ -230,9 +263,9 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     if intput_args.cmb:
         cmb_file = intput_args.cmb_file_list[index]
         tasks.append(cmb_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, cmb_file))
-        # tasks.append(resample_to_original_task.s(raw_file=file,
-        #                                          resample_image_file=resample_file,
-        #                                          resample_seg_file=cmb_file))
+        tasks.append(resample_to_original_task.s(raw_file=file,
+                                                 resample_image_file=resample_file,
+                                                 resample_seg_file=cmb_file))
 
     # 添加 DWI 保存任务
     if intput_args.dwi:
@@ -271,7 +304,6 @@ def celery_workflow(args, file_list):
 
     for i, file in enumerate(file_list):
         try:
-
             resample_file   :pathlib.Path = args.resample_file_list[i]
             synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
             synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
@@ -280,15 +312,13 @@ def celery_workflow(args, file_list):
             if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists()]):
                 continue
 
-            tasks = []
-            tasks.append(resample_task.s(file, resample_file))
-            tasks.append(synthseg_task.s(synthseg_file, synthseg33_file))
-            tasks.append(process_synthseg_task.s(depth_number=depth_number,
-                                                 david_file=david_file,
-                                                 wm_file=wm_file),)
-            tasks.append(save_file_tasks.s(intput_args=args, index=i))
-
-            workflow = chain(*tasks)
+            workflow = chain(resample_task.s(file, resample_file),
+                             synthseg_task.s(synthseg_file, synthseg33_file),
+                             process_synthseg_task.s(depth_number=depth_number,
+                                                     david_file=david_file,
+                                                     wm_file=wm_file),
+                             save_file_tasks.s(intput_args=args, index=i),
+                             post_process_synthseg_task.s(intput_args=args))
             workflows.append(workflow)
         except Exception as e:
             log_error_task.s(file, str(e))

@@ -58,7 +58,10 @@ def model_inference(intput_args):
                                            queue='default',
                                            routing_key='celery')
                 case InferenceEnum.CMB:
-                    pass
+                    args,file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow',args=(args,file_list),
+                                           queue='default',
+                                           routing_key='celery')
                 case InferenceEnum.AneurysmSynthSeg:
                     args, file_list = get_synthseg_args_file(inference_name, file_dict)
                     result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
@@ -109,18 +112,17 @@ if __name__ == '__main__':
                                                                                 output_nifti_path),
                            queue='dicom2nii_queue',
                            routing_key='celery')
+    print('result', result, type(result))
     collect_list = list(result.collect())
     print('collect_list end')
 
-    model_inference(args)
-
     # 946a02a5-79ea-4b0f-9133-793fc2db9beb
-    if collect_list:
-        print('result', result, type(result))
-        print('result', type(result))
-        print('args', args)
-        model_inference(args)
-        print(10000)
+    # if collect_list:
+    #     print('result', result, type(result))
+    #     print('result', type(result))
+    #     print('args', args)
+    #     model_inference(args)
+    #     print(10000)
 
     # # 获取任务的 ID
     # task_id = '65cb5a30-c480-4827-bf24-5bc2a938d867'
@@ -137,3 +139,4 @@ if __name__ == '__main__':
 # D:\00_Chen\Task08\data\raw_dicom\stroke
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
+# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_20250204 --output_nifti /mnt/e/rename_nifti_20250204 --output_inference /mnt/e/rename_nifti_20250204

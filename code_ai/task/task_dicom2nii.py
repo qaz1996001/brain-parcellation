@@ -20,8 +20,12 @@ from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
 from code_ai.utils_inference import get_synthseg_args_file
 from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
+
 from ..dicom2nii.convert import dicom_rename_mr_postprocess
 from ..dicom2nii.convert import convert_nifti_postprocess
+
+import code_ai.task.task_synthseg as task_synthseg
+
 
 
 def get_output_study(dicom_ds):
@@ -186,7 +190,7 @@ def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
     job = group(workflows).apply()
     nifti_study_folder_path = nifti_output_path.joinpath(dicom_study_folder_path.name)
     file_processing(nifti_study_folder_path,ConvertManager.nifti_post_process_manager)
-    return job
+    return job,nifti_study_folder_path
 
 
 
@@ -207,29 +211,30 @@ def process_instances(self, input_args):
                                                     output_dicom_path)
     except:
         self.retry(countdown=60, max_retries=5)  # 重試任務
-
-    try:
-        workflows = []
-        for instance in instances_list:
-            workflow = chain(rename_dicom_file.s(instance,
-                                            ConvertManager.processing_strategy_list,
-                                            ConvertManager.modality_processing_strategy,
-                                            ConvertManager.mr_acquisition_type_processing_strategy),
-                             copy_dicom_file.s(instance,output_dicom_path),)
-            workflows.append(workflow)
-        job = group(workflows).apply()
-    except:
-        self.retry(countdown=60, max_retries=5)  # 重試任務
+"""
+    # try:
+    #     workflows = []
+    #     for instance in instances_list:
+    #         workflow = chain(rename_dicom_file.s(instance,
+    #                                         ConvertManager.processing_strategy_list,
+    #                                         ConvertManager.modality_processing_strategy,
+    #                                         ConvertManager.mr_acquisition_type_processing_strategy),
+    #                          copy_dicom_file.s(instance,output_dicom_path),)
+    #         workflows.append(workflow)
+    #     job = group(workflows).apply()
+    # except:
+    #     self.retry(countdown=60, max_retries=5)  # 重試任務
+"""
 
 
 
 
 @app.task(rate_limit='300/s',priority=60)
 def process_dir(sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
-    from celery.result import GroupResult,EagerResult
     instances_list = list(sub_dir.rglob('*.dcm'))
     res = process_instances.map(chunk_list(instances_list, 64,output_dicom_path))
     res.apply()
+    print('res',res)
     return res
 
 
@@ -252,13 +257,14 @@ def process_dir_next(input_args,sub_dir:pathlib.Path, output_dicom_path:pathlib.
 
 
 @app.task
-def process_synthseg(output_nifti,output_inference):
-    miss_inference = {InferenceEnum.CMB, InferenceEnum.AneurysmSynthSeg, InferenceEnum.Aneurysm}
-    input_dir = pathlib.Path(output_nifti)
+def inference_synthseg(intput_args,
+                       output_inference:pathlib.Path):
+    print('intput_args', intput_args)
     base_output_path = str(pathlib.Path(output_inference))
-    input_dir_list = sorted(input_dir.iterdir())
-    study_list = list(filter(check_study_id, input_dir_list))
+    print('base_output_path', base_output_path)
+    study_list = [intput_args[1]]
     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
+    print('inference_synthseg mapping_inference_list',mapping_inference_list)
     analyses = {}
     for mapping_inference in mapping_inference_list:
         study_id = mapping_inference.keys()
@@ -273,47 +279,26 @@ def process_synthseg(output_nifti,output_inference):
                     result=Result(output_file=task_output_files)
                 )
         analyses[str(study_id)] = Analysis(**tasks)
-
+    workflows = []
     mapping_inference_data = Dataset(analyses=analyses).model_dump()
+    miss_inference = {InferenceEnum.Aneurysm,
+                      InferenceEnum.WMH,
+                      InferenceEnum.Infarct,
+                      InferenceEnum.SynthSeg,
+                      InferenceEnum.CMBSynthSeg}
+
     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
         for inference_name, file_dict in mapping_inference.items():
-            if file_dict is None:
-                continue
             if inference_name in miss_inference:
                 continue
-
-            match inference_name:
-                case InferenceEnum.Area:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
-                                           queue='default',
-                                           routing_key='celery')
-                case InferenceEnum.WMH_PVS:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
-                                           queue='default',
-                                           routing_key='celery')
-                case InferenceEnum.DWI:
-                    # DWI
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
-                                           queue='default',
-                                           routing_key='celery')
-                case InferenceEnum.CMB:
-                    pass
-                case InferenceEnum.AneurysmSynthSeg:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
-                                           queue='default',
-                                           routing_key='celery')
-                case InferenceEnum.Infarct:
-                    pass
-                case InferenceEnum.WMH:
-                    pass
-                case InferenceEnum.Aneurysm:
-                    pass
-                case _:
-                    pass
+            if file_dict is None:
+                continue
+            args, file_list = get_synthseg_args_file(inference_name, file_dict)
+            print('args',args)
+            print('file_list', file_list)
+            workflows.append(task_synthseg.celery_workflow.s(args, file_list))
+    job = group(workflows).apply()
+    return job
 
 
 @app.task
@@ -338,7 +323,10 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
         for sub_dir in list(input_dicom_path.iterdir()):
             workflow = chain(process_dir.s(sub_dir,output_dicom_path),
                              process_dir_next.s(sub_dir,output_dicom_path),
-                             dicom_2_nii_file.s(output_nifti_path))
+                             dicom_2_nii_file.s(output_nifti_path),
+                             # output_inference
+                             inference_synthseg.s(output_nifti_str)
+                             )
             workflows.append(workflow)
     else:
         for sub_dir in list(input_dicom_path.iterdir()):
