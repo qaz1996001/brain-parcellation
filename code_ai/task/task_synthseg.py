@@ -1,26 +1,25 @@
 import shutil
 import subprocess
 from typing import List
-
-from celery import Celery, group, chain,chord
-
 import pathlib
 import nibabel as nib
 import numpy as np
 import gc
-import os
-import traceback
-from . import TemplateProcessor
-from . import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
-from . import resample_one,resampleSynthSEG2original
-from . import app
-
+from celery import Celery, group, chain,chord
 
 from celery import shared_task
 from kombu import Connection, Exchange, Queue, Message, Producer
 from kombu.exceptions import NotBoundError
+import tensorflow as tf
+from . import TemplateProcessor, task_CMB
+from . import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
+from . import resample_one,resampleSynthSEG2original
+from . import app
 
-from ..utils_inference import replace_suffix
+from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
+from code_ai.utils_inference import get_synthseg_args_file,replace_suffix
+from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
+
 
 # RabbitMQ 鎖配置
 RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"
@@ -99,44 +98,56 @@ def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
     """
         限制同時只能執行一個的任務。
         """
-    if acquire_lock():
-        try:
-            synth_seg = app.conf.CELERY_CONTEXT['synth_seg']
-            synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
-                          path_segmentations33=str(synthseg33_file))
-            gc.collect()
+    # if acquire_lock():
+    #     # try:
+    #     #     synth_seg = app.conf.CELERY_CONTEXT['synth_seg']
+    #     #     synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
+    #     #                   path_segmentations33=str(synthseg33_file))
+    #     #     gc.collect()
+    #     #     release_lock()
+    #     #     print('return release_lock', 'release_lock')
+    #     #     return synthseg_file, synthseg33_file
+    #     # finally:
+    #     #     print('finally','release_lock')
+    #     #     release_lock()
+    # else:
+    #     self.retry(countdown=30, max_retries=10)  # 重試任務
+    try:
+        import bentoml
+        if acquire_lock():
+            with bentoml.SyncHTTPClient("http://localhost:3000", timeout=240) as client:
+                client.synthseg_classify(path_images=str(resample_file),
+                                         path_segmentations=str(synthseg_file),
+                                         path_segmentations33=str(synthseg33_file))
+
             release_lock()
-            print('return release_lock', 'release_lock')
-            return synthseg_file, synthseg33_file
-        finally:
-            print('finally','release_lock')
-            release_lock()
-    else:
-        self.retry(countdown=30, max_retries=10)  # 重試任務
+        return synthseg_file, synthseg33_file
+    finally:
+        print('finally', 'release_lock')
+        release_lock()
 
 
 
 @app.task
-def process_synthseg_task(synthseg_file_tuple, depth_number, david_file,wm_file):
-    try:
-        synthseg_file = synthseg_file_tuple[0]
-        synthseg33_file = synthseg_file_tuple[1]
-        synthseg_nii = nib.load(synthseg_file)
-        synthseg33_nii = nib.load(synthseg33_file)
+def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file):
 
-        synthseg_array = np.array(synthseg_nii.dataobj)
-        synthseg33_array = np.array(synthseg33_nii.dataobj)
+    synthseg_file = synthseg_file_tuple[0]
+    synthseg33_file = synthseg_file_tuple[1]
+    synthseg_nii = nib.load(synthseg_file)
+    synthseg33_nii = nib.load(synthseg33_file)
 
-        seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-            synthseg_array, synthseg33_array, depth_number)
-        out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
-        nib.save(out_nib, david_file)
-        out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
-        nib.save(out_nib, wm_file)
-        gc.collect()
-        return synthseg_file,david_file
-    except:
-        log_error_task.s(synthseg_file_tuple, str(traceback.format_exc()))
+    synthseg_array = np.array(synthseg_nii.dataobj)
+    synthseg33_array = np.array(synthseg33_nii.dataobj)
+    seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
+        synthseg_array, synthseg33_array, depth_number)
+    print('200')
+    out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
+    nib.save(out_nib, david_file)
+    out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
+    nib.save(out_nib, wm_file)
+    print('300')
+    gc.collect()
+    return synthseg_file,david_file
 
 @app.task
 def post_process_synthseg_task(args,intput_args, ):
@@ -150,20 +161,15 @@ def post_process_synthseg_task(args,intput_args, ):
         else:
             swan_file = original_cmb_file_list[1]
             t1_file = original_cmb_file_list[0]
-        print('original_cmb_file_list', original_cmb_file_list)
-        print('swan_file', swan_file)
-        print('t1_file', t1_file)
+
         template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
         synthseg_basename: str = replace_suffix(swan_file.name, '')
         template_coregistration_file_name= swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
         cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
-        print('cmd_str', cmd_str)
         # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
-
         process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
-        print('stdout', stdout)
     return intput_args
 
 
@@ -294,6 +300,52 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     # 组合任务并执行
     job = group(tasks).apply()
     return job
+
+
+@shared_task(acks_late=True)
+def inference_synthseg(intput_args,
+                       output_inference:pathlib.Path):
+    print('intput_args', intput_args)
+    output_inference_path = pathlib.Path(output_inference)
+    print('output_inference_path', output_inference_path)
+    study_list = [intput_args[1]]
+    mapping_inference_list = list(map(check_study_mapping_inference, study_list))
+    analyses = {}
+    for mapping_inference in mapping_inference_list:
+        study_id = mapping_inference.keys()
+        model_dict_values = mapping_inference.values()
+        base_output_path = str(output_inference_path.joinpath(*study_id))
+        print('base_output_path',base_output_path)
+        for task_dict in model_dict_values:
+            tasks = {}
+            for model_name, input_paths in task_dict.items():
+                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
+                tasks[model_name] = Task(
+                    intput_path_list = input_paths,
+                    output_path      = base_output_path,
+                    output_path_list = task_output_files,
+                    # result=Result(output_file=task_output_files)
+                )
+        analyses[str(*study_id)] = Analysis(**tasks)
+    workflows = []
+    dataset = Dataset(analyses=analyses)
+    mapping_inference_data = dataset.model_dump()
+    miss_inference = {InferenceEnum.Aneurysm,
+                      InferenceEnum.WMH,
+                      InferenceEnum.Infarct,
+                      InferenceEnum.SynthSeg,
+                      InferenceEnum.CMBSynthSeg}
+
+    for study_id, mapping_inference in mapping_inference_data['analyses'].items():
+        for inference_name, file_dict in mapping_inference.items():
+            if inference_name in miss_inference:
+                continue
+            if file_dict is None:
+                continue
+            args, file_list = get_synthseg_args_file(inference_name, file_dict)
+            workflows.append(celery_workflow.s(args, file_list))
+    job = group(workflows).apply(link=task_CMB.inference_cmb.s(intput_args))
+    return job,mapping_inference_data
 
 
 @app.task

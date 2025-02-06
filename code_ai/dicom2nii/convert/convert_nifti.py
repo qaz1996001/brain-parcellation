@@ -4,7 +4,6 @@ import pathlib
 import re
 import shutil
 
-import dcm2niix
 import subprocess
 from concurrent.futures import ProcessPoolExecutor, Executor
 from .config import MRSeriesRenameEnum,DSCSeriesRenameEnum,ASLSEQSeriesRenameEnum
@@ -62,7 +61,8 @@ class Dicm2NiixConverter:
             The result of the conversion.
         """
         output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
-        cmd_str = f'{dcm2niix.bin} -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
+        # cmd_str = f'{dcm2niix.bin} -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
+        cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
 
         completed_process = subprocess.run(cmd_str, capture_output=True)
         pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)

@@ -4,7 +4,6 @@ import os
 import pathlib
 import subprocess
 from typing import List
-import dcm2niix
 from pydicom import dcmread
 from celery import Celery, chain, group, shared_task
 from . import app
@@ -17,15 +16,12 @@ from code_ai.dicom2nii.convert import T2ProcessingStrategy, ASLProcessingStrateg
 from code_ai.dicom2nii.convert import RestingProcessingStrategy, DTIProcessingStrategy, CVRProcessingStrategy
 from code_ai.dicom2nii.convert import NullEnum
 from code_ai.dicom2nii.convert import MRSeriesRenameEnum
-from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
-from code_ai.utils_inference import get_synthseg_args_file
-from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
 
 from ..dicom2nii.convert import dicom_rename_mr_postprocess
 from ..dicom2nii.convert import convert_nifti_postprocess
 
 import code_ai.task.task_synthseg as task_synthseg
-
+import code_ai.task.task_CMB as task_CMB
 
 
 def get_output_study(dicom_ds):
@@ -140,29 +136,35 @@ def file_processing(study_folder_path,post_process_manager):
 @shared_task(bind=True,rate_limit='16/s',priority=55)
 def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
     output_series_path.parent.mkdir(exist_ok=True, parents=True)
-    cmd_str = f'{dcm2niix.bin} -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
+    cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
     process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    print('call_dcm2niix cmd_str:',cmd_str)
     stdout, stderr = process.communicate()
+    print('call_dcm2niix stdout:',stdout.decode())
 
     pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
     match_result = pattern.search(stdout.decode())
-    str_result = match_result.groups()[0]
-    dcm2niix_output_path = pathlib.Path(f'{str_result}.nii.gz')
-    if dcm2niix_output_path.name != output_series_path:
-        try:
-            # Rename the output file and corresponding JSON file
-            dcm2niix_output_path.rename(output_series_file_path)
-            dcm2niix_json_path = pathlib.Path(str(dcm2niix_output_path).replace('.nii.gz', '.json'))
-            output_series_json_path = pathlib.Path(str(output_series_file_path).replace('.nii.gz', '.json'))
-            if dcm2niix_json_path.exists():
-                dcm2niix_json_path.unlink()
-            if output_series_json_path.exists():
-                output_series_json_path.unlink()
-            # dcm2niix_json_path.rename(output_series_json_path)
-        except FileExistsError:
-            print(rf'FileExistsError {series_path}')
-    return output_series_path.name
+
+    if match_result is None:
+        return f'call_dcm2niix {stdout.decode()}'
+    else:
+        str_result = match_result.groups()[0]
+        dcm2niix_output_path = pathlib.Path(f'{str_result}.nii.gz')
+        if dcm2niix_output_path.name != output_series_path:
+            try:
+                # Rename the output file and corresponding JSON file
+                dcm2niix_output_path.rename(output_series_file_path)
+                dcm2niix_json_path = pathlib.Path(str(dcm2niix_output_path).replace('.nii.gz', '.json'))
+                output_series_json_path = pathlib.Path(str(output_series_file_path).replace('.nii.gz', '.json'))
+                if dcm2niix_json_path.exists():
+                    dcm2niix_json_path.unlink()
+                if output_series_json_path.exists():
+                    output_series_json_path.unlink()
+                # dcm2niix_json_path.rename(output_series_json_path)
+            except FileExistsError:
+                print(rf'FileExistsError {series_path}')
+        return output_series_path.name
 
 
 # @app.task(bind=True,rate_limit='1/s',priority=55)
@@ -256,49 +258,49 @@ def process_dir_next(input_args,sub_dir:pathlib.Path, output_dicom_path:pathlib.
 
 
 
-@app.task
-def inference_synthseg(intput_args,
-                       output_inference:pathlib.Path):
-    print('intput_args', intput_args)
-    base_output_path = str(pathlib.Path(output_inference))
-    print('base_output_path', base_output_path)
-    study_list = [intput_args[1]]
-    mapping_inference_list = list(map(check_study_mapping_inference, study_list))
-    print('inference_synthseg mapping_inference_list',mapping_inference_list)
-    analyses = {}
-    for mapping_inference in mapping_inference_list:
-        study_id = mapping_inference.keys()
-        model_dict_values = mapping_inference.values()
-        for task_dict in model_dict_values:
-            tasks = {}
-            for model_name, input_paths in task_dict.items():
-                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
-                tasks[model_name] = Task(
-                    intput_path_list=input_paths,
-                    output_path=base_output_path,
-                    result=Result(output_file=task_output_files)
-                )
-        analyses[str(study_id)] = Analysis(**tasks)
-    workflows = []
-    mapping_inference_data = Dataset(analyses=analyses).model_dump()
-    miss_inference = {InferenceEnum.Aneurysm,
-                      InferenceEnum.WMH,
-                      InferenceEnum.Infarct,
-                      InferenceEnum.SynthSeg,
-                      InferenceEnum.CMBSynthSeg}
-
-    for study_id, mapping_inference in mapping_inference_data['analyses'].items():
-        for inference_name, file_dict in mapping_inference.items():
-            if inference_name in miss_inference:
-                continue
-            if file_dict is None:
-                continue
-            args, file_list = get_synthseg_args_file(inference_name, file_dict)
-            print('args',args)
-            print('file_list', file_list)
-            workflows.append(task_synthseg.celery_workflow.s(args, file_list))
-    job = group(workflows).apply()
-    return job
+# @app.task
+# def inference_synthseg(intput_args,
+#                        output_inference:pathlib.Path):
+#     print('intput_args', intput_args)
+#     base_output_path = str(pathlib.Path(output_inference))
+#     print('base_output_path', base_output_path)
+#     study_list = [intput_args[1]]
+#     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
+#     print('inference_synthseg mapping_inference_list',mapping_inference_list)
+#     analyses = {}
+#     for mapping_inference in mapping_inference_list:
+#         study_id = mapping_inference.keys()
+#         model_dict_values = mapping_inference.values()
+#         for task_dict in model_dict_values:
+#             tasks = {}
+#             for model_name, input_paths in task_dict.items():
+#                 task_output_files = generate_output_files(input_paths, model_name, base_output_path)
+#                 tasks[model_name] = Task(
+#                     intput_path_list=input_paths,
+#                     output_path=base_output_path,
+#                     result=Result(output_file=task_output_files)
+#                 )
+#         analyses[str(study_id)] = Analysis(**tasks)
+#     workflows = []
+#     mapping_inference_data = Dataset(analyses=analyses).model_dump()
+#     miss_inference = {InferenceEnum.Aneurysm,
+#                       InferenceEnum.WMH,
+#                       InferenceEnum.Infarct,
+#                       InferenceEnum.SynthSeg,
+#                       InferenceEnum.CMBSynthSeg}
+#
+#     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
+#         for inference_name, file_dict in mapping_inference.items():
+#             if inference_name in miss_inference:
+#                 continue
+#             if file_dict is None:
+#                 continue
+#             args, file_list = get_synthseg_args_file(inference_name, file_dict)
+#             print('args',args)
+#             print('file_list', file_list)
+#             workflows.append(task_synthseg.celery_workflow.s(args, file_list))
+#     job = group(workflows).apply()
+#     return job
 
 
 @app.task
@@ -325,8 +327,7 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                              process_dir_next.s(sub_dir,output_dicom_path),
                              dicom_2_nii_file.s(output_nifti_path),
                              # output_inference
-                             inference_synthseg.s(output_nifti_str)
-                             )
+                             task_synthseg.inference_synthseg.s(output_nifti_str),)
             workflows.append(workflow)
     else:
         for sub_dir in list(input_dicom_path.iterdir()):
@@ -337,6 +338,7 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                                      )
                     workflows.append(workflow)
     print('workflows size',len(workflows))
+    # from celery.result import GroupResult
     job = group(workflows).apply_async()
     return job
 

@@ -19,7 +19,8 @@ class Result(BaseModel):
 class Task(BaseModel):
     input_path_list: List[str] = Field(..., alias="intput_path_list")
     output_path: str
-    result: Result
+    output_path_list: List[str]
+    # result: Result
 
 
 class Analysis(BaseModel):
@@ -34,6 +35,7 @@ class Analysis(BaseModel):
 
 
 class Dataset(BaseModel):
+    # analyses: Dict[str, Analysis]
     analyses: Dict[str, Analysis]
 
 
@@ -102,8 +104,11 @@ def prepare_output_file_list(file_list:List[pathlib.Path],
                              suffix:str,
                              output_dir :Optional[pathlib.Path] =None) -> List[pathlib.Path]:
     return [
-        output_dir.joinpath(x.parent.name, replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
+        output_dir.joinpath(replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
             replace_suffix(x.name, suffix)) for x in file_list]
+    # return [
+    #     output_dir.joinpath(x.parent.name, replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
+    #         replace_suffix(x.name, suffix)) for x in file_list]
 
 
 def replace_suffix(filename:str, new_suffix:str):
@@ -148,8 +153,8 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
         case InferenceEnum.Area:
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
-                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")
-                output_files.append(output_file)
+                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz"))
+                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg.nii.gz"))
         case InferenceEnum.WMH_PVS:
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
@@ -159,10 +164,22 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
         case InferenceEnum.DWI:
             output_files.append(os.path.join(base_output_path, f"synthseg_DWI0_original_{task_name}.nii.gz"))
         case InferenceEnum.CMB:
-            for input_path in input_paths:
-                base_name = os.path.basename(input_path).split('.')[0]
-                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_{task_name}.nii.gz")
-                output_files.append(output_file)
+            base_name1 = os.path.basename(input_paths[0]).split('.')[0]
+            base_name2 = os.path.basename(input_paths[1]).split('.')[0]
+            dirname = os.path.dirname(input_paths[0])
+            if base_name1.startswith('SWAN'):
+                # synthseg_SWAN_original_CMB_from_synthseg_T1FLAIR_AXI_original_CMB.nii.gz
+                output_files.append(os.path.join(base_output_path, (f"synthseg_{base_name1}_original_{task_name}_from_"
+                                                                    f"synthseg_{base_name2}_original_{task_name}.nii.gz"
+                                                                    )
+                                                 ))
+            else:
+                output_files.append(os.path.join(base_output_path, (f"synthseg_{base_name2}_original_{task_name}_from_"
+                                                                    f"synthseg_{base_name1}_original_{task_name}.nii.gz"
+                                                                    )
+                                                 ))
+            output_files.append(os.path.join(base_output_path, f"Pred_CMB.nii.gz"))
+            output_files.append(os.path.join(base_output_path, f"Pred_CMB.json"))
         case InferenceEnum.AneurysmSynthSeg:
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
