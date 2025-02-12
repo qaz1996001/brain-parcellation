@@ -1,4 +1,5 @@
 import redis
+from celery.result import AsyncResult
 
 
 def batch_read_redis_keys_and_values(redis_host, redis_port, redis_db, batch_size=100):
@@ -35,6 +36,12 @@ if __name__ == "__main__":
 
     for batch in batch_read_redis_keys_and_values(redis_host, redis_port, redis_db, batch_size):
         for key, value in batch:
-            print(f"Key: {key}, {type(value)} Value: {pickle.loads(value)}")
+            redis_result = pickle.loads(value)
+            print(f"Key: {key}, {type(value)} Value: {redis_result}")
+            print(f"{redis_result['parent_id']}")
+            result:AsyncResult = AsyncResult(redis_result['task_id'])
+            print('result',result,type(result))
+            print(result.name)
+
             break
         break

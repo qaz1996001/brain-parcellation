@@ -14,17 +14,13 @@ import tensorflow as tf
 from . import TemplateProcessor, task_CMB
 from . import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
 from . import resample_one,resampleSynthSEG2original
-from . import app
+from . import app,RABBITMQ_URL,LOCK_NAME,SYNTHSEG_INFERENCE_URL,TIME_OUT,COUNTDOWN,MAX_RETRIES
 
 from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
 from code_ai.utils_inference import get_synthseg_args_file,replace_suffix
 from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
+import bentoml
 
-
-# RabbitMQ 鎖配置
-RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"
-
-LOCK_NAME = "synthseg_task_lock"
 
 
 
@@ -98,33 +94,32 @@ def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
     """
         限制同時只能執行一個的任務。
         """
-    # if acquire_lock():
-    #     # try:
-    #     #     synth_seg = app.conf.CELERY_CONTEXT['synth_seg']
-    #     #     synth_seg.run(path_images=str(resample_file), path_segmentations=str(synthseg_file),
-    #     #                   path_segmentations33=str(synthseg33_file))
-    #     #     gc.collect()
-    #     #     release_lock()
-    #     #     print('return release_lock', 'release_lock')
-    #     #     return synthseg_file, synthseg33_file
-    #     # finally:
-    #     #     print('finally','release_lock')
-    #     #     release_lock()
-    # else:
-    #     self.retry(countdown=30, max_retries=10)  # 重試任務
+    # try:
+    #     import bentoml
+    #     if acquire_lock():
+    #         with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL, timeout=TIME_OUT) as client:
+    #             client.synthseg_classify(path_images=str(resample_file),
+    #                                      path_segmentations=str(synthseg_file),
+    #                                      path_segmentations33=str(synthseg33_file))
+    #
+    #         release_lock()
+    #     return synthseg_file, synthseg33_file
+    # except :
+    #     release_lock()
+    #     self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
+    # finally:
+    #     print('finally', 'release_lock')
+    #     release_lock()
     try:
-        import bentoml
-        if acquire_lock():
-            with bentoml.SyncHTTPClient("http://localhost:3000", timeout=240) as client:
+        with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL,
+                                    timeout=TIME_OUT) as client:
                 client.synthseg_classify(path_images=str(resample_file),
                                          path_segmentations=str(synthseg_file),
                                          path_segmentations33=str(synthseg33_file))
-
-            release_lock()
         return synthseg_file, synthseg33_file
-    finally:
-        print('finally', 'release_lock')
-        release_lock()
+    except :
+        self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
+
 
 
 
@@ -232,12 +227,6 @@ def wmh_save_task(synthseg_array, synthseg_array_wm, affine, header, depth_numbe
     return f"Saved WMH file: {wmh_file}"
 
 
-@app.task
-def clear_tensorflow_backend():
-    import tensorflow as tf
-    tf.keras.backend.clear_session()
-    return True
-
 
 @app.task
 def save_file_tasks(synthseg_david_tuple, intput_args, index):
@@ -344,7 +333,7 @@ def inference_synthseg(intput_args,
                 continue
             args, file_list = get_synthseg_args_file(inference_name, file_dict)
             workflows.append(celery_workflow.s(args, file_list))
-    job = group(workflows).apply(link=task_CMB.inference_cmb.s(intput_args))
+    job = group(workflows).apply(link=task_CMB.inference_cmb.s(dataset.model_dump_json()))
     return job,mapping_inference_data
 
 
