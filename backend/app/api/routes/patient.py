@@ -5,7 +5,6 @@ from fastapi import APIRouter, Query
 from fastapi_pagination import Page
 from fastapi_pagination.api import create_page
 from fastapi_pagination.customization import CustomizedPage, UseModelConfig
-
 from sqlalchemy import func, or_, text,and_
 from sqlalchemy.sql import Select
 from app.core import SessionDep

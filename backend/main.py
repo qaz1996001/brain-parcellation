@@ -13,8 +13,8 @@ def custom_generate_unique_id(route: APIRoute) -> str:
 
 
 def create_app() -> FastAPI:
-    from api import api_router
-    from core.config import settings
+    from app.api import api_router
+    from app.core.config import settings
 
     if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
         sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
@@ -24,6 +24,7 @@ def create_app() -> FastAPI:
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
         generate_unique_id_function=custom_generate_unique_id,
         default_response_class=ORJSONResponse,
+        version = settings.VERSION,
     )
 
 
@@ -50,5 +51,4 @@ if __name__ == '__main__':
     uvicorn.run(
         app="main:app",
         host='0.0.0.0',
-        port=8800,
-        reload=True)
+        port=8800)

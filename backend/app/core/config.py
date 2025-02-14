@@ -25,7 +25,7 @@ def parse_cors(v: Any) -> list[str] | str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=fr"D:\00_Chen\Task09_fastapi\.env", env_ignore_empty=True, extra="ignore"
+        env_file=fr"/backend/.env", env_ignore_empty=True, extra="ignore"
     )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str = ""
+    VERSION : str = "0.0.0"
 
     @computed_field  # type: ignore[misc]
     @property

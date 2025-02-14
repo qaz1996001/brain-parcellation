@@ -47,5 +47,6 @@ services:
       - rabbitmq_server
     volumes:
       - ./backend:/backend
+      - /mnt/d/wsl_ubuntu:/mnt/d/wsl_ubuntu
     ports:
-      - 9800:8800
+      - 8800:8800
