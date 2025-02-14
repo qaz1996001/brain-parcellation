@@ -24,8 +24,6 @@ class SynthSegOnnx:
 
         labels_parcellation, unique_i_parc = np.unique(utils.get_list_labels(labels_parcellation)[0],
                                                        return_index=True)
-        # self.net_unet2 =
-        # self.net_parcellation =
 
     def prepare_output_files(self, path_images, out_seg, recompute):
         # check inputs
@@ -144,7 +142,6 @@ class SynthSegOnnx:
         return path_images, out_synthseg, out_synthseg33, recompute_list
 
 
-
     def postprocess(self, post_patch_seg, post_patch_parc, shape, pad_idx, crop_idx,
                     labels_segmentation, labels_parcellation, aff, im_res, fast, topology_classes, v1,
                     return_seg=True, return_posteriors=False):
@@ -238,8 +235,6 @@ class SynthSegOnnx:
         fast = args['fast']
         v1 = args['v1']
         n_neutral_labels = args['n_neutral_labels']
-        labels_denoiser = args['labels_denoiser']
-        path_model_parcellation = args['path_model_parcellation']
         labels_parcellation = args['labels_parcellation']
         cropping = args['crop']
         ct = args['ct']
@@ -250,11 +245,9 @@ class SynthSegOnnx:
             labels_segmentation, flip_indices, unique_idx = get_flip_indices(labels_segmentation, n_neutral_labels)
         else:
             labels_segmentation, unique_idx = np.unique(labels_segmentation, return_index=True)
-            flip_indices = None
 
         if topology_classes is not None:
             topology_classes = utils.load_array_if_path(topology_classes, load_as_numpy=True)[unique_idx]
-        labels_denoiser = np.unique(utils.get_list_labels(labels_denoiser)[0])
 
         labels_parcellation, unique_i_parc = np.unique(utils.get_list_labels(labels_parcellation)[0],
                                                        return_index=True)
@@ -265,55 +258,61 @@ class SynthSegOnnx:
         else:
             min_pad = 128
 
-
-
-
         image, aff, h, im_res, shape, pad_idx, crop_idx = self.preprocess(path_image=path_images,
                                                                           ct=ct,
                                                                           crop=cropping,
                                                                           min_pad=min_pad)
-        ort_inputs = {net_unet2.get_inputs()[0].name: image.astype(np.float32)}
+        intput_im = image.astype(np.float32)
+        ort_inputs = {net_unet2.get_inputs()[0].name: intput_im}
         ort_outs = net_unet2.run(None, ort_inputs)
+        temp_index_index = ort_outs[0].argmax(1)
+        mask_1 = np.logical_or((temp_index_index == 2), (temp_index_index == 20)).astype(np.float32)
+        mask_2 = np.logical_and((temp_index_index != 2), (temp_index_index != 20)).astype(np.float32)
+
+        parc_inputs = {net_parcellation.get_inputs()[0].name: np.expand_dims(np.concatenate([intput_im[:, 0],
+                                                                                             mask_2,
+                                                                                             mask_1, ]), 0)}
+        parc_ort_outs = net_parcellation.run(None, parc_inputs)
         # 1 33 192 192 192
         # 0  1  2   3   4
         # 0  2  3   4   1,
-
         # 1  3 192 192 192
 
-        # unet2_output = np.transpose(ort_outs[0], (0, 2, 3, 4, 1))
-        temp_input = np.concatenate()
-        net_parcellation_inputs = {net_parcellation.get_inputs()[0].name: image.astype(np.float32)}
-        net_parc_outs = net_parcellation.run(None, net_parcellation_inputs)
-        # unet2_output = net_unet2.predict(image)
-        # post_patch_parcellation = net_parcellation.predict(parc_input)
+        unet2_output = np.transpose(ort_outs[0], (0, 2, 3, 4, 1))
+        parc_output = np.transpose(parc_ort_outs[0], (0, 2, 3, 4, 1))
 
-        # seg = self.postprocess(post_patch_seg=unet2_output,
-        #                        post_patch_parc=post_patch_parcellation,
-        #                        shape=shape,
-        #                        pad_idx=pad_idx,
-        #                        crop_idx=crop_idx,
-        #                        labels_segmentation=labels_segmentation,
-        #                        labels_parcellation=labels_parcellation,
-        #                        aff=aff,
-        #                        im_res=im_res,
-        #                        fast=fast,
-        #                        topology_classes=topology_classes,
-        #                        v1=v1)
-        # utils.save_volume(seg, aff, h, path_segmentations, dtype='int32')
-        #
-        # seg = self.postprocess(post_patch_seg=unet2_output,
-        #                        post_patch_parc=None,
-        #                        shape=shape,
-        #                        pad_idx=pad_idx,
-        #                        crop_idx=crop_idx,
-        #                        labels_segmentation=labels_segmentation,
-        #                        labels_parcellation=labels_parcellation,
-        #                        aff=aff,
-        #                        im_res=im_res,
-        #                        fast=fast,
-        #                        topology_classes=topology_classes,
-        #                        v1=v1)
-        # utils.save_volume(seg, aff, h, path_segmentations33, dtype='int32')
+        seg33 = self.postprocess(post_patch_seg=unet2_output,
+                                 post_patch_parc=None,
+                                 shape=shape,
+                                 pad_idx=pad_idx,
+                                 crop_idx=crop_idx,
+                                 labels_segmentation=labels_segmentation,
+                                 labels_parcellation=None,
+                                 aff=aff,
+                                 im_res=im_res,
+                                 fast=fast,
+                                 topology_classes=topology_classes,
+                                 v1=v1,
+                                 return_seg=True,
+                                 return_posteriors=False)
+        h.set_data_dtype('int16')
+        utils.save_volume(seg33, aff, h, path_segmentations33, dtype='int16')
+        seg_parc = self.postprocess(post_patch_seg=unet2_output,
+                                    post_patch_parc=parc_output,
+                                    shape=shape,
+                                    pad_idx=pad_idx,
+                                    crop_idx=crop_idx,
+                                    labels_segmentation=labels_segmentation,
+                                    labels_parcellation=labels_parcellation,
+                                    aff=aff,
+                                    im_res=im_res,
+                                    fast=False,
+                                    topology_classes=topology_classes,
+                                    v1=False,
+                                    return_seg=True,
+                                    return_posteriors=False)
+        h.set_data_dtype('int16')
+        utils.save_volume(seg_parc, aff, h, path_segmentations, dtype='int16')
 
     # @profile
     def run_segmentations33(self, path_images, path_segmentations33,net_unet2):

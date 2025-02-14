@@ -10,7 +10,6 @@ from celery import Celery, group, chain,chord
 from celery import shared_task
 from kombu import Connection, Exchange, Queue, Message, Producer
 from kombu.exceptions import NotBoundError
-import tensorflow as tf
 from . import TemplateProcessor, task_CMB
 from . import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
 from . import resample_one,resampleSynthSEG2original
@@ -20,7 +19,6 @@ from code_ai.utils_inference import check_study_id,check_study_mapping_inference
 from code_ai.utils_inference import get_synthseg_args_file,replace_suffix
 from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
 import bentoml
-
 
 
 
@@ -159,12 +157,13 @@ def post_process_synthseg_task(args,intput_args, ):
 
         template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
         synthseg_basename: str = replace_suffix(swan_file.name, '')
-        template_coregistration_file_name= swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
+        template_coregistration_file_name = swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
         cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
         # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
         process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
+    gc.collect()
     return intput_args
 
 
@@ -175,7 +174,6 @@ def resample_to_original_task(self, raw_file, resample_image_file, resample_seg_
     outpput_raw_file = resample_seg_file.parent.joinpath(raw_file.name)
     print('raw_file', raw_file)
     print('outpput_raw_file', outpput_raw_file)
-
     if str(raw_file) == str(outpput_raw_file):
         return original_seg_file
     else:
@@ -186,13 +184,11 @@ def resample_to_original_task(self, raw_file, resample_image_file, resample_seg_
 
 
 @app.task
-@shared_task
 def log_error_task(file, error_msg):
     print(f"Error processing {file}: {error_msg}")
     return False
 
 @app.task
-@shared_task
 def wm_save_task(seg_array, affine, header, wm_file):
     """保存白质分区文件"""
     out_nib = nib.Nifti1Image(seg_array, affine, header)
@@ -201,7 +197,6 @@ def wm_save_task(seg_array, affine, header, wm_file):
     return f"Saved WM file: {wm_file}"
 
 @app.task
-@shared_task
 def cmb_save_task(seg_array, affine, header, cmb_file):
     """保存CMB文件"""
     cmb_array = CMBProcess.run(seg_array)
@@ -210,7 +205,6 @@ def cmb_save_task(seg_array, affine, header, cmb_file):
     return f"Saved CMB file: {cmb_file}"
 
 @app.task
-@shared_task
 def dwi_save_task(seg_array, affine, header, dwi_file):
     """保存DWI文件"""
     dwi_array = DWIProcess.run(seg_array)
@@ -219,18 +213,24 @@ def dwi_save_task(seg_array, affine, header, dwi_file):
     return f"Saved DWI file: {dwi_file}"
 
 @app.task
-def wmh_save_task(synthseg_array, synthseg_array_wm, affine, header, depth_number, wmh_file):
+def wmh_save_task(synthseg_file, wm_file, depth_number, wmh_file):
     """保存WMH文件"""
+    synthseg_nii      = nib.load(synthseg_file)
+    synthseg_wm_nii   = nib.load(wm_file)
+    synthseg_array    = np.array(synthseg_nii.dataobj)
+    synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
+    affine            = synthseg_nii.affine
+    header            = synthseg_nii.header
     wmh_array = run_wmh(synthseg_array, synthseg_array_wm, depth_number)
     out_nib = nib.Nifti1Image(wmh_array, affine, header)
     nib.save(out_nib, wmh_file)
     return f"Saved WMH file: {wmh_file}"
 
 
+# def save_file_tasks(intput_args, index):
 
 @app.task
 def save_file_tasks(synthseg_david_tuple, intput_args, index):
-# def save_file_tasks(intput_args, index):
     print('intput_args', intput_args)
     tasks = []
     synthseg_file = intput_args.synthseg_file_list[index]
@@ -241,8 +241,6 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     seg_array = np.array(david_nii.dataobj)
 
     wm_file  = intput_args.wm_file_list[index]
-    synthseg_wm_nii = nib.load(wm_file)
-    synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
 
     file          = intput_args.intput_file_list[index]
     resample_file = intput_args.resample_file_list[index]
@@ -275,13 +273,12 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
         wmh_file = intput_args.wmh_file_list[index]
         tasks.append(
             wmh_save_task.s(
-                synthseg_array=synthseg_nii.get_fdata(),
-                synthseg_array_wm=synthseg_array_wm,
-                affine=synthseg_nii.affine,
-                header=synthseg_nii.header,
+                synthseg_file=synthseg_file,
+                wm_file=wm_file,
                 depth_number=intput_args.depth_number,
                 wmh_file=wmh_file,
             )
+        #     synthseg_file, wm_file,
         )
         tasks.append(resample_to_original_task.s(raw_file=file,
                                                  resample_image_file=resample_file,
@@ -291,7 +288,7 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     return job
 
 
-@shared_task(acks_late=True)
+@app.task(acks_late=True)
 def inference_synthseg(intput_args,
                        output_inference:pathlib.Path):
     print('intput_args', intput_args)
@@ -333,7 +330,7 @@ def inference_synthseg(intput_args,
                 continue
             args, file_list = get_synthseg_args_file(inference_name, file_dict)
             workflows.append(celery_workflow.s(args, file_list))
-    job = group(workflows).apply(link=task_CMB.inference_cmb.s(dataset.model_dump_json()))
+    job = group(workflows).apply()
     return job,mapping_inference_data
 
 
@@ -365,3 +362,14 @@ def celery_workflow(args, file_list):
             log_error_task.s(file, str(e))
     job = group(workflows).delay()
     return job
+
+# file_dict = {'input_path_list':['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
+#              'output_path': '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091',
+#              'output_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_T1BRAVO_AXI_original_synthseg33.nii.gz',
+#                                   '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_T1BRAVO_AXI_original_synthseg.nii.gz']}
+#  {'input_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/SWAN.nii.gz',
+#                       '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
+#   'output_path': '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091',
+#   'output_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_SWAN_original_CMB_from_synthseg_T1BRAVO_AXI_original_CMB.nii.gz',
+#                        '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/Pred_CMB.nii.gz',
+#                        '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/Pred_CMB.json']}

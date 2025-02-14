@@ -19,9 +19,7 @@ from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 
 from ..dicom2nii.convert import dicom_rename_mr_postprocess
 from ..dicom2nii.convert import convert_nifti_postprocess
-
-import code_ai.task.task_synthseg as task_synthseg
-import code_ai.task.task_CMB as task_CMB
+import code_ai.task.task_inference as task_inference
 
 
 def get_output_study(dicom_ds):
@@ -133,7 +131,7 @@ def file_processing(study_folder_path,post_process_manager):
 
 
 # @app.task(bind=True,rate_limit='1/s',priority=55)
-@shared_task(bind=True,rate_limit='16/s',priority=55)
+@app.task(bind=True,rate_limit='16/s',priority=55)
 def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
     output_series_path.parent.mkdir(exist_ok=True, parents=True)
     cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
@@ -168,7 +166,7 @@ def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
 
 
 # @app.task(bind=True,rate_limit='1/s',priority=55)
-@shared_task(bind=True,rate_limit='8/s',priority=60)
+@app.task(bind=True,rate_limit='8/s',priority=60)
 def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
     FILE_SIZE = 500
     if dicom_study_folder_path is None:
@@ -196,7 +194,7 @@ def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
 
 
 
-@shared_task(bind=True,priority=58,ignore_result=True)
+@app.task(bind=True,priority=58,ignore_result=True)
 def process_instances(self, input_args):
     # @app.task(bind=True,rate_limit='500/s',priority=58)
     # def process_instances(self, instances_list,output_dicom_path):
@@ -256,53 +254,6 @@ def process_dir_next(input_args,sub_dir:pathlib.Path, output_dicom_path:pathlib.
             dicom_study_folder_path = study_folder_path
         return dicom_study_folder_path
 
-
-
-# @app.task
-# def inference_synthseg(intput_args,
-#                        output_inference:pathlib.Path):
-#     print('intput_args', intput_args)
-#     base_output_path = str(pathlib.Path(output_inference))
-#     print('base_output_path', base_output_path)
-#     study_list = [intput_args[1]]
-#     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
-#     print('inference_synthseg mapping_inference_list',mapping_inference_list)
-#     analyses = {}
-#     for mapping_inference in mapping_inference_list:
-#         study_id = mapping_inference.keys()
-#         model_dict_values = mapping_inference.values()
-#         for task_dict in model_dict_values:
-#             tasks = {}
-#             for model_name, input_paths in task_dict.items():
-#                 task_output_files = generate_output_files(input_paths, model_name, base_output_path)
-#                 tasks[model_name] = Task(
-#                     intput_path_list=input_paths,
-#                     output_path=base_output_path,
-#                     result=Result(output_file=task_output_files)
-#                 )
-#         analyses[str(study_id)] = Analysis(**tasks)
-#     workflows = []
-#     mapping_inference_data = Dataset(analyses=analyses).model_dump()
-#     miss_inference = {InferenceEnum.Aneurysm,
-#                       InferenceEnum.WMH,
-#                       InferenceEnum.Infarct,
-#                       InferenceEnum.SynthSeg,
-#                       InferenceEnum.CMBSynthSeg}
-#
-#     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
-#         for inference_name, file_dict in mapping_inference.items():
-#             if inference_name in miss_inference:
-#                 continue
-#             if file_dict is None:
-#                 continue
-#             args, file_list = get_synthseg_args_file(inference_name, file_dict)
-#             print('args',args)
-#             print('file_list', file_list)
-#             workflows.append(task_synthseg.celery_workflow.s(args, file_list))
-#     job = group(workflows).apply()
-#     return job
-
-
 @app.task
 def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
     if isinstance(input_dicom_str,str):
@@ -326,15 +277,15 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
             workflow = chain(process_dir.s(sub_dir,output_dicom_path),
                              process_dir_next.s(sub_dir,output_dicom_path),
                              dicom_2_nii_file.s(output_nifti_path),
-                             # output_inference
-                             task_synthseg.inference_synthseg.s(output_nifti_str),)
+                             task_inference.task_inference.s(output_nifti_str),)
             workflows.append(workflow)
     else:
         for sub_dir in list(input_dicom_path.iterdir()):
             if sub_dir.is_dir():
                 for sub_dir in list(input_dicom_path.iterdir()):
                     workflow = chain(process_dir.s(sub_dir,output_dicom_path),
-                                     dicom_2_nii_file.s(output_nifti_path)
+                                     dicom_2_nii_file.s(output_nifti_path),
+                                     task_inference.task_inference.s(output_nifti_str)
                                      )
                     workflows.append(workflow)
     print('workflows size',len(workflows))

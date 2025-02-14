@@ -268,6 +268,8 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
         case InferenceEnum.AneurysmSynthSeg:
             args, file_list = build_Area('wm_file', file_dict)
             return args, file_list
+        case _:
+            return ( None, None )
 
 
 
