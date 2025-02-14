@@ -4,6 +4,7 @@ import orjson
 from celery import shared_task
 from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN
 
+
 @shared_task(bind=True,acks_late=True)
 def inference_cmb(self,args,
                   intput_args,

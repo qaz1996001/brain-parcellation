@@ -2,14 +2,19 @@ import uuid
 from datetime import datetime
 from typing import Dict, List
 
+import psycopg2
+import sqlalchemy
 from celery import Celery, Task
 from celery.app.task import Context
 from celery.worker.consumer import Consumer
 from celery.signals import task_success, task_received
+from celery.signals import worker_ready
+
 from pydantic import BaseModel
 
+
 from sqlalchemy.orm import Session
-from .model import TaskModel, SessionLocal
+from .model import TaskModel
 
 app = Celery('tasks',
              broker='pyamqp://guest:guest@localhost:5672/celery',
@@ -64,25 +69,20 @@ app.conf.task_queues = {
     'dicom_rename_queue': {'routing_key': 'dicom_rename_queue'},  # 專屬dicom2nii_queue
 }
 
-# 在启动Celery worker时注册任务上下文
+
+
 @app.on_after_configure.connect
 def setup_global_context(sender, **kwargs):
     sender.conf.CELERY_CONTEXT = {}
-    print('setup_global_context',sender,type(sender))
-
-
-from celery.signals import worker_ready
-from celery.concurrency.solo import TaskPool
-
-
-@worker_ready.connect
-def configure_environment(sender, **kwargs):
-    from .model import engine
-    sender.app.conf.CELERY_CONTEXT['engine'] = engine
-    sender.app.conf.CELERY_CONTEXT['SessionLocal'] = SessionLocal
-
-
-
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    # 用create_engine對這個URL_DATABASE建立一個引擎
+    engine = create_engine('postgresql+psycopg2://postgres_n:postgres_p@127.0.0.1:15433/db_name',
+                           pool_recycle=3600, pool_size=10, max_overflow=10)
+    # 使用sessionmaker來與資料庫建立一個對話，記得要bind=engine，這才會讓專案和資料庫連結
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, )
+    sender.conf.CELERY_CONTEXT.update({"SessionLocal":SessionLocal})
+    sender.conf.CELERY_CONTEXT.update({"db_engine":engine})
 
 
 
@@ -95,62 +95,72 @@ class ArgsModel(BaseModel):
 
 @task_received.connect
 def task_received_handler(sender=None, request=None, **kwargs):
+    SessionLocal = sender.app.conf.CELERY_CONTEXT.get('SessionLocal')
     if isinstance(sender, Consumer):
         session = SessionLocal()
         with session:
-            if isinstance(request.id,str):
-                uid = uuid.UUID(request.id)
-            else:
-                uid = request.id
-            task_query = session.query(TaskModel).filter(TaskModel.task_id == uid)
-            task: TaskModel = task_query.first()
-            if task:
-                task.error_massage = str(sender)
-            else:
-                task = TaskModel(task_id=request.id,
-                                 name=request.task_name,
-                                 args=request.argsrepr,
-                                 status='PENDING')
-                session.add(task)
-                session.commit()
-                session.refresh(task)
-
-
-# task_received_handler sender ['app', 'controller', 'init_callback', 'hostname', 'pid', 'pool', 'timer', 'strategies', 'conninfo', 'connection_errors', 'channel_errors', '_restart_state', '_does_info', '_limit_order', 'on_task_request', 'on_task_message', 'amqheartbeat_rate', 'disable_rate_limits', 'initial_prefetch_count', 'prefetch_multiplier', '_maximum_prefetch_restored', 'task_buckets', 'hub', 'amqheartbeat', 'loop', '_pending_operations', 'steps', 'blueprint', 'connection', 'event_dispatcher', 'heart', 'task_consumer', 'qos', 'gossip', '_mutex', 'restart_count', 'first_connection_attempt', '__module__', '__doc__', 'Strategies', 'Blueprint', '__init__', 'call_soon', 'perform_pending_operations', 'bucket_for_task', 'reset_rate_limits', '_update_prefetch_count', '_update_qos_eventually', '_limit_move_to_pool', '_schedule_bucket_request', '_limit_task', '_limit_post_eta', 'start', '_get_connection_retry_type', 'on_connection_error_before_connected', 'on_connection_error_after_connected', 'register_with_event_loop', 'shutdown', 'stop', 'on_ready', 'loop_args', 'on_decode_error', 'on_close', 'connect', 'connection_for_read', 'connection_for_write', 'ensure_connected', '_flush_events', 'on_send_event_buffered', 'add_task_queue', 'cancel_task_queue', 'apply_eta_task', '_message_report', 'on_unknown_message', 'on_unknown_task', 'on_invalid_task', 'update_strategies', 'create_task_handler', '_restore_prefetch_count_after_connection_restart', 'max_prefetch_count', '_new_prefetch_count', '__repr__', '__dict__', '__weakref__', '__new__', '__hash__', '__str__', '__getattribute__', '__setattr__', '__delattr__', '__lt__', '__le__', '__eq__', '__ne__', '__gt__', '__ge__', '__reduce_ex__', '__reduce__', '__subclasshook__', '__init_subclass__', '__format__', '__sizeof__', '__dir__', '__class__']
-
+            try:
+                if isinstance(request.id,str):
+                    uid = uuid.UUID(request.id)
+                else:
+                    uid = request.id
+                task_query = session.query(TaskModel).filter(TaskModel.task_id == uid)
+                task: TaskModel = task_query.first()
+                if task:
+                    task.error_massage = str(sender)
+                else:
+                    task = TaskModel(task_id=request.id,
+                                     name=request.task_name,
+                                     args=request.argsrepr,
+                                     status='PENDING')
+                    session.add(task)
+                    session.commit()
+                    session.refresh(task)
+            except Exception as e:
+                session.rollback()
+            finally:
+                sender.app.conf.CELERY_CONTEXT.update({"SessionLocal": SessionLocal})
 
 
 
 @task_success.connect
 def task_success_handler(sender=None, result=None, **kwargs):
+    SessionLocal = sender.app.conf.CELERY_CONTEXT.get('SessionLocal')
     session :Session = SessionLocal()
     print(f'sender {sender}')
     with session:
-        task_query = session.query(TaskModel).filter(TaskModel.task_id == sender.request.id)
-        task:TaskModel = task_query.first()
-        if task is not None:
+        try:
+            task_query = session.query(TaskModel).filter(TaskModel.task_id == sender.request.id)
+            task: TaskModel = task_query.first()
+            if task is not None:
 
-            task.status = 'SUCCESS'
-            task.end_time_at = datetime.now()
-            session.commit()
-        else:
-            if isinstance(sender.request, Context):
-                if sender.request.args is not None:
-                    args_model = ArgsModel(args = [sender.request.args])
-                    task = TaskModel(task_id=sender.request.id,
-                                     name=sender.name,
-                                     args=args_model.model_dump_json(),
-                                     status='SUCCESS',
-                                     end_time_at = datetime.now())
-                else:
-                    task = TaskModel(task_id=sender.request.id,
-                                     name=sender.name,
-                                     args="",
-                                     status='SUCCESS',
-                                     end_time_at=datetime.now())
-            session.add(task)
-            session.commit()
-            session.refresh(task)
+                task.status = 'SUCCESS'
+                task.end_time_at = datetime.now()
+                session.commit()
+            else:
+                if isinstance(sender.request, Context):
+                    if sender.request.args is not None:
+                        args_model = ArgsModel(args=[sender.request.args])
+                        task = TaskModel(task_id=sender.request.id,
+                                         name=sender.name,
+                                         args=args_model.model_dump_json(),
+                                         status='SUCCESS',
+                                         end_time_at=datetime.now())
+                    else:
+                        task = TaskModel(task_id=sender.request.id,
+                                         name=sender.name,
+                                         args="",
+                                         status='SUCCESS',
+                                         end_time_at=datetime.now())
+                session.add(task)
+                session.commit()
+                session.refresh(task)
+        except Exception as e:
+            session.rollback()
+        except sqlalchemy.exc.DatabaseError:
+            session.rollback()
+        finally:
+            sender.app.conf.CELERY_CONTEXT.update({"SessionLocal": SessionLocal})
 
 # @worker_ready.connect
 # def configure_environment(sender, **kwargs):

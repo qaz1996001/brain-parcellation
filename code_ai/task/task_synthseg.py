@@ -359,7 +359,7 @@ def celery_workflow(args, file_list):
                              post_process_synthseg_task.s(intput_args=args))
             workflows.append(workflow)
         except Exception as e:
-            log_error_task.s(file, str(e))
+            pass
     job = group(workflows).delay()
     return job
 

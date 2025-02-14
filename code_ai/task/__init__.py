@@ -13,5 +13,5 @@ CMB_INFERENCE_URL = 'http://localhost:3000'
 # http://127.0.0.1:3000/synthseg_classify
 SYNTHSEG_INFERENCE_URL = 'http://localhost:3000'
 TIME_OUT    = 360
-COUNTDOWN   = 240
+COUNTDOWN   = 120
 MAX_RETRIES = 10

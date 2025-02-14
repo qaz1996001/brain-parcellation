@@ -107,6 +107,8 @@ class Model:
         target_spacing = np.array([spacing[0], spacing[1], min(spacing)])  # isotropical z-axis only
         target_spacing = target_spacing / 2 if target_spacing[0] > 0.6 else target_spacing  # force upsampling?
         image_arr = self.resize_volume(image_arr, spacing, target_spacing, dtype='float32')
+        model1 = bentoml.onnx.get(self.BENTOML_MODEL1_TAG).load_model(providers=['CUDAExecutionProvider'])
+        model2 = bentoml.onnx.get(self.BENTOML_MODEL2_TAG).load_model(providers=['CUDAExecutionProvider'])
         if temp_path is not None:
             seg_arr, _ = self.load_synthseg_seg(seg_path=str(temp_path),
                                                 target_size=image_arr.shape)
@@ -114,15 +116,17 @@ class Model:
             image_arr = self.custom_normalize_1(image_arr, brain_mask)
 
             output = self.sliding_window_inference(inputs=image_arr[np.newaxis, :, :, :, np.newaxis],
-                                                   roi_size=self.patch_size, model=self.model1,
+                                                   roi_size=self.patch_size, model=model1,
                                                    overlap=self.overlap,
                                                    n_class=self.n_class, importance_map=self.importance_map,
                                                    mask=brain_mask[np.newaxis, :, :, :, np.newaxis], )
             pred_map = output[0, :, :, :, 0].numpy() * brain_mask
-            df_pred, pred_label = self.object_analysis(image_arr, pred_map, target_spacing, self.model2)
+            df_pred, pred_label = self.object_analysis(image_arr, pred_map, target_spacing, model2)
             self.save_nii_trio(nifti_file = swan_path, pred_label = pred_label,
                                output_path = output_nii_path_str)
             df_label = self.save_label_table(swan_path, df_pred, pred_label, seg_arr,output_json_path_str)
+
+            del model1, model2
             gc.collect()
         return output_nii_path_str
 
@@ -141,6 +145,7 @@ class Model:
         # self.synth_seg_model.run_segmentations33(path_images=path_images,
         #                                          path_segmentations33=path_segmentations33,
         #                                          net_unet2 = self.model3)
+        del model3, model4
         gc.collect()
         # return
 
@@ -173,6 +178,8 @@ class Model:
         padding_size = [image_x - input_x for image_x, input_x in zip(image_size, padded_image_size)]
         paddings = [(0, 0)] + [(x // 2, x - x // 2) for x in padding_size] + [(0, 0)]
 
+        if isinstance(inputs,np.ndarray):
+            inputs = cp.asarray(inputs)
         input_padded = cp.pad(inputs, paddings)
         if mask is not None:
             mask_padded = cp.pad(cp.asarray(mask, dtype=cp.bool_), paddings)
@@ -181,7 +188,6 @@ class Model:
         output_sum = cp.zeros(output_shape, dtype=cp.float32)
         output_weight_sum = cp.ones(output_shape, dtype=cp.float32)
         window_slices = cls.get_window_slices(padded_image_size, roi_size, overlap, strategy)
-        pred_list = []
         for index, window_slice in enumerate(window_slices):
             start_indices = tuple(ws for ws in window_slice[0])
             end_indices = list(window_slice[0][ws] + window_slice[1][ws] for ws in range(len(start_indices)))
@@ -196,7 +202,6 @@ class Model:
                          start_indices[2]:end_indices[2],
                          start_indices[3]:end_indices[3]]
                 pred = cls.run_model(model, window, importance_map)
-                pred_list.append(pred)
                 padding = [(start, output_size - (start + size)) for start, size, output_size in
                            zip(*window_slice, output_shape)]
                 padding = padding[:-1] + [(0, 0)]
@@ -204,7 +209,7 @@ class Model:
                 output_weight_sum += cp.pad(importance_map, padding)
         output = output_sum / output_weight_sum
         crop_slice = tuple(slice(pad[0], pad[0] + input_x) for pad, input_x in zip(paddings, inputs.shape[:-1]))
-        return output[crop_slice], pred_list
+        return output[crop_slice]
     @classmethod
     def load_volume(cls, path_volume, im_only=False, squeeze=True, dtype=None, LPS_coor=True):
         """

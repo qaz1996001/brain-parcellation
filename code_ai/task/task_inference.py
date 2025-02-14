@@ -48,14 +48,6 @@ def task_inference(intput_args,output_inference:pathlib.Path):
                     args, file_list = get_synthseg_args_file(inference_name, file_dict)
                     temp_task = (task_synthseg.celery_workflow.s(args, file_list) | task_CMB.inference_cmb.s(dataset.model_dump_json()))
                     workflows.append(temp_task)
-                case InferenceEnum.Area:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    temp_task = (task_synthseg.celery_workflow.s(args, file_list))
-                    workflows.append(temp_task)
-                case InferenceEnum.DWI:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    temp_task = (task_synthseg.celery_workflow.s(args, file_list))
-                    workflows.append(temp_task)
     job = group(workflows).delay()
     return mapping_inference_data
 

@@ -7,10 +7,6 @@ from typing import List
 from sqlalchemy import String, TIMESTAMP, Uuid, DOUBLE
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-# 用create_engine對這個URL_DATABASE建立一個引擎
-engine = create_engine('postgresql+psycopg2://postgres_n:postgres_p@127.0.0.1:15433/db_name')
-# 使用sessionmaker來與資料庫建立一個對話，記得要bind=engine，這才會讓專案和資料庫連結
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # 創建SQLAlchemy的一個class，然後在其它地方使用
 Base = declarative_base()
 
