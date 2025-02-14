@@ -36,3 +36,16 @@ services:
       POSTGRES_PASSWORD: postgres_p
     ports:
       - 15433:5432
+  fast_api_app:
+    build:
+      context: ./backend
+    container_name: fast_api_app
+    restart: always
+    depends_on:
+      - db_server
+      - redis_server
+      - rabbitmq_server
+    volumes:
+      - ./backend:/backend
+    ports:
+      - 9800:8800
