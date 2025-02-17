@@ -1,19 +1,14 @@
 import datetime
 import itertools
 import pathlib
-
 import gc
 import numpy as np
 import pandas as pd
 import nibabel as nib
 from scipy import signal
 from scipy import ndimage as ndi
-from skimage.morphology import ball
-from skimage.segmentation import watershed
-from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops, regionprops_table
 import bentoml
-import onnxruntime as ort
 import cupy as cp
 
 @bentoml.service(
@@ -120,7 +115,7 @@ class Model:
                                                    overlap=self.overlap,
                                                    n_class=self.n_class, importance_map=self.importance_map,
                                                    mask=brain_mask[np.newaxis, :, :, :, np.newaxis], )
-            pred_map = output[0, :, :, :, 0].numpy() * brain_mask
+            pred_map = cp.asnumpy(cp.squeeze(output)) * brain_mask
             df_pred, pred_label = self.object_analysis(image_arr, pred_map, target_spacing, model2)
             self.save_nii_trio(nifti_file = swan_path, pred_label = pred_label,
                                output_path = output_nii_path_str)
@@ -149,6 +144,15 @@ class Model:
         gc.collect()
         # return
 
+    @bentoml.api
+    async def infarct_classify(self,):
+
+        pass
+
+    @bentoml.api
+    async def wmh_classify(self, ):
+        pass
+
     @classmethod
     def run_model(cls, sess, input1, importance_map, mode='cmb_unet_64_model'):
         if 'cmb_unet_64_model' == mode:
@@ -167,6 +171,8 @@ class Model:
             temp = sess.run(["prob_out"], {"input_1": np_input1})[0]
             return np.round(temp, 6)
         return input1
+
+
     @classmethod
     def sliding_window_inference(cls, inputs, roi_size, model, overlap, n_class, importance_map, strategy="overlap_inside",
                                  mask=None, **kwargs):
@@ -386,8 +392,8 @@ class Model:
     def object_analysis(cls, image_arr, pred_map, spacing, model, min_th=0.084, FP_reduction_th=0.357, uncertain_th=0.5175):
         pred_label = label(pred_map > 0.05)
         # pred_label = get_watershed_label(pred_map, 0.05)  # separate connected labels
-        gaussian = cls.gaussian_kernel(roi_size=(26, 26, 26), sigma=1 / 8).numpy().astype('float16')
-        # FP_reduction model predict object by object
+        # gaussian = gaussian_kernel(roi_size=(26, 26, 26), sigma=1/8).numpy().astype('float16')
+        gaussian = cls.gaussian_kernel(roi_size=(26, 26, 26), sigma=1 / 8)
         if (pred_label.max() > 0) and (FP_reduction_th > 0):
             # FP_reduction model predict object by object
             props = regionprops(pred_label)
@@ -396,11 +402,12 @@ class Model:
                 x0, y0, z0, x1, y1, z1 = p.bbox
                 center = [(x0 + x1) // 2, (y0 + y1) // 2, (z0 + z1) // 2]
                 # crop_image = center_crop(image_arr, center).astype('float16')
-                crop_image = cls.center_crop(image_arr, center)
-                x = np.stack([crop_image, gaussian], axis=-1)[np.newaxis, ...]
-                TP_conf.append(model(x, training=False).numpy()[0][0])  # <-- model2 prediction
+                crop_image = cp.asarray(cls.center_crop(image_arr, center))
+                x = cp.stack([crop_image, gaussian], axis=-1, dtype=cp.float32)[cp.newaxis, ...]
+                TP_conf.append(cls.run_model(model, x, importance_map=None, mode='cmb_unet_26_model_300'))
+                # TP_conf.append(model(x, training=False).numpy()[0][0])  # <-- model2 prediction
                 print(".", end="")
-            TP_conf = np.stack(TP_conf).astype('float32') / 2  # covert to [0.0:1.0]
+            TP_conf = np.squeeze(np.stack(TP_conf).astype('float32') / 2)  # covert to [0.0:1.0]
             pred_type = ['CMB' if x * 2 > uncertain_th else 'Uncertain' for x in TP_conf]
             print("。")
         else:
@@ -408,6 +415,7 @@ class Model:
             pred_type = 'other'
         # pred measurement
         props = regionprops_table(pred_label, pred_map, properties=('label', 'bbox', 'intensity_mean'))
+
         df_pred = pd.DataFrame({'ori_Pred_label': props['label'],
                                 'Pred_diameter': ((props['bbox-3'] - props['bbox-0']) * spacing[0] + (
                                             props['bbox-4'] - props['bbox-1']) * spacing[1]) / 2,
@@ -450,6 +458,7 @@ class Model:
             print(
                 f"size={x.header.get_data_shape()} spacing={x.header.get_zooms()}  {label_arr.dtype}:{label_arr.min()}-{label_arr.max()}")
             print("affine matrix =\n", x.affine)
+
     @classmethod
     def save_label_table(cls, nifti_file, df_pred, label_arr, seg_arr, output_json_path_str,):
         def get_location(lb):

@@ -2,10 +2,10 @@ import os.path
 import bentoml
 import orjson
 from celery import shared_task
-from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN
+from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
-@shared_task(bind=True,acks_late=True)
+@app.task(bind=True,acks_late=True)
 def inference_cmb(self,args,
                   intput_args,
                   ):
@@ -34,11 +34,17 @@ def inference_cmb(self,args,
             print('output_json_path_str', output_json_path_str[0])
             if os.path.exists(temp_path_str[0]):
                 with bentoml.SyncHTTPClient(CMB_INFERENCE_URL, timeout=TIME_OUT) as client:
-                    result = client.cmb_classify(swan_path_str=swan_path_str,
-                                                 temp_path_str=temp_path_str[0],
-                                                 output_nii_path_str=output_nii_path_str[0],
-                                                 output_json_path_str=output_json_path_str[0])
-                return intput_args[1],result
+                    try:
+                        result = client.cmb_classify(swan_path_str=swan_path_str,
+                                                     temp_path_str=temp_path_str[0],
+                                                     output_nii_path_str=output_nii_path_str[0],
+                                                     output_json_path_str=output_json_path_str[0])
+                        return intput_args[1],result
+                    except:
+                        print('inference_cmb except')
+                        self.retry(countdown=COUNTDOWN, max_retries=MAX_RETRIES)  # 重試任務
+
             else:
                 print('inference_cmb retry')
                 self.retry(countdown=COUNTDOWN, max_retries=MAX_RETRIES)  # 重試任務
+

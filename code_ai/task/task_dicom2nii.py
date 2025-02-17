@@ -270,6 +270,7 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
         output_nifti_path = output_nifti_str
 
     workflows = []
+    job_list = []
     is_dir_flag = all(list(map(lambda x: x.is_dir(), input_dicom_path.iterdir())))
     print('is_dir_flag', is_dir_flag)
     if is_dir_flag:
@@ -278,7 +279,9 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                              process_dir_next.s(sub_dir,output_dicom_path),
                              dicom_2_nii_file.s(output_nifti_path),
                              task_inference.task_inference.s(output_nifti_str),)
-            workflows.append(workflow)
+            job = workflow.apply_async()
+            job_list.append(job)
+            # workflows.append(workflow)
     else:
         for sub_dir in list(input_dicom_path.iterdir()):
             if sub_dir.is_dir():
@@ -287,11 +290,13 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                                      dicom_2_nii_file.s(output_nifti_path),
                                      task_inference.task_inference.s(output_nifti_str)
                                      )
-                    workflows.append(workflow)
-    print('workflows size',len(workflows))
+                    job = workflow.apply_async()
+                    job_list.append(job)
+                    # workflows.append(workflow)
+    # print('workflows size',len(workflows))
+    print('job_list size', len(job_list))
     # from celery.result import GroupResult
-    job = group(workflows).apply_async()
-    return job
+    return job_list
 
 
 class ConvertManager:
