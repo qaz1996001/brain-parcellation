@@ -77,7 +77,7 @@ def release_lock():
 
 
 
-@app.task(acks_late=True)
+@app.task(acks_late=True,rate_limit='100/s')
 @shared_task
 def resample_task(file, resample_file):
     if not resample_file.parent.exists():
@@ -121,7 +121,7 @@ def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
 
 
 
-@app.task
+@app.task(acks_late=True)
 def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file):
 
     synthseg_file = synthseg_file_tuple[0]
@@ -142,13 +142,13 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file
     gc.collect()
     return synthseg_file,david_file
 
-@app.task
+@app.task(acks_late=True)
 def post_process_synthseg_task(args,intput_args, ):
     print('post_process_synthseg_task',args)
     print('intput_args', intput_args)
     if intput_args.cmb:
         original_cmb_file_list: List[pathlib.Path] = list(map(lambda x:x.parent.joinpath(f"synthseg_{x.name.replace('resample', 'original')}"),intput_args.cmb_file_list))
-        if original_cmb_file_list[0].name .startswith('synthseg_SWAN'):
+        if original_cmb_file_list[0].name.startswith('synthseg_SWAN'):
             swan_file = original_cmb_file_list[0]
             t1_file = original_cmb_file_list[1]
         else:
@@ -157,18 +157,22 @@ def post_process_synthseg_task(args,intput_args, ):
 
         template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
         synthseg_basename: str = replace_suffix(swan_file.name, '')
+
         template_coregistration_file_name = swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
         cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
         # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
+        print('cmd_str',cmd_str)
         process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
+        print('stdout',stdout)
+        print('stderr',stderr)
     gc.collect()
     return intput_args
 
 
 
-@app.task(bind=True,rate_limit='5/m',priority=20,acks_late=True)
+@app.task(bind=True,rate_limit='10/m',priority=20,acks_late=True)
 def resample_to_original_task(self,intput_args,
                               original_file, resample_image_file, resample_seg_file):
     original_seg_file = resampleSynthSEG2original(original_file, resample_image_file, resample_seg_file)
@@ -247,8 +251,8 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index,output_path_list):
         temp_task = chain(wm_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, wm_file),
                           resample_to_original_task.s(original_file=file, resample_image_file=resample_file,
                                                       resample_seg_file=wm_file))
-        job = temp_task.apply_async()
-        job_list.append(job)
+        # job = temp_task.apply_async()
+        job_list.append(temp_task)
 
     # 添加 CMB 保存任务
     if intput_args.cmb:
@@ -257,8 +261,8 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index,output_path_list):
                           resample_to_original_task.s(original_file=file,
                                                       resample_image_file=resample_file,
                                                       resample_seg_file=cmb_file))
-        job = temp_task.apply_async()
-        job_list.append(job)
+        # job = temp_task.apply_async()
+        job_list.append(temp_task)
 
     # 添加 DWI 保存任务
     if intput_args.dwi:
@@ -267,8 +271,8 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index,output_path_list):
                           resample_to_original_task.s(original_file=file,
                                                       resample_image_file=resample_file,
                                                       resample_seg_file=dwi_file))
-        job = temp_task.apply_async()
-        job_list.append(job)
+        # job = temp_task.apply_async()
+        job_list.append(temp_task)
 
     # 添加 WMH 保存任务
     if intput_args.wmh:
@@ -280,8 +284,8 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index,output_path_list):
                           resample_to_original_task.s(original_file=file,
                                                       resample_image_file=resample_file,
                                                       resample_seg_file=wmh_file))
-        job = temp_task.apply_async()
-        job_list.append(job)
+        # job = temp_task.apply_async()
+        job_list.append(temp_task)
     return job_list
 
 
@@ -359,6 +363,40 @@ def inference_synthseg(intput_args,
 #     job = group(workflows).delay()
 #     return job
 
+# @app.task(acks_late=True)
+# def celery_workflow(inference_name, file_dict):
+#     args, file_list = get_synthseg_args_file(inference_name, file_dict)
+#     print(f'task_synthseg celery_workflow inference_name {inference_name}')
+#     print(f'task_synthseg celery_workflow file_dict {file_dict}')
+#     print(f'task_synthseg celery_workflow args {args}')
+#     print(f'task_synthseg celery_workflow file_list {file_list}')
+#     output_path_list = file_dict['output_path_list']
+#     depth_number = args.depth_number or 5
+#     job_list = []
+#     for i, file in enumerate(file_list):
+#         resample_file   :pathlib.Path = args.resample_file_list[i]
+#         synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
+#         synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
+#         david_file      :pathlib.Path = args.david_file_list[i]
+#         wm_file         :pathlib.Path = args.wm_file_list[i]
+#         output_path_file:pathlib.Path = pathlib.Path(output_path_list[0])
+#         if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists(),output_path_file.exists()]):
+#             continue
+#
+#         temp_task = chain(resample_task.s(file, resample_file),
+#                          synthseg_task.s(synthseg_file, synthseg33_file),
+#                          process_synthseg_task.s(depth_number=depth_number,
+#                                                  david_file=david_file,
+#                                                  wm_file=wm_file),
+#                          save_file_tasks.s(intput_args=args, index=i,output_path_list=output_path_list),
+#                          post_process_synthseg_task.s(intput_args=args))
+#         # job = temp_task.apply_async()
+#         job_list.append(temp_task)
+#     # for job in job_list:
+#     #     job().get(disable_sync_subtasks=False)
+#     return job_list
+
+
 @app.task(acks_late=True)
 def celery_workflow(inference_name, file_dict):
     args, file_list = get_synthseg_args_file(inference_name, file_dict)
@@ -386,19 +424,9 @@ def celery_workflow(inference_name, file_dict):
                                                  wm_file=wm_file),
                          save_file_tasks.s(intput_args=args, index=i,output_path_list=output_path_list),
                          post_process_synthseg_task.s(intput_args=args))
-        job = temp_task.apply_async()
-        job_list.append(job)
+        job = temp_task.delay().get(disable_sync_subtasks=False)
+        job_list.append(temp_task)
+        # job = temp_task.apply_async(disable_sync_subtasks=False)
+    # for job in job_list:
+    #     job().get(disable_sync_subtasks=False)
     return job_list
-
-
-
-# file_dict = {'input_path_list':['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
-#              'output_path': '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091',
-#              'output_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_T1BRAVO_AXI_original_synthseg33.nii.gz',
-#                                   '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_T1BRAVO_AXI_original_synthseg.nii.gz']}
-#  {'input_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/SWAN.nii.gz',
-#                       '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
-#   'output_path': '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091',
-#   'output_path_list': ['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/synthseg_SWAN_original_CMB_from_synthseg_T1BRAVO_AXI_original_CMB.nii.gz',
-#                        '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/Pred_CMB.nii.gz',
-#                        '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/Pred_CMB.json']}

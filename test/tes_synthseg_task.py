@@ -212,7 +212,7 @@ def main(args):
     input_dir = pathlib.Path(args.input_nifti)
     input_dir_list = sorted(input_dir.iterdir())
     study_list = list(filter(check_study_id, input_dir_list))
-    base_output_path = "/mnt/d/00_Chen/Task04_git/output"
+    base_output_path = args.output
     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
     analyses = {}
     for mapping_inference in mapping_inference_list:
@@ -326,7 +326,10 @@ if __name__ == '__main__':
                                            queue='default',
                                            routing_key='celery')
                 case InferenceEnum.CMB:
-                    pass
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
+                                           queue='default',
+                                           routing_key='celery')
                 case InferenceEnum.AneurysmSynthSeg:
                     args, file_list = get_synthseg_args_file(inference_name, file_dict)
                     result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),

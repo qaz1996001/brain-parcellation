@@ -43,25 +43,29 @@ def task_inference(intput_args, output_inference: pathlib.Path):
         for inference_name, file_dict in mapping_inference.items():
             if file_dict is None:
                 continue
-            print('inference_name {} file_dict {}'.format(inference_name, file_dict))
 
             match inference_name:
                 case InferenceEnum.CMB:
                     temp_task = chain(task_synthseg.celery_workflow.s(inference_name, file_dict))
-                    # temp_task.link(task_CMB.inference_cmb.s(dataset.model_dump_json()))
-                    job = temp_task.apply_async(link = task_CMB.inference_cmb.s(dataset.model_dump_json()))
-                    job_list.append(job)
+                    temp_task.link(task_CMB.inference_cmb.s(dataset.model_dump_json()))
+                    job_list.append(temp_task)
+                    # job = temp_task.apply_async(link = task_CMB.inference_cmb.s(dataset.model_dump_json()))
+                    # job_list.append(job)
                 case InferenceEnum.WMH:
-                    temp_task = chain(task_synthseg.celery_workflow.s(InferenceEnum.WMH_PVS, mapping_inference[InferenceEnum.WMH_PVS]))
-                    # temp_task.link(task_WMH.inference_wmh.s(dataset.model_dump_json()))
-                    job = temp_task.apply_async(link = task_WMH.inference_wmh.s(dataset.model_dump_json()))
-                    job_list.append(job)
+                    temp_task = chain(task_synthseg.celery_workflow.s(InferenceEnum.WMH_PVS,
+                                                                      mapping_inference[InferenceEnum.WMH_PVS]))
+                    temp_task.link(task_WMH.inference_wmh.s(dataset.model_dump_json()))
+                    job_list.append(temp_task)
+                    # job = temp_task.apply_async(link = task_WMH.inference_wmh.s(dataset.model_dump_json()))
+                    # job_list.append(job)
 
                 case InferenceEnum.Infarct:
-                    temp_task = chain(task_synthseg.celery_workflow.s(InferenceEnum.DWI, mapping_inference[InferenceEnum.DWI]))
-                    # temp_task.link(task_infarct.inference_infarct.s(dataset.model_dump_json()))
-                    job = temp_task.apply_async(link = task_infarct.inference_infarct.s(dataset.model_dump_json()))
-                    job_list.append(job)
+                    temp_task = chain(task_synthseg.celery_workflow.s(InferenceEnum.DWI,
+                                                                      mapping_inference[InferenceEnum.DWI]))
+                    temp_task.link(task_infarct.inference_infarct.s(dataset.model_dump_json()))
+                    job_list.append(temp_task)
+                    # job = temp_task.apply_async(link = task_infarct.inference_infarct.s(dataset.model_dump_json()))
+                    # job_list.append(job)
                 case InferenceEnum.Area:
                     cmb_dict = file_dict.get(InferenceEnum.CMB)
                     area_dict = file_dict.get(InferenceEnum.Area)
@@ -69,11 +73,13 @@ def task_inference(intput_args, output_inference: pathlib.Path):
                         continue
                     else:
                         temp_task = chain(task_synthseg.celery_workflow.s(inference_name, file_dict))
-                        job = temp_task.apply_async()
-                        job_list.append(job)
+                        job_list.append(temp_task)
+                        # job = temp_task.apply_async()
+                        # job_list.append(job)
                 # case _:
                 #     temp_task = chain(task_synthseg.celery_workflow.s(inference_name, file_dict))
-
+    for job in job_list:
+        job()
     return job_list
 
 
