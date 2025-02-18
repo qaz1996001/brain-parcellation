@@ -11,7 +11,7 @@ from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
 
 
 def model_inference(intput_args):
-    miss_inference = {InferenceEnum.CMB, InferenceEnum.AneurysmSynthSeg,InferenceEnum.Aneurysm}
+    miss_inference = {InferenceEnum.CMB, InferenceEnum.Aneurysm}
     input_dir = pathlib.Path(intput_args.output_nifti)
     base_output_path = str(pathlib.Path(intput_args.output_inference))
     input_dir_list = sorted(input_dir.iterdir())
@@ -60,11 +60,6 @@ def model_inference(intput_args):
                 case InferenceEnum.CMB:
                     args,file_list = get_synthseg_args_file(inference_name, file_dict)
                     result = app.send_task('code_ai.task.task_synthseg.celery_workflow',args=(args,file_list),
-                                           queue='default',
-                                           routing_key='celery')
-                case InferenceEnum.AneurysmSynthSeg:
-                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
-                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(args, file_list),
                                            queue='default',
                                            routing_key='celery')
                 case InferenceEnum.Infarct:
@@ -133,10 +128,9 @@ if __name__ == '__main__':
     # print('result', type(result))
     # print('collect_list start')
 
-#  python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom1 --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
+# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom1 --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 
 # D:\00_Chen\Task08\data\raw_dicom\stroke
-# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_20250204 --output_nifti /mnt/e/rename_nifti_20250204 --output_inference /mnt/e/rename_nifti_20250204

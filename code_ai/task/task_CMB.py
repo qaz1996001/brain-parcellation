@@ -5,14 +5,14 @@ from celery import shared_task
 from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
-@app.task(bind=True,acks_late=True)
+@app.task(bind=True,acks_late=True,rate_limit='300/s')
 def inference_cmb(self,args,
                   intput_args,
                   ):
+    print(f'inference_cmb args {args} ')
+    print(f'inference_cmb intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)
-    if mapping_inference_data_dict.get('analyses') is None:
-        return
-    for study_id, task_dict in mapping_inference_data_dict['analyses'].items():
+    for study_id, task_dict in mapping_inference_data_dict.items():
         cmb_task = task_dict.get('CMB')
         if cmb_task is None:
             return intput_args
@@ -47,4 +47,3 @@ def inference_cmb(self,args,
             else:
                 print('inference_cmb retry')
                 self.retry(countdown=COUNTDOWN, max_retries=MAX_RETRIES)  # 重試任務
-

@@ -87,7 +87,7 @@ def resample_task(file, resample_file):
 
 
 # @app.task(bind=True,rate_limit='1/m')
-@app.task(bind=True,rate_limit='30/s',priority=50)
+@app.task(bind=True,rate_limit='30/s',acks_late=True,priority=50)
 def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
     """
         限制同時只能執行一個的任務。
@@ -168,27 +168,23 @@ def post_process_synthseg_task(args,intput_args, ):
 
 
 
-@app.task(bind=True,rate_limit='5/m',priority=20)
-def resample_to_original_task(self, raw_file, resample_image_file, resample_seg_file):
-    original_seg_file = resampleSynthSEG2original(raw_file, resample_image_file, resample_seg_file)
-    outpput_raw_file = resample_seg_file.parent.joinpath(raw_file.name)
-    print('raw_file', raw_file)
+@app.task(bind=True,rate_limit='5/m',priority=20,acks_late=True)
+def resample_to_original_task(self,intput_args,
+                              original_file, resample_image_file, resample_seg_file):
+    original_seg_file = resampleSynthSEG2original(original_file, resample_image_file, resample_seg_file)
+    outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
+    print('original_file', original_file)
     print('outpput_raw_file', outpput_raw_file)
-    if str(raw_file) == str(outpput_raw_file):
+    if str(original_file) == str(outpput_raw_file):
         return original_seg_file
     else:
-        with open(raw_file,mode='rb') as raw_file_f:
+        with open(original_file,mode='rb') as raw_file_f:
             with open(outpput_raw_file,mode='wb') as outpput_raw_file_f:
                 shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
         return original_seg_file
 
 
-@app.task
-def log_error_task(file, error_msg):
-    print(f"Error processing {file}: {error_msg}")
-    return False
-
-@app.task
+@app.task(acks_late=True)
 def wm_save_task(seg_array, affine, header, wm_file):
     """保存白质分区文件"""
     out_nib = nib.Nifti1Image(seg_array, affine, header)
@@ -196,7 +192,7 @@ def wm_save_task(seg_array, affine, header, wm_file):
     print('wm_save_task')
     return f"Saved WM file: {wm_file}"
 
-@app.task
+@app.task(acks_late=True)
 def cmb_save_task(seg_array, affine, header, cmb_file):
     """保存CMB文件"""
     cmb_array = CMBProcess.run(seg_array)
@@ -204,7 +200,7 @@ def cmb_save_task(seg_array, affine, header, cmb_file):
     nib.save(out_nib, cmb_file)
     return f"Saved CMB file: {cmb_file}"
 
-@app.task
+@app.task(acks_late=True)
 def dwi_save_task(seg_array, affine, header, dwi_file):
     """保存DWI文件"""
     dwi_array = DWIProcess.run(seg_array)
@@ -212,7 +208,7 @@ def dwi_save_task(seg_array, affine, header, dwi_file):
     nib.save(out_nib, dwi_file)
     return f"Saved DWI file: {dwi_file}"
 
-@app.task
+@app.task(acks_late=True)
 def wmh_save_task(synthseg_file, wm_file, depth_number, wmh_file):
     """保存WMH文件"""
     synthseg_nii      = nib.load(synthseg_file)
@@ -229,10 +225,10 @@ def wmh_save_task(synthseg_file, wm_file, depth_number, wmh_file):
 
 # def save_file_tasks(intput_args, index):
 
-@app.task
-def save_file_tasks(synthseg_david_tuple, intput_args, index):
+@app.task(acks_late=True)
+def save_file_tasks(synthseg_david_tuple, intput_args, index,output_path_list):
     print('intput_args', intput_args)
-    tasks = []
+
     synthseg_file = intput_args.synthseg_file_list[index]
     synthseg_nii = nib.load(synthseg_file)
 
@@ -245,47 +241,48 @@ def save_file_tasks(synthseg_david_tuple, intput_args, index):
     file          = intput_args.intput_file_list[index]
     resample_file = intput_args.resample_file_list[index]
     # 添加 WM 保存任务
+    job_list = []
     if intput_args.wm_file:
         wm_file = intput_args.wm_file_list[index]
-        tasks.append(wm_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, wm_file))
-        tasks.append(resample_to_original_task.s(raw_file=file,
-                                                 resample_image_file=resample_file,
-                                                 resample_seg_file=wm_file))
+        temp_task = chain(wm_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, wm_file),
+                          resample_to_original_task.s(original_file=file, resample_image_file=resample_file,
+                                                      resample_seg_file=wm_file))
+        job = temp_task.apply_async()
+        job_list.append(job)
 
     # 添加 CMB 保存任务
     if intput_args.cmb:
         cmb_file = intput_args.cmb_file_list[index]
-        tasks.append(cmb_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, cmb_file))
-        tasks.append(resample_to_original_task.s(raw_file=file,
-                                                 resample_image_file=resample_file,
-                                                 resample_seg_file=cmb_file))
+        temp_task = chain(cmb_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, cmb_file),
+                          resample_to_original_task.s(original_file=file,
+                                                      resample_image_file=resample_file,
+                                                      resample_seg_file=cmb_file))
+        job = temp_task.apply_async()
+        job_list.append(job)
 
     # 添加 DWI 保存任务
     if intput_args.dwi:
         dwi_file = intput_args.dwi_file_list[index]
-        tasks.append(dwi_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, dwi_file))
-        tasks.append(resample_to_original_task.s(raw_file=file,
-                                                 resample_image_file=resample_file,
-                                                 resample_seg_file=dwi_file))
+        temp_task = chain(dwi_save_task.s(seg_array, synthseg_nii.affine, synthseg_nii.header, dwi_file),
+                          resample_to_original_task.s(original_file=file,
+                                                      resample_image_file=resample_file,
+                                                      resample_seg_file=dwi_file))
+        job = temp_task.apply_async()
+        job_list.append(job)
 
     # 添加 WMH 保存任务
     if intput_args.wmh:
         wmh_file = intput_args.wmh_file_list[index]
-        tasks.append(
-            wmh_save_task.s(
-                synthseg_file=synthseg_file,
-                wm_file=wm_file,
-                depth_number=intput_args.depth_number,
-                wmh_file=wmh_file,
-            )
-        #     synthseg_file, wm_file,
-        )
-        tasks.append(resample_to_original_task.s(raw_file=file,
-                                                 resample_image_file=resample_file,
-                                                 resample_seg_file=wmh_file))
-    # 组合任务并执行
-    job = group(tasks).apply()
-    return job
+        temp_task = chain(wmh_save_task.s(synthseg_file=synthseg_file,
+                                          wm_file=wm_file,
+                                          depth_number=intput_args.depth_number,
+                                          wmh_file=wmh_file,),
+                          resample_to_original_task.s(original_file=file,
+                                                      resample_image_file=resample_file,
+                                                      resample_seg_file=wmh_file))
+        job = temp_task.apply_async()
+        job_list.append(job)
+    return job_list
 
 
 @app.task(acks_late=True)
@@ -319,8 +316,7 @@ def inference_synthseg(intput_args,
     miss_inference = {InferenceEnum.Aneurysm,
                       InferenceEnum.WMH,
                       InferenceEnum.Infarct,
-                      InferenceEnum.SynthSeg,
-                      InferenceEnum.CMBSynthSeg}
+                      InferenceEnum.SynthSeg}
 
     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
         for inference_name, file_dict in mapping_inference.items():
@@ -334,34 +330,67 @@ def inference_synthseg(intput_args,
     return job,mapping_inference_data
 
 
-@app.task
-def celery_workflow(args, file_list):
-    workflows = []
+# @app.task
+# def celery_workflow(args, file_list):
+#     workflows = []
+#     depth_number = args.depth_number or 5
+#     print('args',args)
+#
+#     for i, file in enumerate(file_list):
+#         try:
+#             resample_file   :pathlib.Path = args.resample_file_list[i]
+#             synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
+#             synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
+#             david_file      :pathlib.Path = args.david_file_list[i]
+#             wm_file         :pathlib.Path = args.wm_file_list[i]
+#             if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists()]):
+#                 continue
+#
+#             workflow = chain(resample_task.s(file, resample_file),
+#                              synthseg_task.s(synthseg_file, synthseg33_file),
+#                              process_synthseg_task.s(depth_number=depth_number,
+#                                                      david_file=david_file,
+#                                                      wm_file=wm_file),
+#                              save_file_tasks.s(intput_args=args, index=i),
+#                              post_process_synthseg_task.s(intput_args=args))
+#             workflows.append(workflow)
+#         except Exception as e:
+#             pass
+#     job = group(workflows).delay()
+#     return job
+
+@app.task(acks_late=True)
+def celery_workflow(inference_name, file_dict):
+    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+    print(f'task_synthseg celery_workflow inference_name {inference_name}')
+    print(f'task_synthseg celery_workflow file_dict {file_dict}')
+    print(f'task_synthseg celery_workflow args {args}')
+    print(f'task_synthseg celery_workflow file_list {file_list}')
+    output_path_list = file_dict['output_path_list']
     depth_number = args.depth_number or 5
-    print('args',args)
-
+    job_list = []
     for i, file in enumerate(file_list):
-        try:
-            resample_file   :pathlib.Path = args.resample_file_list[i]
-            synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
-            synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
-            david_file      :pathlib.Path = args.david_file_list[i]
-            wm_file         :pathlib.Path = args.wm_file_list[i]
-            if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists()]):
-                continue
+        resample_file   :pathlib.Path = args.resample_file_list[i]
+        synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
+        synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
+        david_file      :pathlib.Path = args.david_file_list[i]
+        wm_file         :pathlib.Path = args.wm_file_list[i]
+        output_path_file:pathlib.Path = pathlib.Path(output_path_list[0])
+        if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists(),output_path_file.exists()]):
+            continue
 
-            workflow = chain(resample_task.s(file, resample_file),
-                             synthseg_task.s(synthseg_file, synthseg33_file),
-                             process_synthseg_task.s(depth_number=depth_number,
-                                                     david_file=david_file,
-                                                     wm_file=wm_file),
-                             save_file_tasks.s(intput_args=args, index=i),
-                             post_process_synthseg_task.s(intput_args=args))
-            workflows.append(workflow)
-        except Exception as e:
-            pass
-    job = group(workflows).delay()
-    return job
+        temp_task = chain(resample_task.s(file, resample_file),
+                         synthseg_task.s(synthseg_file, synthseg33_file),
+                         process_synthseg_task.s(depth_number=depth_number,
+                                                 david_file=david_file,
+                                                 wm_file=wm_file),
+                         save_file_tasks.s(intput_args=args, index=i,output_path_list=output_path_list),
+                         post_process_synthseg_task.s(intput_args=args))
+        job = temp_task.apply_async()
+        job_list.append(job)
+    return job_list
+
+
 
 # file_dict = {'input_path_list':['/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
 #              'output_path': '/mnt/e/rename_nifti_20250206/10516407_20231215_MR_21210200091',

@@ -44,7 +44,6 @@ class InferenceEnum(str, enum.Enum):
     Area = 'Area'
 
     CMB = 'CMB'
-    CMBSynthSeg = 'CMBSynthSeg'
 
     DWI = 'DWI'
     Infarct = 'Infarct'
@@ -53,7 +52,6 @@ class InferenceEnum(str, enum.Enum):
     WMH_PVS = 'WMH_PVS'
     # Lacune
     Aneurysm = 'Aneurysm'
-    AneurysmSynthSeg = 'AneurysmSynthSeg'
 
 
 
@@ -76,7 +74,6 @@ model_mapping_series_dict = {
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
     # InferenceEnum.CMBSynthSeg
-    InferenceEnum.AneurysmSynthSeg: [[MRSeriesRenameEnum.MRA_BRAIN]],
     InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,MRSeriesRenameEnum.DWI1000,MRSeriesRenameEnum.ADC],
                             ],
     InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
@@ -180,12 +177,6 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
                                                  ))
             output_files.append(os.path.join(base_output_path, f"Pred_CMB.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_CMB.json"))
-        case InferenceEnum.AneurysmSynthSeg:
-            for input_path in input_paths:
-                base_name = os.path.basename(input_path).split('.')[0]
-                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")
-                output_files.append(output_file)
-            pass
         case InferenceEnum.Infarct:
             output_files.append(os.path.join(base_output_path, f"Pred_Infarct.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_Infarct_ADCth.nii.gz"))
@@ -200,7 +191,10 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
             output_files.append(os.path.join(base_output_path, f"Prob_Aneurysm.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_Vessel.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.json"))
-
+            for input_path in input_paths:
+                base_name = os.path.basename(input_path).split('.')[0]
+                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")
+                output_files.append(output_file)
         case _:
             pass
     return output_files
@@ -254,6 +248,10 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
             args,file_list = build_Area('wmh',file_dict)
             args.wmh_file_list = prepare_output_file_list(args.resample_file_list, '_WMHPVS.nii.gz', output_path)
             return args, file_list
+        case InferenceEnum.WMH_PVS:
+            args, file_list = build_Area('wmh', file_dict)
+            args.wmh_file_list = prepare_output_file_list(args.resample_file_list, '_WMHPVS.nii.gz', output_path)
+            return args, file_list
         case InferenceEnum.DWI:
             args, file_list = build_Area('dwi', file_dict)
             args.dwi_file_list = prepare_output_file_list(args.resample_file_list, '_DWI.nii.gz', output_path)
@@ -265,7 +263,7 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
         case InferenceEnum.Area:
             args,file_list = build_Area('wm_file',file_dict)
             return args, file_list
-        case InferenceEnum.AneurysmSynthSeg:
+        case InferenceEnum.Aneurysm:
             args, file_list = build_Area('wm_file', file_dict)
             return args, file_list
         case _:

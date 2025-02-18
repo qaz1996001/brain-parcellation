@@ -12,16 +12,47 @@ app = Celery('tasks',
              )
 app.config_from_object('code_ai.celery_config')
 
+def get_result_by_id(task_id:str):
+    result = AsyncResult(task_id)
+    if result.children is not None and len(result.children) > 0 :
+        get_result_by_id(result.children[0].task_id)
+    print(result.task_id)
+    result.retries
+    print('result status', result.status)
+    print('result state', result.state)
+    print('result',result.result)
+    print('result',result.name)
+    print('*******************************')
+
+
 
 if __name__ == '__main__':
     # 946a02a5-79ea-4b0f-9133-793fc2db9beb
     from celery.result import AsyncResult
     # # 获取任务的 ID
-    task_id = '2e41f07d-28d0-41b4-bb1c-cd0142f5c98c'
-    task_id = 'ef6db8ae-e16a-4c94-b375-18b97a0ecc7b'
+    task_id = ('ce29d361-cc0a-41f6-92f4-ee9366a3e070'
+               )
+    get_result_by_id(task_id)
+
+
     # 创建 AsyncResult 实例
     result = AsyncResult(task_id)
-    # 2e41f07d-28d0-41b4-bb1c-cd0142f5c98c
-    print('result',result,type(result))
-    print('result status', result.status)
-    print('result state', result.state)
+    # print('result id', result.task_id, )
+    # print('result kwargs', result.kwargs, )
+    # print('result args', result.args, )
+    # print('result status', result.status)
+    # print('result state', result.state)
+    # print('result parent', result.parent)
+    # print('result children', result.children)
+    # for children in result.children:
+    #     result = AsyncResult(children.task_id)
+    #     print('result id', result.task_id,)
+    #     print('result kwargs', result.kwargs, )
+    #     print('result args', result.args, )
+    #     print('result status', result.status)
+    #     print('result state', result.state)
+    #     print('result parent', result.parent)
+    #     print('result children', result.children)
+
+
+

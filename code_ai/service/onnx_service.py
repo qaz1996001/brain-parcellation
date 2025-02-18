@@ -11,15 +11,28 @@ from skimage.measure import label, regionprops, regionprops_table
 import bentoml
 import cupy as cp
 
+
+
+
+INFARCT_PATH_CODE         =  '/mnt/e/data/pipeline/chuan/code/'
+INFARCT_PATH_PROCESSMODEL = '/mnt/e/data/pipeline/chuan/process/Deep_Infarct/'
+INFARCT_PATH_JSON         ='/mnt/e/data/pipeline/chuan/json/'
+INFARCT_PATH_LOG          ='/mnt/e/data/pipeline/chuan/log/'
+
+
+
 @bentoml.service(
     name="shh-model",
     traffic={
-        "timeout": 300,
-        "concurrency": 1,
+        "timeout": 360,
+        "concurrency": 2,
     },
     resources={
         "gpu": 1,
+        "cpu": 4,
+
     },
+    workers = 2
 )
 class Model:
 
@@ -30,6 +43,8 @@ class Model:
     BENTOML_MODEL2_TAG = "cmb_unet_26_model_300"
     BENTOML_MODEL3_TAG = "synthsegrobust2_trace"
     BENTOML_MODEL4_TAG = "synthsegparcmodel"
+
+    BENTOML_INFARCT_MODEL_TAG = 'infarct_unet_256_model:5x3btgxm66gzwaav'
 
     label_index_name_mapping_dict = {0: "Background",
                                      1: "CSF",
@@ -137,17 +152,36 @@ class Model:
                                  path_segmentations33=path_segmentations33,
                                  net_unet2 = model3,
                                  net_parcellation = model4)
-        # self.synth_seg_model.run_segmentations33(path_images=path_images,
-        #                                          path_segmentations33=path_segmentations33,
-        #                                          net_unet2 = self.model3)
         del model3, model4
         gc.collect()
         # return
 
     @bentoml.api
-    async def infarct_classify(self,):
-
-        pass
+    async def infarct_classify(self,adc_file:str,
+                               dwi0_file:str,
+                               dwi1000_file:str,
+                               synthseg_file:str,
+                               output_path:str):
+        from .pipeline_infarct_onnx import pipeline_infarct
+        print('infarct_classify adc_file',adc_file)
+        print('infarct_classify dwi0_file',dwi0_file)
+        print('infarct_classify dwi1000_file',dwi1000_file)
+        print('infarct_classify synthseg_file',synthseg_file)
+        model = bentoml.onnx.get(self.BENTOML_INFARCT_MODEL_TAG).load_model(providers=['CPUExecutionProvider'])
+        adc_path = pathlib.Path(adc_file)
+        id = adc_path.parent.name
+        pipeline_infarct(ID                = id,
+                         ADC_file          = adc_file,
+                         DWI0_file         = dwi0_file ,
+                         DWI1000_file      = dwi1000_file,
+                         SynthSEG_file     = synthseg_file,
+                         path_output       = output_path,
+                         cuatom_model      = model,
+                         path_code         = INFARCT_PATH_CODE,
+                         path_processModel = INFARCT_PATH_PROCESSMODEL,
+                         path_json         = INFARCT_PATH_JSON,
+                         path_log          = INFARCT_PATH_LOG,
+                         )
 
     @bentoml.api
     async def wmh_classify(self, ):

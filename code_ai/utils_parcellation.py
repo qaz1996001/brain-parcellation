@@ -106,6 +106,13 @@ from scipy.ndimage import binary_dilation, generate_binary_structure, iterate_st
     distance_transform_edt
 import tensorflow as tf
 
+gpus = tf.config.experimental.list_physical_devices('GPU')
+if gpus:
+    try:
+        tf.config.experimental.set_memory_growth(device=gpus[0], enable=True)
+    except RuntimeError as e:
+        print(e)
+
 
 def pairwise_distance(a, b):
     """

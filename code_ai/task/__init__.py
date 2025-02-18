@@ -7,11 +7,10 @@ from code_ai.celery_app import app
 RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"
 LOCK_NAME = "synthseg_task_lock"
 
-
 # http://localhost:3000/cmb_classify
 CMB_INFERENCE_URL = 'http://localhost:3000'
-# http://127.0.0.1:3000/synthseg_classify
 SYNTHSEG_INFERENCE_URL = 'http://localhost:3000'
 TIME_OUT    = 360
-COUNTDOWN   = 120
+COUNTDOWN   = 180
 MAX_RETRIES = 10
+RETRY_BACKOFF = 30

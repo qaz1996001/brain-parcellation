@@ -21,10 +21,9 @@ app = Celery('tasks',
              include=['code_ai.task.task_CMB',
                       'code_ai.task.task_dicom2nii',
                       'code_ai.task.task_infarct',
-                      'code_ai.task.task_synthseg',
-                      'code_ai.task.task_WMH',
                       'code_ai.task.task_inference',
-                      ],
+                      'code_ai.task.task_synthseg',
+                      'code_ai.task.task_WMH',],
              # backend='rpc://'
              backend='redis://localhost:10079/1'
              )
@@ -39,7 +38,6 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.log_error_task': {'queue': 'default'},
     'code_ai.task.task_synthseg.post_process_synthseg_task': {'queue': 'default'},
 
-    'code_ai.task.task_inference.task_inference': {'queue': 'default'},
 
     'code_ai.task.task_synthseg.synthseg_task': {'queue': 'synthseg_queue'},  # 將synthseg_task指派到專屬隊列
     'code_ai.task.task_synthseg.process_synthseg_task': {'queue': 'synthseg_queue'},
@@ -47,14 +45,18 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.cmb_save_task': {'queue': 'synthseg_queue'},
     'code_ai.task.task_synthseg.dwi_save_task': {'queue': 'synthseg_queue'},
 
-    'code_ai.task.task_CMB.inference_cmb': {'queue': 'dicom2nii_queue'},
+
+    'code_ai.task.task_CMB.inference_cmb': {'queue': 'default'},
+    'code_ai.task.task_infarct.inference_infarct': {'queue': 'default'},
+    'code_ai.task.task_inference.task_inference': {'queue': 'default'},
+    'code_ai.task.task_synthseg.inference_synthseg': {'queue': 'default'},
+    'code_ai.task.task_WMH.inference_wmh': {'queue': 'default'},
+
 
     'code_ai.task.task_dicom2nii.celery_workflow':  {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom2nii_queue'},
 
-
-    'code_ai.task.task_synthseg.inference_synthseg': {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'dicom2nii_queue'},
 
     'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
@@ -70,6 +72,7 @@ app.conf.task_queues = {
 }
 
 
+# app.conf.broker_transport_options = {'visibility_timeout': 2*60*60} # 2 hours
 
 @app.on_after_configure.connect
 def setup_global_context(sender, **kwargs):
