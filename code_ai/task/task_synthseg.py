@@ -224,6 +224,18 @@ def build_save_file_tasks(intput_args, index):
     wm_file: pathlib.Path = intput_args.wm_file_list[index]
     job_list = []
 
+    # 添加 wm_file
+    if intput_args.wm_file:
+        temp_task = chain(resample_to_original_task.si(original_file=file,
+                                                       resample_image_file=resample_file,
+                                                       resample_seg_file=david_file),
+                          resample_to_original_task.si(original_file=file,
+                                                       resample_image_file=resample_file,
+                                                       resample_seg_file=wm_file)
+                          )
+        job = temp_task
+        job_list.append(job)
+
     # 添加 CMB 保存任务
     if intput_args.cmb:
         cmb_file = intput_args.cmb_file_list[index]
@@ -293,6 +305,8 @@ def build_save_file_tasks(intput_args, index):
 #             pass
 #     job = group(workflows).delay()
 #     return job
+
+
 
 @app.task(acks_late=True)
 def celery_workflow(inference_name, file_dict):

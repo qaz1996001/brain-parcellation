@@ -37,7 +37,6 @@ app.config_from_object('code_ai.celery_config')
 app.conf.task_routes = {
     'code_ai.task.task_synthseg.celery_workflow': {'queue': 'default'},
     'code_ai.task.task_synthseg.resample_task': {'queue': 'default'},  # 默認處理其他任務
-    'code_ai.task.task_synthseg.log_error_task': {'queue': 'default'},
     'code_ai.task.task_synthseg.post_process_synthseg_task': {'queue': 'default'},
 
 
@@ -51,18 +50,17 @@ app.conf.task_routes = {
     'code_ai.task.task_CMB.inference_cmb': {'queue': 'default'},
     'code_ai.task.task_infarct.inference_infarct': {'queue': 'default'},
     'code_ai.task.task_inference.task_inference': {'queue': 'default'},
-    'code_ai.task.task_synthseg.inference_synthseg': {'queue': 'default'},
+    'code_ai.task.task_synthseg.infence_synthseg': {'queue': 'default'},
     'code_ai.task.task_WMH.inference_wmh': {'queue': 'default'},
 
 
     'code_ai.task.task_dicom2nii.celery_workflow':  {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
-    'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom2nii_queue'},
-
     'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'dicom2nii_queue'},
 
     'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
     'code_ai.task.task_dicom2nii.process_instances': {'queue': 'dicom_rename_queue'},
+    'code_ai.task.task_dicom2nii.process_dir_next': {'queue': 'dicom_rename_queue'},
+    'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
 
     'code_ai.task.workflow.celery_workflow': {'queue': 'default'},
 
@@ -169,30 +167,4 @@ def task_success_handler(sender=None, result=None, **kwargs):
             session.rollback()
         finally:
             sender.app.conf.CELERY_CONTEXT.update({"SessionLocal": SessionLocal})
-
-# @worker_ready.connect
-# def configure_environment(sender, **kwargs):
-#     import tensorflow as tf
-#     gpus = tf.config.experimental.list_physical_devices('GPU')
-#     print(gpus)
-#     if gpus:
-#         try:
-#             # tf.config.experimental.set_virtual_device_configuration(
-#             #     gpus[0],
-#             #     [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=10240)]
-#             # )
-#             tf.config.experimental.set_memory_growth(device=gpus[0], enable=True)
-#         except RuntimeError as e:
-#             print(e)
-#
-#     print('configure_environment', sender, type(sender),sender.hostname)
-#     if isinstance(sender,Consumer) and isinstance(sender.pool,TaskPool) and sender.hostname == 'worker1@DESKTOP-TPJC1AV':
-#         print('sender.pool',sender.pool)
-#         print('sender.app.conf.CELERY_CONTEXT')
-#         print(sender.app.conf.CELERY_CONTEXT)
-#         model = sender.app.conf.CELERY_CONTEXT.get('synth_seg')
-#         if model is None:
-#             model = SynthSeg()
-#             sender.app.conf.CELERY_CONTEXT['synth_seg'] = model
-#             print('CELERY_CONTEXT',sender.app.conf.CELERY_CONTEXT)
 

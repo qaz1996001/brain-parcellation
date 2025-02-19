@@ -30,12 +30,13 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                                               output_nifti_path=output_nifti_path)
 
             task_inference_chain = build_task_inference(output_inference=output_nifti_str)
-
-            workflow = chain(dicom2nii_chain, task_inference_chain)
-            print('dicom2nii_chain', dicom2nii_chain)
-            print('task_inference_chain', task_inference_chain)
+            workflow = chain(chain(dicom2nii_chain),
+                             chain(task_inference_chain)
+                             )
             print('workflow', workflow)
-            job_list.append(workflow)
+            result = workflow.apply_async()
+            job_list.append(result)
+
     else:
         for sub_dir in list(input_dicom_path.iterdir()):
             if sub_dir.is_dir():
@@ -43,14 +44,15 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
                     dicom2nii_chain = build_dicom2nii(sub_dir=sub_dir,
                                                       output_dicom_path=output_dicom_path,
                                                       output_nifti_path=output_nifti_path)
+
                     task_inference_chain = build_task_inference(output_inference=output_nifti_str)
-                    workflow = chain(dicom2nii_chain, task_inference_chain)
-                    print('dicom2nii_chain', dicom2nii_chain)
-                    print('task_inference_chain', task_inference_chain)
+                    workflow = chain(chain(dicom2nii_chain),
+                                     chain(task_inference_chain)
+                                     )
                     print('workflow', workflow)
-                    job_list.append(workflow)
+                    result = workflow.apply_async()
+                    job_list.append(result)
 
-    print(job_list)
-
-    print('job_list size', len(job_list))
-    return group(job_list).apply_async()
+    # print('job_list size', len(job_list))
+    # return group(job_list).apply_async()
+    return job_list
