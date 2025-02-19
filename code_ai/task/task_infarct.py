@@ -6,7 +6,7 @@ from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
 @app.task(bind=True,rate_limit='30/s',acks_late=True)
-def inference_infarct(self,#args,
+def inference_infarct(self,
                       intput_args):
     print(f'inference_infarct intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)

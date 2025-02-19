@@ -133,9 +133,8 @@ def task_received_handler(sender=None, request=None, **kwargs):
 @task_success.connect
 def task_success_handler(sender=None, result=None, **kwargs):
     SessionLocal = sender.app.conf.CELERY_CONTEXT.get('SessionLocal')
-    session :Session = SessionLocal()
     print(f'sender {sender}')
-    with session:
+    with SessionLocal() as session:
         try:
             task_query :Query = session.query(TaskModel).filter(TaskModel.task_id == sender.request.id)
             task: TaskModel = task_query.first()

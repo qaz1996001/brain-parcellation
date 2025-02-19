@@ -1,7 +1,6 @@
 import os.path
 import bentoml
 import orjson
-from celery import shared_task
 from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
@@ -9,7 +8,7 @@ from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 def inference_wmh(self,intput_args,):
     print(f'inference_wmh intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)
-    for study_id, task_dict in mapping_inference_data_dict.items():
+    for study_id, task_dict in mapping_inference_data_dict['analyses'].items():
         temp_task = task_dict.get('WMH')
         if temp_task is None:
             return intput_args

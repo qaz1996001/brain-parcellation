@@ -113,13 +113,13 @@ def task_inference(intput_args, output_inference: pathlib.Path):
             print('inference_name {} file_dict {}'.format(inference_name, file_dict))
             match inference_name:
                 case InferenceEnum.CMB:
-                    temp_task = build_synthseg(inference_name, file_dict)
-                    job = temp_task.link(task_CMB.inference_cmb.si(intput_args=dataset.model_dump_json()))
-                    job_list.append(job)
+                    temp_task = chain( build_synthseg(inference_name, file_dict),
+                                      task_CMB.inference_cmb.si(intput_args=dataset.model_dump_json()))
+                    job_list.append(temp_task)
                 case InferenceEnum.WMH:
-                    temp_task = build_synthseg(InferenceEnum.WMH_PVS, mapping_inference[InferenceEnum.WMH_PVS])
-                    job = temp_task.link(task_WMH.inference_wmh.si(intput_args=dataset.model_dump_json()))
-                    job_list.append(job)
+                    temp_task = chain(build_synthseg(InferenceEnum.WMH_PVS, mapping_inference[InferenceEnum.WMH_PVS]),
+                                      task_WMH.inference_wmh.si(intput_args=dataset.model_dump_json()))
+                    job_list.append(temp_task)
 
                 case InferenceEnum.Infarct:
                     task_chain = chain(build_synthseg(InferenceEnum.DWI, mapping_inference[InferenceEnum.DWI]),
@@ -137,7 +137,7 @@ def task_inference(intput_args, output_inference: pathlib.Path):
                 # case _:
                 #     temp_task = chain(task_synthseg.celery_workflow.s(inference_name, file_dict))
     print('task_inference job_list',job_list)
-    return chain(*job_list)()
+    return group(job_list)()
 
 
 def build_task_inference(output_inference: pathlib.Path):

@@ -314,7 +314,7 @@ def celery_workflow(inference_name, file_dict):
         if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists(),output_path_file.exists()]):
             continue
 
-        temp_task = chain(resample_task.s(file, resample_file),
+        temp_task = chain(resample_task.si(file, resample_file),
                           synthseg_task.s(synthseg_file, synthseg33_file),
                           process_synthseg_task.s(depth_number=depth_number,
                                                   david_file=david_file,
@@ -325,7 +325,8 @@ def celery_workflow(inference_name, file_dict):
         job = temp_task
         job_list.append(job)
     print('task_synthseg job_list',job_list)
-    return chain(*job_list)
+    return group(job_list)
+    # return chain(*job_list)
 
 
 def build_synthseg(inference_name, file_dict):
@@ -352,4 +353,5 @@ def build_synthseg(inference_name, file_dict):
         # job = temp_task.apply_async()
         job = temp_task
         job_list.append(job)
-    return chain(*job_list)
+    return group(job_list)
+

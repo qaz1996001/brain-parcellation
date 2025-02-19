@@ -9,10 +9,9 @@ from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 def inference_cmb(self,
                   intput_args,
                   ):
-    print(f'inference_cmb args {args} ')
     print(f'inference_cmb intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)
-    for study_id, task_dict in mapping_inference_data_dict.items():
+    for study_id, task_dict in mapping_inference_data_dict['analyses'].items():
         cmb_task = task_dict.get('CMB')
         if cmb_task is None:
             return intput_args
