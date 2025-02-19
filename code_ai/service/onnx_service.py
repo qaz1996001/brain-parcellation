@@ -117,9 +117,9 @@ class Model:
         target_spacing = np.array([spacing[0], spacing[1], min(spacing)])  # isotropical z-axis only
         target_spacing = target_spacing / 2 if target_spacing[0] > 0.6 else target_spacing  # force upsampling?
         image_arr = self.resize_volume(image_arr, spacing, target_spacing, dtype='float32')
-        model1 = bentoml.onnx.get(self.BENTOML_MODEL1_TAG).load_model(providers=['CUDAExecutionProvider'])
-        model2 = bentoml.onnx.get(self.BENTOML_MODEL2_TAG).load_model(providers=['CUDAExecutionProvider'])
         if temp_path is not None:
+            model1 = bentoml.onnx.get(self.BENTOML_MODEL1_TAG).load_model(providers=['CUDAExecutionProvider'])
+            model2 = bentoml.onnx.get(self.BENTOML_MODEL2_TAG).load_model(providers=['CUDAExecutionProvider'])
             seg_arr, _ = self.load_synthseg_seg(seg_path=str(temp_path),
                                                 target_size=image_arr.shape)
             brain_mask = seg_arr > 0
@@ -137,7 +137,7 @@ class Model:
             df_label = self.save_label_table(swan_path, df_pred, pred_label, seg_arr,output_json_path_str)
 
             del model1, model2
-            gc.collect()
+        gc.collect()
         return output_nii_path_str
 
     @bentoml.api
@@ -146,15 +146,19 @@ class Model:
                                 path_segmentations:str,
                                 path_segmentations33:str):
         print('synthseg_classify path_images',path_images)
-        model3 = bentoml.onnx.get(self.BENTOML_MODEL3_TAG).load_model(providers=['CUDAExecutionProvider'])
-        model4 = bentoml.onnx.get(self.BENTOML_MODEL4_TAG).load_model(providers=['CUDAExecutionProvider'])
-        self.synth_seg_model.run(path_images=path_images, path_segmentations=path_segmentations,
-                                 path_segmentations33=path_segmentations33,
-                                 net_unet2 = model3,
-                                 net_parcellation = model4)
-        del model3, model4
+        segmentations_path   = pathlib.Path(path_segmentations)
+        segmentations33_path = pathlib.Path(path_segmentations33)
+        if segmentations_path.exists() and segmentations33_path.exists():
+            pass
+        else:
+            model3 = bentoml.onnx.get(self.BENTOML_MODEL3_TAG).load_model(providers=['CUDAExecutionProvider'])
+            model4 = bentoml.onnx.get(self.BENTOML_MODEL4_TAG).load_model(providers=['CUDAExecutionProvider'])
+            self.synth_seg_model.run(path_images=path_images, path_segmentations=path_segmentations,
+                                     path_segmentations33=path_segmentations33,
+                                     net_unet2 = model3,
+                                     net_parcellation = model4)
+            del model3, model4
         gc.collect()
-        # return
 
     @bentoml.api
     async def infarct_classify(self,adc_file:str,

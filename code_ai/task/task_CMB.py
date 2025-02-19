@@ -6,7 +6,7 @@ from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
 @app.task(bind=True,acks_late=True,rate_limit='300/s')
-def inference_cmb(self,args,
+def inference_cmb(self,
                   intput_args,
                   ):
     print(f'inference_cmb args {args} ')

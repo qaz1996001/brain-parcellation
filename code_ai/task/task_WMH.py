@@ -6,8 +6,7 @@ from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 
 @app.task(bind=True,acks_late=True,rate_limit='30/s')
-def inference_wmh(self,args,intput_args,):
-    print(f'inference_wmh args {args} ')
+def inference_wmh(self,intput_args,):
     print(f'inference_wmh intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)
     for study_id, task_dict in mapping_inference_data_dict.items():

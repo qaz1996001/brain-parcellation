@@ -13,7 +13,7 @@ from celery.signals import worker_ready
 from pydantic import BaseModel
 
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from .model import TaskModel
 
 app = Celery('tasks',
@@ -23,7 +23,9 @@ app = Celery('tasks',
                       'code_ai.task.task_infarct',
                       'code_ai.task.task_inference',
                       'code_ai.task.task_synthseg',
-                      'code_ai.task.task_WMH',],
+                      'code_ai.task.task_WMH',
+                      'code_ai.task.workflow',
+                      ],
              # backend='rpc://'
              backend='redis://localhost:10079/1'
              )
@@ -61,6 +63,8 @@ app.conf.task_routes = {
 
     'code_ai.task.task_dicom2nii.process_dir': {'queue': 'dicom_rename_queue'},
     'code_ai.task.task_dicom2nii.process_instances': {'queue': 'dicom_rename_queue'},
+
+    'code_ai.task.workflow.celery_workflow': {'queue': 'default'},
 
 }
 
@@ -133,7 +137,7 @@ def task_success_handler(sender=None, result=None, **kwargs):
     print(f'sender {sender}')
     with session:
         try:
-            task_query = session.query(TaskModel).filter(TaskModel.task_id == sender.request.id)
+            task_query :Query = session.query(TaskModel).filter(TaskModel.task_id == sender.request.id)
             task: TaskModel = task_query.first()
             if task is not None:
 
@@ -161,6 +165,8 @@ def task_success_handler(sender=None, result=None, **kwargs):
         except Exception as e:
             session.rollback()
         except sqlalchemy.exc.DatabaseError:
+            session.rollback()
+        except psycopg2.DatabaseError:
             session.rollback()
         finally:
             sender.app.conf.CELERY_CONTEXT.update({"SessionLocal": SessionLocal})
