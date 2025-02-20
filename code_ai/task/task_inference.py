@@ -1,16 +1,10 @@
 import pathlib
-
-from celery import group, chain, shared_task
-
+from celery import group, chain
 from . import app, task_CMB, task_synthseg, task_WMH, task_infarct
-from .task_synthseg import build_synthseg
 from ..utils_inference import Dataset, Analysis, check_study_mapping_inference, generate_output_files, Task, \
-    get_synthseg_args_file, InferenceEnum
+    InferenceEnum
 
 
-miss_inference_name = {InferenceEnum.WMH_PVS,
-                       InferenceEnum.DWI,
-                       }
 
 #
 # @app.task(rate_limit='30/s',acks_late=True,)
@@ -79,8 +73,7 @@ miss_inference_name = {InferenceEnum.WMH_PVS,
 
 
 
-# @app.task(rate_limit='30/s',acks_late=True,)
-@shared_task
+@app.task(rate_limit='4/s', acks_late=True)
 def task_inference(intput_args, output_inference: pathlib.Path):
     # intput_args = (<GroupResult: b59006e6-7998-40a4-ba4f-94114bf14fd1 []>, PosixPath('/mnt/e/rename_nifti_0219/00647793_20190307_MR_20803070001'))
     print('task_inference intput_args', intput_args)
@@ -113,15 +106,15 @@ def task_inference(intput_args, output_inference: pathlib.Path):
                 continue
             match inference_name:
                 case InferenceEnum.CMB:
-                    temp_task = chain( build_synthseg(inference_name, file_dict),
+                    temp_task = chain( task_synthseg.build_synthseg(inference_name, file_dict),
                                       task_CMB.inference_cmb.si(intput_args=dataset.model_dump_json()))
                     job_list.append(temp_task)
                 case InferenceEnum.WMH:
-                    temp_task = chain(build_synthseg(InferenceEnum.WMH_PVS, mapping_inference[InferenceEnum.WMH_PVS]),
+                    temp_task = chain(task_synthseg.build_synthseg(InferenceEnum.WMH_PVS, mapping_inference[InferenceEnum.WMH_PVS]),
                                       task_WMH.inference_wmh.si(intput_args=dataset.model_dump_json()))
                     job_list.append(temp_task)
                 case InferenceEnum.Infarct:
-                    task_chain = chain(build_synthseg(InferenceEnum.DWI, mapping_inference[InferenceEnum.DWI]),
+                    task_chain = chain(task_synthseg.build_synthseg(InferenceEnum.DWI, mapping_inference[InferenceEnum.DWI]),
                                        task_infarct.inference_infarct.si(intput_args=dataset.model_dump_json()))
                     job_list.append(task_chain)
                 case InferenceEnum.Area:
@@ -130,11 +123,11 @@ def task_inference(intput_args, output_inference: pathlib.Path):
                     if (cmb_dict is not None) and (area_dict is not None):
                         continue
                     else:
-                        temp_task = build_synthseg(inference_name, file_dict)
+                        temp_task = task_synthseg.build_synthseg(inference_name, file_dict)
                         job = temp_task
                         job_list.append(job)
                 case InferenceEnum.Aneurysm:
-                    temp_task = build_synthseg(inference_name, file_dict)
+                    temp_task = task_synthseg.build_synthseg(inference_name, file_dict)
                     job = temp_task
                     job_list.append(job)
                 # case _:
@@ -142,8 +135,13 @@ def task_inference(intput_args, output_inference: pathlib.Path):
     print('task_inference job_list',job_list)
     # return chain(*job_list)
     return group(job_list).apply_async()
-    # return group(job_list)()
 
 
-def build_task_inference(output_inference: pathlib.Path):
-    return task_inference.s(output_inference)
+def build_task_inference(output_inference: pathlib.Path,sub_dir=None):
+    if sub_dir is None:
+        return task_inference.s(output_inference)
+    else:
+        # intput_args, output_inference
+        return task_inference.si(intput_args = (None,sub_dir),
+                                 output_inference = output_inference)
+

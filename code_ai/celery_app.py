@@ -47,12 +47,12 @@ app.conf.task_routes = {
     'code_ai.task.task_synthseg.dwi_save_task': {'queue': 'synthseg_queue'},
 
 
-    'code_ai.task.task_CMB.inference_cmb': {'queue': 'default'},
-    'code_ai.task.task_infarct.inference_infarct': {'queue': 'default'},
-    'code_ai.task.task_inference.task_inference': {'queue': 'default'},
-    'code_ai.task.task_synthseg.infence_synthseg': {'queue': 'default'},
-    'code_ai.task.task_WMH.inference_wmh': {'queue': 'default'},
+    'code_ai.task.task_CMB.inference_cmb': {'queue': 'synthseg_queue'},
+    'code_ai.task.task_infarct.inference_infarct': {'queue': 'synthseg_queue'},
+    'code_ai.task.task_synthseg.infence_synthseg': {'queue': 'synthseg_queue'},
+    'code_ai.task.task_WMH.inference_wmh': {'queue': 'synthseg_queue'},
 
+    'code_ai.task.task_inference.task_inference': {'queue': 'default'},
 
     'code_ai.task.task_dicom2nii.celery_workflow':  {'queue': 'dicom2nii_queue'},
     'code_ai.task.task_synthseg.resample_to_original_task': {'queue': 'dicom2nii_queue'},
@@ -63,6 +63,7 @@ app.conf.task_routes = {
     'code_ai.task.task_dicom2nii.dicom_2_nii_file': {'queue': 'dicom2nii_queue'},
 
     'code_ai.task.workflow.celery_workflow': {'queue': 'default'},
+    'code_ai.task.workflow.task_inference_workflow': {'queue': 'default'},
 
 }
 

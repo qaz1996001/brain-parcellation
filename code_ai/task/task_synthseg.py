@@ -1,3 +1,4 @@
+import os.path
 import shutil
 import subprocess
 from typing import List
@@ -77,8 +78,7 @@ def release_lock():
 
 
 
-@app.task(acks_late=True)
-@shared_task
+@app.task(rate_limit='16/s', acks_late=True)
 def resample_task(file, resample_file):
     if not resample_file.parent.exists():
         resample_file.parent.mkdir(parents=True, exist_ok=True)
@@ -86,28 +86,26 @@ def resample_task(file, resample_file):
     return str(resample_file)
 
 
-# @app.task(bind=True,rate_limit='1/m')
-@app.task(bind=True,rate_limit='30/s',acks_late=True,priority=50)
+# try:
+#     """
+#         限制同時只能執行一個的任務。
+#     """
+#     import bentoml
+#     if acquire_lock():
+#         with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL, timeout=TIME_OUT) as client:
+#             client.synthseg_classify(path_images=str(resample_file),
+#                                      path_segmentations=str(synthseg_file),
+#                                      path_segmentations33=str(synthseg33_file))
+#         release_lock()
+#     return synthseg_file, synthseg33_file
+# except :
+#     release_lock()
+#     self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
+# finally:
+#     print('finally', 'release_lock')
+#     release_lock()
+@app.task(bind=True,rate_limit='16/s',acks_late=True,priority=50)
 def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
-    """
-        限制同時只能執行一個的任務。
-        """
-    # try:
-    #     import bentoml
-    #     if acquire_lock():
-    #         with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL, timeout=TIME_OUT) as client:
-    #             client.synthseg_classify(path_images=str(resample_file),
-    #                                      path_segmentations=str(synthseg_file),
-    #                                      path_segmentations33=str(synthseg33_file))
-    #
-    #         release_lock()
-    #     return synthseg_file, synthseg33_file
-    # except :
-    #     release_lock()
-    #     self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
-    # finally:
-    #     print('finally', 'release_lock')
-    #     release_lock()
     try:
         with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL,
                                     timeout=TIME_OUT) as client:
@@ -119,30 +117,34 @@ def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
         self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
 
 
-
-
-@app.task
+@app.task(rate_limit='16/s', acks_late=True)
 def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file):
 
     synthseg_file = synthseg_file_tuple[0]
     synthseg33_file = synthseg_file_tuple[1]
-    synthseg_nii = nib.load(synthseg_file)
-    synthseg33_nii = nib.load(synthseg33_file)
 
-    synthseg_array = np.array(synthseg_nii.dataobj)
-    synthseg33_array = np.array(synthseg33_nii.dataobj)
-    seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-        synthseg_array, synthseg33_array, depth_number)
-    print('200')
-    out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
-    nib.save(out_nib, david_file)
-    out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
-    nib.save(out_nib, wm_file)
-    print('300')
-    gc.collect()
-    return synthseg_file,david_file
 
-@app.task
+    if os.path.exists(wm_file):
+        return synthseg_file, david_file
+    else:
+        synthseg_nii = nib.load(synthseg_file)
+        synthseg33_nii = nib.load(synthseg33_file)
+
+        synthseg_array = np.array(synthseg_nii.dataobj)
+        synthseg33_array = np.array(synthseg33_nii.dataobj)
+        seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
+            synthseg_array, synthseg33_array, depth_number)
+        print('200')
+        out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
+        nib.save(out_nib, david_file)
+        out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
+        nib.save(out_nib, wm_file)
+        print('300')
+        gc.collect()
+        return synthseg_file,david_file
+
+
+@app.task(rate_limit='16/s', acks_late=True)
 def post_process_synthseg_task(args,intput_args, ):
     print('post_process_synthseg_task',args)
     print('intput_args', intput_args)
@@ -168,7 +170,7 @@ def post_process_synthseg_task(args,intput_args, ):
 
 
 
-@app.task(bind=True,rate_limit='5/m',priority=20,acks_late=True)
+@app.task(bind=True,rate_limit='16/m',priority=30,acks_late=True)
 def resample_to_original_task(self,original_file, resample_image_file, resample_seg_file):
     original_seg_file = resampleSynthSEG2original(original_file, resample_image_file, resample_seg_file)
     outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
@@ -184,7 +186,7 @@ def resample_to_original_task(self,original_file, resample_image_file, resample_
 
 
 
-@app.task(acks_late=True)
+@app.task(acks_late=True,rate_limit='16/s')
 def save_file_tasks(synthseg_file,david_file,wm_file,
                     depth_number,
                     save_mode,save_file_path):
@@ -276,39 +278,7 @@ def build_save_file_tasks(intput_args, index):
 
 
 
-
-# @app.task
-# def celery_workflow(args, file_list):
-#     workflows = []
-#     depth_number = args.depth_number or 5
-#     print('args',args)
-#
-#     for i, file in enumerate(file_list):
-#         try:
-#             resample_file   :pathlib.Path = args.resample_file_list[i]
-#             synthseg_file   :pathlib.Path = args.synthseg_file_list[i]
-#             synthseg33_file :pathlib.Path = args.synthseg33_file_list[i]
-#             david_file      :pathlib.Path = args.david_file_list[i]
-#             wm_file         :pathlib.Path = args.wm_file_list[i]
-#             if all([synthseg_file.exists(),synthseg33_file.exists(),david_file.exists(),wm_file.exists()]):
-#                 continue
-#
-#             workflow = chain(resample_task.s(file, resample_file),
-#                              synthseg_task.s(synthseg_file, synthseg33_file),
-#                              process_synthseg_task.s(depth_number=depth_number,
-#                                                      david_file=david_file,
-#                                                      wm_file=wm_file),
-#                              save_file_tasks.s(intput_args=args, index=i),
-#                              post_process_synthseg_task.s(intput_args=args))
-#             workflows.append(workflow)
-#         except Exception as e:
-#             pass
-#     job = group(workflows).delay()
-#     return job
-
-
-
-@app.task(acks_late=True)
+@app.task(acks_late=True,rate_limit='16/s')
 def celery_workflow(inference_name, file_dict):
     args, file_list = get_synthseg_args_file(inference_name, file_dict)
     print(f'task_synthseg celery_workflow inference_name {inference_name}')

@@ -1,11 +1,7 @@
 import datetime
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
-from typing import List
-from sqlalchemy import String, TIMESTAMP, Uuid, DOUBLE
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, TIMESTAMP, Uuid
+from sqlalchemy.orm import Mapped, mapped_column
 
 # 創建SQLAlchemy的一個class，然後在其它地方使用
 Base = declarative_base()
