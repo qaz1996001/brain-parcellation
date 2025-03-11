@@ -1,7 +1,6 @@
 import os.path
 import bentoml
 import orjson
-from celery import shared_task
 from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
 
 

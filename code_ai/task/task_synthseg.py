@@ -82,7 +82,8 @@ def release_lock():
 def resample_task(file, resample_file):
     if not resample_file.parent.exists():
         resample_file.parent.mkdir(parents=True, exist_ok=True)
-    resample_one(str(file), str(resample_file))
+    if not resample_file.exists():
+        resample_one(str(file), str(resample_file))
     return str(resample_file)
 
 
@@ -107,11 +108,14 @@ def resample_task(file, resample_file):
 @app.task(bind=True,rate_limit='16/s',acks_late=True,priority=50)
 def synthseg_task(self, resample_file, synthseg_file, synthseg33_file):
     try:
-        with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL,
-                                    timeout=TIME_OUT) as client:
-                client.synthseg_classify(path_images=str(resample_file),
-                                         path_segmentations=str(synthseg_file),
-                                         path_segmentations33=str(synthseg33_file))
+        if all([resample_file.exists(), synthseg_file.exists() , synthseg33_file.exists()]):
+            pass
+        else:
+            with bentoml.SyncHTTPClient(SYNTHSEG_INFERENCE_URL,
+                                        timeout=TIME_OUT) as client:
+                    client.synthseg_classify(path_images=str(resample_file),
+                                             path_segmentations=str(synthseg_file),
+                                             path_segmentations33=str(synthseg33_file))
         return synthseg_file, synthseg33_file
     except :
         self.retry(countdown=COUNTDOWN//2, max_retries=MAX_RETRIES)  # 重試任務
@@ -124,7 +128,7 @@ def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file
     synthseg33_file = synthseg_file_tuple[1]
 
 
-    if os.path.exists(wm_file):
+    if os.path.exists(wm_file) and os.path.exists(david_file):
         return synthseg_file, david_file
     else:
         synthseg_nii = nib.load(synthseg_file)

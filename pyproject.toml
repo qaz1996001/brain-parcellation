@@ -1,0 +1,24 @@
+[project]
+name = "task04-git"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "bentoml>=1.4.3",
+    "celery>=5.4.0",
+    "httpx>=0.28.1",
+    "nibabel>=5.3.2",
+    "numba==0.61.0",
+    "numpy==1.26.0",
+    "orjson>=3.10.15",
+    "pandas==2.1.3",
+    "psycopg2-binary==2.9.9",
+    "pydicom>=3.0.1",
+    "redis>=5.2.1",
+    "scikit-image>=0.25.2",
+    "simpleitk>=2.4.1",
+    "sqlalchemy>=2.0.38",
+    "tensorflow>=2.14.0",
+    "tqdm>=4.67.1",
+]

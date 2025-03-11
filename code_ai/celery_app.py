@@ -27,7 +27,7 @@ app = Celery('tasks',
                       'code_ai.task.workflow',
                       ],
              # backend='rpc://'
-             backend='redis://localhost:10079/1'
+             backend='://localhost:10079/1'
              )
 
 app.config_from_object('code_ai.celery_config')

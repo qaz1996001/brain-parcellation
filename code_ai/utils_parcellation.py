@@ -2308,7 +2308,6 @@ def left_right_translate(slice):
     else:
         return True, np.flip(slice, 1)
 
-
 def inverse_left_right_translate(flip, slice):
     """Inverse the left-right flipping if necessary."""
     if flip:

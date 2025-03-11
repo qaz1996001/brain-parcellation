@@ -102,6 +102,8 @@ def task_inference(intput_args, output_inference: pathlib.Path):
     job_list = []
     for study_id, mapping_inference in mapping_inference_data['analyses'].items():
         for inference_name, file_dict in mapping_inference.items():
+
+
             if file_dict is None:
                 continue
             match inference_name:

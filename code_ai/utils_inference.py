@@ -70,7 +70,7 @@ model_mapping_series_dict = {
     InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
 
     #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
-    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
+    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXIr],
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
     # InferenceEnum.CMBSynthSeg
@@ -115,14 +115,21 @@ def replace_suffix(filename:str, new_suffix:str):
 
 def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[str, str]]:
     file_list = sorted(study_path.iterdir())
+
     if any(filter(lambda x: x.name.endswith('nii.gz') or x.name.endswith('nii'), file_list)):
         df_file = pd.DataFrame(file_list, columns=['file_path'])
         df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
         model_mapping_dict = {}
         for model_name, model_mapping_series_list in model_mapping_series_dict.items():
+
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
                 result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
+                if model_name == 'CMB':
+                    print('model_name', model_name, model_mapping_series_list)
+                    print('mapping_series_str',mapping_series_str)
+                    print('df_file[file_name]', df_file['file_name'])
+                    print('result',result)
 
                 if result[0].shape[0] >= len(mapping_series_str):
                     df_result = df_file.iloc()[result[1]]
@@ -268,7 +275,5 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
             return args, file_list
         case _:
             return ( None, None )
-
-
 
 

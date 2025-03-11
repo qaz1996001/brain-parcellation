@@ -34,13 +34,21 @@ if __name__ == '__main__':
     input_dicom_path = args.input_dicom
     output_dicom_path = args.output_dicom
     output_nifti_path = args.output_nifti
+    output_inference_path = args.output_inference
     print(args.output_nifti)
     print(args.output_inference)
-    result = app.send_task('code_ai.task.workflow.celery_workflow', args=(input_dicom_path,
-                                                                          output_dicom_path,
-                                                                          output_nifti_path),
+    # result = app.send_task('code_ai.task.workflow.celery_workflow', args=(input_dicom_path,
+    #                                                                       output_dicom_path,
+    #                                                                       output_nifti_path),
+    #                        queue='default',
+    #                        routing_key='celery')
+
+    result = app.send_task('code_ai.task.workflow.task_inference_workflow',
+                           args=(output_nifti_path,
+                                 output_inference_path),
                            queue='default',
                            routing_key='celery')
+
     # 946a02a5-79ea-4b0f-9133-793fc2db9beb
     # if collect_list:
     #     print('result', result, type(result))
@@ -62,5 +70,7 @@ if __name__ == '__main__':
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 
 # D:\00_Chen\Task08\data\raw_dicom\stroke
-# python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
+# python test/tes_dicom2nii_and_synthseg_task.py --input_dtmuicom /mnt/d/00_Chen/Task08/data/raw_dicom/stroke --output_dicom /mnt/e/rename_dicom1 --output_nifti /mnt/e/rename_nifti1 --output_inference /mnt/e/rename_nifti1
 # python test/tes_dicom2nii_and_synthseg_task.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_20250204 --output_nifti /mnt/e/rename_nifti_20250204 --output_inference /mnt/e/rename_nifti_20250204
+# python test/tes_workflow.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_0219_v2 --output_nifti /mnt/e/rename_nifti_0219_v2 --output_inference /mnt/e/rename_nifti_0219_v2
+#
