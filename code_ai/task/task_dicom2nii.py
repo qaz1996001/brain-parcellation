@@ -6,7 +6,6 @@ import subprocess
 from typing import List
 from pydicom import dcmread
 from celery import  chain, group, shared_task
-from . import app
 
 from code_ai.dicom2nii.convert import ModalityProcessingStrategy,MRAcquisitionTypeProcessingStrategy, MRRenameSeriesProcessingStrategy
 from code_ai.dicom2nii.convert import DwiProcessingStrategy, ADCProcessingStrategy,EADCProcessingStrategy,SWANProcessingStrategy
@@ -17,8 +16,8 @@ from code_ai.dicom2nii.convert import RestingProcessingStrategy, DTIProcessingSt
 from code_ai.dicom2nii.convert import NullEnum
 from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 
-from ..dicom2nii.convert import dicom_rename_mr_postprocess
-from ..dicom2nii.convert import convert_nifti_postprocess
+from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
+from code_ai.dicom2nii.convert import convert_nifti_postprocess
 
 
 def get_output_study(dicom_ds):
@@ -75,7 +74,6 @@ def chunk_list(lst, chunk_size,output_dicom_path):
         yield (lst[i:i + chunk_size],output_dicom_path)
 
 
-@shared_task(priority=58)
 def rename_dicom_file(instance_path,
                       processing_strategy_list,
                       modality_processing_strategy,
@@ -97,7 +95,6 @@ def rename_dicom_file(instance_path,
                         return series_enum.value,output_study
 
 
-@shared_task(priority=58,ignore_result=True)
 def copy_dicom_file(input_tuple,instance_path,output_path):
     if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
         return
@@ -124,7 +121,6 @@ def file_processing(study_folder_path,post_process_manager):
 
 
 # @app.task(bind=True,rate_limit='1/s',priority=55)
-@app.task(bind=True,rate_limit='16/s',priority=55)
 def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
     output_series_path.parent.mkdir(exist_ok=True, parents=True)
     cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
@@ -158,7 +154,6 @@ def call_dcm2niix(self,output_series_file_path,output_series_path,series_path):
         return output_series_path.name
 
 
-@app.task(bind=True,acks_late=True,priority=58,ignore_result=True)
 def process_instances(self, input_args):
     instances_list = input_args[0]
     output_dicom_path = input_args[1]
@@ -176,7 +171,6 @@ def process_instances(self, input_args):
 
 
 
-@app.task(bind=True,rate_limit='16/s',priority=60)
 def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
     print('dicom_study_folder_path',dicom_study_folder_path)
     print('nifti_output_path', nifti_output_path)
@@ -205,10 +199,6 @@ def dicom_2_nii_file(self,dicom_study_folder_path,nifti_output_path):
     return job,nifti_study_folder_path
 
 
-
-
-
-@app.task(rate_limit='300/s',acks_late=True,priority=60)
 def process_dir_next(sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
     instances_list = list(sub_dir.rglob('*.dcm'))
     if len(instances_list) > 0:
@@ -225,7 +215,6 @@ def process_dir_next(sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
         return dicom_study_folder_path
 
 
-@app.task(rate_limit='6/s',acks_late=True,priority=60)
 def process_dir(sub_dir:pathlib.Path, output_dicom_path:pathlib.Path):
     instances_list = list(sub_dir.rglob('*.dcm'))
     # output_dicom_path_list = [output_dicom_path for _ in instances_list]
@@ -241,51 +230,6 @@ def build_dicom2nii(sub_dir,output_dicom_path,output_nifti_path):
                       )
     return dicom2nii
 
-
-
-# @app.task
-# def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
-#     if isinstance(input_dicom_str,str):
-#         input_dicom_path: pathlib.Path = pathlib.Path(input_dicom_str)
-#     else:
-#         input_dicom_path = input_dicom_str
-#     if isinstance(output_dicom_str,str):
-#         output_dicom_path: pathlib.Path = pathlib.Path(output_dicom_str)
-#     else:
-#         output_dicom_path = output_dicom_str
-#     if isinstance(output_nifti_str,str):
-#         output_nifti_path: pathlib.Path = pathlib.Path(output_nifti_str)
-#     else:
-#         output_nifti_path = output_nifti_str
-#
-#     workflows = []
-#     job_list = []
-#     is_dir_flag = all(list(map(lambda x: x.is_dir(), input_dicom_path.iterdir())))
-#     print('is_dir_flag', is_dir_flag)
-#     if is_dir_flag:
-#         for sub_dir in list(input_dicom_path.iterdir()):
-#             workflow = chain(process_dir.s(sub_dir,output_dicom_path),
-#                              process_dir_next.s(sub_dir,output_dicom_path),
-#                              dicom_2_nii_file.s(output_nifti_path),
-#                              task_inference.task_inference.s(output_nifti_str),)
-#             job = workflow.apply_async()
-#             job_list.append(job)
-#             # workflows.append(workflow)
-#     else:
-#         for sub_dir in list(input_dicom_path.iterdir()):
-#             if sub_dir.is_dir():
-#                 for sub_dir in list(input_dicom_path.iterdir()):
-#                     workflow = chain(process_dir.s(sub_dir,output_dicom_path),
-#                                      dicom_2_nii_file.s(output_nifti_path),
-#                                      task_inference.task_inference.s(output_nifti_str)
-#                                      )
-#                     job = workflow.apply_async()
-#                     job_list.append(job)
-#                     # workflows.append(workflow)
-#     # print('workflows size',len(workflows))
-#     print('job_list size', len(job_list))
-#     # from celery.result import GroupResult
-#     return job_list
 
 
 

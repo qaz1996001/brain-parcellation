@@ -42,6 +42,9 @@ def model_inference(intput_args):
 
             match inference_name:
                 case InferenceEnum.Area:
+                    result = app.send_task('code_ai.task.task_synthseg.celery_workflow', args=(inference_name, file_dict),
+                                           queue='default',
+                                           routing_key='celery')
                     args,file_list = get_synthseg_args_file(inference_name, file_dict)
                     result = app.send_task('code_ai.task.task_synthseg.celery_workflow',args=(args,file_list),
                                            queue='default',

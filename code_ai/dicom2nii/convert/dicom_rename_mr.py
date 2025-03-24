@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append(os.path.abspath('..'))
 import pathlib
 import re
 import shutil

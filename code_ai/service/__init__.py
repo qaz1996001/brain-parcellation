@@ -1,6 +1,6 @@
-import bentoml
-from .cmb_service import CMBService
-from .synthseg_service import SynthSegService
+# import bentoml
+# from .cmb_service import CMBService
+# from .synthseg_service import SynthSegService
 
 #
 # @bentoml.service(

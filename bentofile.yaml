@@ -1,0 +1,9 @@
+service: "service:svc"
+include:
+- "code_ai.service.onnx_service.py"
+- "code_ai.service.synthseg_service.py"
+python:
+  packages:
+    - numpy
+    - orjson
+    - tensorflow

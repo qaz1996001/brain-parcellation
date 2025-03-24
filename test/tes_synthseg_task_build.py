@@ -267,7 +267,7 @@ def main(args):
 
 def build_Area(mode,file_dict):
     parser = argparse.ArgumentParser()
-    args = parser.parse_args()
+    args = parser.parse_args(namespace='build_Area')
     args.cmb = False
     args.wmh = False
     args.dwi = False

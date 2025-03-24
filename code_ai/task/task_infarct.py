@@ -1,10 +1,9 @@
 import os.path
 import bentoml
 import orjson
-from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
+from code_ai.task import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN
 
 
-@app.task(bind=True,rate_limit='30/s',acks_late=True)
 def inference_infarct(self,
                       intput_args):
     print(f'inference_infarct intput_args {intput_args} ')

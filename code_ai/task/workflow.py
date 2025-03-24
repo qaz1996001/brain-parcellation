@@ -3,10 +3,8 @@ import pathlib
 from celery import chain
 from code_ai.task.task_dicom2nii import build_dicom2nii
 from code_ai.task.task_inference import build_task_inference
-from . import app
 
 
-@app.task(rate_limit='4/s', acks_late=True)
 def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
     if isinstance(input_dicom_str, str):
         input_dicom_path: pathlib.Path = pathlib.Path(input_dicom_str)
@@ -56,7 +54,6 @@ def celery_workflow(input_dicom_str, output_dicom_str, output_nifti_str):
     return job_list
 
 
-@app.task(rate_limit='4/s', acks_late=True)
 def task_inference_workflow(output_nifti_str, output_inference_str):
     if isinstance(output_nifti_str, str):
         output_nifti_path: pathlib.Path = pathlib.Path(output_nifti_str)

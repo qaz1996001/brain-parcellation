@@ -1,10 +1,9 @@
 import os.path
-import bentoml
+
 import orjson
-from . import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN, app
+from code_ai.task import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN
 
 
-@app.task(bind=True,acks_late=True,rate_limit='30/s')
 def inference_wmh(self,intput_args,):
     print(f'inference_wmh intput_args {intput_args} ')
     mapping_inference_data_dict = orjson.loads(intput_args)

@@ -212,7 +212,8 @@ def main(args):
     input_dir = pathlib.Path(args.input_nifti)
     input_dir_list = sorted(input_dir.iterdir())
     study_list = list(filter(check_study_id, input_dir_list))
-    base_output_path = "/mnt/d/00_Chen/Task04_git/output"
+    output_dir = pathlib.Path(args.output)
+    # base_output_path = "/mnt/d/00_Chen/Task04_git/output"
     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
     analyses = {}
     for mapping_inference in mapping_inference_list:
@@ -222,7 +223,7 @@ def main(args):
         for task_dict in model_dict_values:
             tasks = {}
             for model_name, input_paths in task_dict.items():
-                task_output_files = generate_output_files(input_paths, model_name, base_output_path)
+                task_output_files = generate_output_files(input_paths, model_name, str(output_dir))
                 # if len(task_output_files) >
                 tasks[model_name] = Task(
                     intput_path_list=input_paths,
@@ -370,3 +371,28 @@ if __name__ == '__main__':
 # output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Vessel.nii.gz
 # output_path /mnt/e/PC_3090/data/output/PSCL_MRI/00003092_20201007_MR_20910070157/Pred_Aneurysm.json
 
+
+            match inference_name:
+                case InferenceEnum.Area:
+                    args,file_list = get_synthseg_args_file(inference_name, file_dict)
+                    print(args,file_list)
+                case InferenceEnum.WMH_PVS:
+                    args,file_list = get_synthseg_args_file(inference_name, file_dict)
+
+                case InferenceEnum.DWI:
+                    # DWI
+                    args,file_list = get_synthseg_args_file(inference_name, file_dict)
+
+                case InferenceEnum.CMB:
+                    pass
+                case InferenceEnum.AneurysmSynthSeg:
+                    args, file_list = get_synthseg_args_file(inference_name, file_dict)
+
+                case InferenceEnum.Infarct:
+                    pass
+                case InferenceEnum.WMH:
+                    pass
+                case InferenceEnum.Aneurysm:
+                    pass
+                case _:
+                    pass
