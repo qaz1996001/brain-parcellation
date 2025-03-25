@@ -8,8 +8,9 @@ import numpy as np
 import gc
 
 import bentoml
-from funboost import boost, BrokerEnum, BoosterParams, Booster
+from funboost import boost, BrokerEnum, BoosterParams, Booster, ConcurrentModeEnum
 
+from code_ai import PYTHON3
 from code_ai.task import TemplateProcessor
 from code_ai.task import CMBProcess, DWIProcess, run_wmh, run_with_WhiteMatterParcellation
 from code_ai.task import resample_one, resampleSynthSEG2original
@@ -22,7 +23,8 @@ from code_ai.task.schema import intput_params
 
 # 定義 Funboost 任務
 @Booster('resample_task_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         is_send_consumer_hearbeat_to_redis = True)
 # def resample_task(file, resample_file):
 def resample_task(func_params  : Dict[str,any]):
     #
@@ -36,7 +38,8 @@ def resample_task(func_params  : Dict[str,any]):
     return str(resample_file)
 
 
-@Booster('synthseg_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+@Booster('synthseg_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         is_send_consumer_hearbeat_to_redis = True)
 def synthseg_task(func_params  : Dict[str,any]):
     task_params     = intput_params.SynthsegTaskParams.model_validate(func_params)
     resample_file   = task_params.resample_file
@@ -57,9 +60,15 @@ def synthseg_task(func_params  : Dict[str,any]):
         print(e)
         raise e  # Funboost 會自動處理重試
 
-@Booster('process_synthseg_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-# def process_synthseg_task(synthseg_file_tuple, depth_number, david_file, wm_file):
+
+@Booster('process_synthseg_task_queue',
+         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         concurrent_mode = ConcurrentModeEnum.SOLO,
+         concurrent_num  = 1 ,
+         is_send_consumer_hearbeat_to_redis = True
+         )
 def process_synthseg_task(func_params  : Dict[str,any]):
+    # BoosterParams()
     task_params     = intput_params.ProcessSynthsegTaskParams.model_validate(func_params)
     synthseg_file   = task_params.synthseg_file
     synthseg33_file = task_params.synthseg33_file
@@ -67,47 +76,40 @@ def process_synthseg_task(func_params  : Dict[str,any]):
     wm_file         = task_params.wm_file
     depth_number    = task_params.depth_number
 
+
     if os.path.exists(wm_file) and os.path.exists(david_file):
         return synthseg_file, david_file
     else:
-        synthseg_nii = nib.load(synthseg_file)
-        synthseg33_nii = nib.load(synthseg33_file)
-
-        synthseg_array = np.array(synthseg_nii.dataobj)
-        synthseg33_array = np.array(synthseg33_nii.dataobj)
-        seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-            synthseg_array, synthseg33_array, depth_number)
-        out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
-        nib.save(out_nib, david_file)
-        out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
-        nib.save(out_nib, wm_file)
-        gc.collect()
-        return synthseg_file, david_file
-
-@Booster('post_process_synthseg_task_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-def post_process_synthseg_task(args, intput_args):
-    if intput_args.cmb:
-        original_cmb_file_list: List[pathlib.Path] = list(map(lambda x: x.parent.joinpath(f"synthseg_{x.name.replace('resample', 'original')}"), intput_args.cmb_file_list))
-        if original_cmb_file_list[0].name.startswith('synthseg_SWAN'):
-            swan_file = original_cmb_file_list[0]
-            t1_file = original_cmb_file_list[1]
-        else:
-            swan_file = original_cmb_file_list[1]
-            t1_file = original_cmb_file_list[0]
-
-        template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
-        synthseg_basename: str = replace_suffix(swan_file.name, '')
-        template_coregistration_file_name = swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
-        cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file, swan_file, template_coregistration_file_name)
-        process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
+        cmd_str = ('export PYTHONPATH={} && '
+                   '{} code_ai/pipeline/process_synthseg.py '
+                   '--synthseg_file {} '
+                   '--synthseg33_file {} '
+                   '--david_file {} '
+                   '--wm_file {} '
+                   '--depth_number {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                              PYTHON3,
+                                              synthseg_file,
+                                              synthseg33_file,
+                                              david_file,
+                                              wm_file,
+                                              depth_number)
+                   )
+        process = subprocess.Popen(args=cmd_str, shell=True,  # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
-    gc.collect()
-    return intput_args
+        # print(stderr)
+        # return stdout, stderr
+        return synthseg_file, david_file
 
-@Booster('resample_to_original_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-def resample_to_original_task(original_file, resample_image_file, resample_seg_file):
+
+@Booster('resample_to_original_task_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+def resample_to_original_task(func_params  : Dict[str,any]):
+    task_params     = intput_params.ResampleToOriginalTask.model_validate(func_params)
+    original_file   = task_params.original_file
+    resample_image_file = task_params.resample_image_file
+    resample_seg_file      = task_params.resample_seg_file
+
     original_seg_file = resampleSynthSEG2original(original_file, resample_image_file, resample_seg_file)
     outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
     if str(original_file) == str(outpput_raw_file):

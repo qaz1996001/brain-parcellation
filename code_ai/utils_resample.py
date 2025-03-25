@@ -60,66 +60,6 @@ def resample_to_original(resample_file_path, original_file_path, output_file_pat
     sitk.WriteImage(resampled_to_original_image, output_file_path)
     return output_file_path
 
-#
-def resampleSynthSEG2original_(path, case_name, series, SynthSEGmodel):
-    #先讀取原始影像並抓出SpacingBetweenSlices跟PixelSpacing
-    img_nii = nib.load(os.path.join(path, case_name, case_name + '_' + series + '.nii.gz')) #256*256*22
-    img_array = np.array(img_nii.dataobj)
-    img_array = data_translate(img_array, img_nii) #拿來對
-    img_1mm_nii = nib.load(os.path.join(path, case_name, case_name + '_' + series + '_resample.nii.gz')) #230*230*140
-    img_1mm_array = np.array(img_1mm_nii.dataobj)
-    SynthSEG_1mm_nii = nib.load(os.path.join(path, case_name, case_name + '_' + series + '_' + SynthSEGmodel + '.nii.gz')) #230*230*140
-    SynthSEG33_1mm_nii = nib.load(os.path.join(path, case_name, case_name + '_' + series + '_synthseg33.nii.gz')) #230*230*140
-    david_1mm_nii = nib.load(os.path.join(path, case_name, case_name + '_' + series + '_david.nii.gz')) #230*230*140
-
-    y_i, x_i, z_i = img_array.shape
-    y_i1, x_i1, z_i1 = img_1mm_array.shape
-
-    header_img = img_nii.header.copy() #抓出nii header 去算體積
-    pixdim_img = header_img['pixdim']  #可以借此從nii的header抓出voxel size
-    header_img_1mm = img_1mm_nii.header.copy() #抓出nii header 去算體積
-    pixdim_img_1mm = header_img_1mm['pixdim']  #可以借此從nii的header抓出voxel size
-
-    #先把影像從230*230*140轉成 original*original*140
-    img_1mm_ori_nii = nibabel.processing.conform(img_1mm_nii, ((y_i, x_i, z_i1)),(pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),order = 1) #影像用，256*256*140
-    img_1mm_ori = np.array(img_1mm_ori_nii.dataobj)
-    img_1mm_ori = data_translate(img_1mm_ori, img_1mm_ori_nii)
-
-    #再將SynthSEG從230*230*140轉成 original*original*140
-    SynthSEG_1mm_ori_nii = nibabel.processing.conform(SynthSEG_1mm_nii, ((y_i, x_i, z_i1)),(pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),order = 0) #256*256*140
-    SynthSEG_1mm_ori = np.array(SynthSEG_1mm_ori_nii.dataobj)
-    SynthSEG_1mm_ori = data_translate(SynthSEG_1mm_ori, SynthSEG_1mm_ori_nii)
-    SynthSEG33_1mm_ori_nii = nibabel.processing.conform(SynthSEG33_1mm_nii, ((y_i, x_i, z_i1)),(pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),order = 0) #256*256*140
-    SynthSEG33_1mm_ori = np.array(SynthSEG33_1mm_ori_nii.dataobj)
-    SynthSEG33_1mm_ori = data_translate(SynthSEG33_1mm_ori, SynthSEG33_1mm_ori_nii)
-    david_1mm_ori_nii = nibabel.processing.conform(david_1mm_nii, ((y_i, x_i, z_i1)),(pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),order = 0) #256*256*140
-    david_1mm_ori = np.array(david_1mm_ori_nii.dataobj)
-    david_1mm_ori = data_translate(david_1mm_ori, david_1mm_ori_nii)
-
-    #以下將1mm重新組回otiginal
-    new_array = np.zeros(img_array.shape)
-    new_array33 = np.zeros(img_array.shape)
-    new_arraydavid = np.zeros(img_array.shape)
-    img_repeat = np.expand_dims(img_array, -1).repeat(z_i1, axis=-1)
-    img_1mm_repeat = np.expand_dims(img_1mm_ori, 2).repeat(z_i, axis=2)
-    diff = np.sum(np.abs(img_1mm_repeat - img_repeat), axis = (0,1))
-    argmin = np.argmin(diff, axis=1)
-    new_array = SynthSEG_1mm_ori[:,:,argmin]
-    new_array33 = SynthSEG33_1mm_ori[:,:,argmin]
-    new_arraydavid = david_1mm_ori[:,:,argmin]
-
-    new_array_save = data_translate_back(new_array, img_nii)
-    new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
-    nib.save(new_SynthSeg_nii, os.path.join(path, case_name, case_name + '_' + series + '_' + SynthSEGmodel + '_to' + series + '.nii.gz'))
-    new_array33_save = data_translate_back(new_array33, img_nii)
-    new_SynthSeg33_nii = nii_img_replace(img_nii, new_array33_save)
-    nib.save(new_SynthSeg33_nii, os.path.join(path, case_name, case_name + '_' + series + '_synthseg33_to' + series + '.nii.gz'))
-    new_arraydavid_save = data_translate_back(new_arraydavid, img_nii)
-    new_arraydavid_save_nii = nii_img_replace(img_nii, new_arraydavid_save)
-    nib.save(new_arraydavid_save_nii, os.path.join(path, case_name, case_name + '_' + series + '_david_to' + series + '.nii.gz'))
-
-    return new_array
-
 
 def resampleSynthSEG2original_0204(raw_file:pathlib.Path,
                               resample_image_file:pathlib.Path,
@@ -170,19 +110,7 @@ def resampleSynthSEG2original_0204(raw_file:pathlib.Path,
     return original_seg_file
 
 
-def resampleSynthSEG2original(raw_file: pathlib.Path,
-                              resample_image_file: pathlib.Path,
-                              resample_seg_file: pathlib.Path):
-    img_nii, img_array, y_i, x_i, z_i, header_img, pixdim_img = get_volume_info(str(raw_file))
-    img_1mm_nii, img_1mm_array, y_i1, x_i1, z_i1, header_img_1mm, pixdim_img_1mm = get_volume_info(str(resample_image_file))
-
-    # 先把影像從230*230*140轉成 original*original*140
-    img_1mm_ori_nii = nibabel.processing.conform(img_1mm_nii,
-                                                 ((y_i, x_i, z_i1)),
-                                                 (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),
-                                                 order=1)  # 影像用，256*256*140
-    img_1mm_ori = np.array(img_1mm_ori_nii.dataobj)
-
+def get_original_z_index(img_array,z_i,img_1mm_ori,z_i1,z_pixdim_img):
     if z_i < 64:
         img_repeat = np.expand_dims(img_array, -1).repeat(z_i1, axis=-1)
         img_1mm_repeat = np.expand_dims(img_1mm_ori, 2).repeat(z_i, axis=2)
@@ -196,6 +124,157 @@ def resampleSynthSEG2original(raw_file: pathlib.Path,
             diff = np.sum(np.abs(img_array_broadcast - img_1mm_ori), axis=(0, 1))
             argmin_list.append(np.argmin(diff))
         argmin = np.array(argmin_list)
+    return check_original_z_index(argmin, img_array, img_1mm_ori, z_pixdim_img)
+
+
+def check_original_z_index(argmin,img_array,img_1mm_ori,z_pixdim_img):
+    z_index = np.arange(0, argmin.shape[0], 1)
+    z_index += 1
+    z_index *= int(z_pixdim_img)
+    diff_index = z_index - argmin
+    if np.any(diff_index < 0):
+        error_index = z_index[diff_index < 0]
+        for i in error_index:
+            img_index = np.argmax(z_index == i)
+            start_i = int(i - (z_pixdim_img))
+            end_i = int(i)
+            broadcast_shape = img_1mm_ori[:, :, start_i:end_i].shape
+            img_array_broadcast = np.broadcast_to(np.expand_dims(img_array[:, :, img_index], -1), broadcast_shape)
+            diff = np.sum(np.abs(img_array_broadcast - img_1mm_ori[:, :, start_i:end_i]), axis=(0, 1))
+            argmin[img_index] = np.argmin(diff) + start_i
+    return argmin
+
+
+
+def resampleSynthSEG2original(raw_file: pathlib.Path,
+                              resample_image_file: pathlib.Path,
+                              resample_seg_file: pathlib.Path):
+    img_nii, img_array, y_i, x_i, z_i, header_img, pixdim_img = get_volume_info(str(raw_file))
+    img_1mm_nii, img_1mm_array, y_i1, x_i1, z_i1, header_img_1mm, pixdim_img_1mm = get_volume_info(str(resample_image_file))
+
+    # 先把影像從230*230*140轉成 original*original*140
+    img_1mm_ori_nii = nibabel.processing.conform(img_1mm_nii,
+                                                 ((y_i, x_i, z_i1)),
+                                                 (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),
+                                                 order=1)  # 影像用，256*256*140
+    img_1mm_ori = np.array(img_1mm_ori_nii.dataobj)
+
+
+    # 處理 小於0 的狀況
+    z_pixdim_img = max(int(header_img['pixdim'][3]),1)
+    argmin = get_original_z_index(img_array, z_i, img_1mm_ori, z_i1, z_pixdim_img)
+    # if z_i < 64:
+    #     img_repeat = np.expand_dims(img_array, -1).repeat(z_i1, axis=-1)
+    #     img_1mm_repeat = np.expand_dims(img_1mm_ori, 2).repeat(z_i, axis=2)
+    #     diff = np.sum(np.abs(img_1mm_repeat - img_repeat), axis=(0, 1))
+    #     argmin = np.argmin(diff, axis=1)
+    # else:
+    #     argmin_list = []
+    #     broadcast_shape = img_1mm_ori.shape
+    #     for z_index in range(z_i):
+    #         img_array_broadcast = np.broadcast_to(np.expand_dims(img_array[:, :, z_index], -1), broadcast_shape)
+    #         diff = np.sum(np.abs(img_array_broadcast - img_1mm_ori), axis=(0, 1))
+    #         argmin_list.append(np.argmin(diff))
+    #     argmin = np.array(argmin_list)
+
+    SynthSEG_1mm_nii = nib.load(str(resample_seg_file))  # 230*230*140
+    SynthSEG_1mm_ori_nii = nibabel.processing.conform(SynthSEG_1mm_nii,
+                                                      ((y_i, x_i, z_i1)),
+                                                      (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3])
+                                                      , order=0)  # 256*256*140
+    SynthSEG_1mm_ori = np.array(SynthSEG_1mm_ori_nii.dataobj)
+    SynthSEG_1mm_ori = data_translate(SynthSEG_1mm_ori, SynthSEG_1mm_ori_nii)
+
+    new_array = SynthSEG_1mm_ori[:, :, argmin]
+
+    new_array_save = data_translate_back(new_array, img_nii)
+    new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
+    original_seg_file = resample_seg_file.parent.joinpath(
+        f"synthseg_{resample_seg_file.name.replace('resample', 'original')}")
+    nib.save(new_SynthSeg_nii, original_seg_file)
+    return original_seg_file
+
+
+
+def resampleSynthSEG2original_z_index(raw_file: pathlib.Path,
+                                      resample_image_file: pathlib.Path,
+                                      resample_seg_file: pathlib.Path):
+    # 會使用到的一些predict技巧
+    img_nii = nib.load(str(raw_file))  # 256*256*22
+    img_array = np.array(img_nii.dataobj)
+
+    img_1mm_nii = nib.load(resample_image_file)  # 230*230*140
+    img_1mm_array = np.array(img_1mm_nii.dataobj)
+
+
+    y_i, x_i, z_i = img_array.shape
+    y_i1, x_i1, z_i1 = img_1mm_array.shape
+
+    header_img = img_nii.header.copy()  # 抓出nii header 去算體積
+    pixdim_img = header_img['pixdim']  # 可以借此從nii的header抓出voxel size
+    header_img_1mm = img_1mm_nii.header.copy()  # 抓出nii header 去算體積
+    pixdim_img_1mm = header_img_1mm['pixdim']  # 可以借此從nii的header抓出voxel size
+
+    z_pixdim_img = max(int(header_img['pixdim'][3]),1)
+
+    # 先把影像從230*230*140轉成 original*original*140
+    img_1mm_ori_nii = nibabel.processing.conform(img_1mm_nii,
+                                                 ((y_i, x_i, z_i1)),
+                                                 (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3]),
+                                                 order=1)  # 影像用，256*256*140
+    img_1mm_ori = np.array(img_1mm_ori_nii.dataobj)
+
+    argmin = get_original_z_index(img_array,z_i,img_1mm_ori,z_i1,z_pixdim_img)
+
+    SynthSEG_1mm_nii = nib.load(str(resample_seg_file))  # 230*230*140
+    SynthSEG_1mm_ori_nii = nibabel.processing.conform(SynthSEG_1mm_nii,
+                                                      ((y_i, x_i, z_i1)),
+                                                      (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3])
+                                                      , order=0)  # 256*256*140
+    SynthSEG_1mm_ori = np.array(SynthSEG_1mm_ori_nii.dataobj)
+    SynthSEG_1mm_ori = data_translate(SynthSEG_1mm_ori, SynthSEG_1mm_ori_nii)
+
+    new_array = SynthSEG_1mm_ori[:, :, argmin]
+
+    new_array_save = data_translate_back(new_array, img_nii)
+    new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
+    original_seg_file = resample_seg_file.parent.joinpath(
+        f"synthseg_{resample_seg_file.name.replace('resample', 'original')}")
+    nib.save(new_SynthSeg_nii, original_seg_file)
+    return original_seg_file,argmin
+
+
+def save_original_seg_by_argmin_z_index(raw_file: pathlib.Path,
+                                        resample_seg_file: pathlib.Path,
+                                        argmin):
+    img_nii, img_array, y_i, x_i, z_i, header_img, pixdim_img = get_volume_info(str(raw_file))
+    img_1mm_nii, img_1mm_array, y_i1, x_i1, z_i1, header_img_1mm, pixdim_img_1mm = get_volume_info(str(resample_seg_file))
+
+
+    SynthSEG_1mm_nii = nib.load(str(resample_seg_file))  # 230*230*140
+    SynthSEG_1mm_ori_nii = nibabel.processing.conform(SynthSEG_1mm_nii,
+                                                      ((y_i, x_i, z_i1)),
+                                                      (pixdim_img[1], pixdim_img[2], pixdim_img_1mm[3])
+                                                      , order=0)  # 256*256*140
+    SynthSEG_1mm_ori = np.array(SynthSEG_1mm_ori_nii.dataobj)
+    SynthSEG_1mm_ori = data_translate(SynthSEG_1mm_ori, SynthSEG_1mm_ori_nii)
+
+    new_array = SynthSEG_1mm_ori[:, :, argmin]
+
+    new_array_save = data_translate_back(new_array, img_nii)
+    new_SynthSeg_nii = nii_img_replace(img_nii, new_array_save)
+    original_seg_file = resample_seg_file.parent.joinpath(
+        f"synthseg_{resample_seg_file.name.replace('resample', 'original')}")
+    nib.save(new_SynthSeg_nii, original_seg_file)
+    return original_seg_file
+
+
+def save_nii_original_seg_by_argmin(raw_file: pathlib.Path,
+                                    resample_seg_file: pathlib.Path,
+                                    argmin):
+    img_nii, img_array, y_i, x_i, z_i, header_img, pixdim_img = get_volume_info(str(raw_file))
+    img_1mm_nii, img_1mm_array, y_i1, x_i1, z_i1, header_img_1mm, pixdim_img_1mm = get_volume_info(str(resample_seg_file))
+
 
     SynthSEG_1mm_nii = nib.load(str(resample_seg_file))  # 230*230*140
     SynthSEG_1mm_ori_nii = nibabel.processing.conform(SynthSEG_1mm_nii,
