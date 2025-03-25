@@ -3,16 +3,14 @@ import shutil
 import subprocess
 from typing import List, Dict
 import pathlib
-import nibabel as nib
-import numpy as np
+
 import gc
 
 import bentoml
-from funboost import boost, BrokerEnum, BoosterParams, Booster, ConcurrentModeEnum
+from funboost import boost, BrokerEnum, BoosterParams, Booster, ConcurrentModeEnum, BoosterParamsComplete
 
 from code_ai import PYTHON3
-from code_ai.task import TemplateProcessor
-from code_ai.task import CMBProcess, DWIProcess, run_wmh, run_with_WhiteMatterParcellation
+
 from code_ai.task import resample_one, resampleSynthSEG2original
 from code_ai.task import app, RABBITMQ_URL, LOCK_NAME, SYNTHSEG_INFERENCE_URL, TIME_OUT, COUNTDOWN, MAX_RETRIES
 
@@ -21,14 +19,16 @@ from code_ai.utils_inference import InferenceEnum
 
 from code_ai.task.schema import intput_params
 
+
 # 定義 Funboost 任務
 @Booster('resample_task_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
-         is_send_consumer_hearbeat_to_redis = True)
+         is_send_consumer_hearbeat_to_redis = True,
+         is_push_to_dlx_queue_when_retry_max_times  = True,
+         is_using_rpc_mode =True)
 # def resample_task(file, resample_file):
 def resample_task(func_params  : Dict[str,any]):
-    #
-    task_params = intput_params.ResampleTaskParams.model_validate(func_params)
+    task_params = intput_params.ResampleTaskParams.model_validate(func_params,strict=False)
     file = task_params.file
     resample_file = task_params.resample_file
     if not resample_file.parent.exists():
@@ -39,7 +39,10 @@ def resample_task(func_params  : Dict[str,any]):
 
 
 @Booster('synthseg_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
-         is_send_consumer_hearbeat_to_redis = True)
+         is_send_consumer_hearbeat_to_redis=True,
+         is_push_to_dlx_queue_when_retry_max_times=True,
+         is_using_rpc_mode=True
+         )
 def synthseg_task(func_params  : Dict[str,any]):
     task_params     = intput_params.SynthsegTaskParams.model_validate(func_params)
     resample_file   = task_params.resample_file
@@ -105,7 +108,7 @@ def process_synthseg_task(func_params  : Dict[str,any]):
 @Booster('resample_to_original_task_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
 def resample_to_original_task(func_params  : Dict[str,any]):
-    task_params     = intput_params.ResampleToOriginalTask.model_validate(func_params)
+    task_params     = intput_params.ResampleToOriginalTaskParams.model_validate(func_params)
     original_file   = task_params.original_file
     resample_image_file = task_params.resample_image_file
     resample_seg_file      = task_params.resample_seg_file
@@ -120,28 +123,123 @@ def resample_to_original_task(func_params  : Dict[str,any]):
                 shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
         return original_seg_file
 
+
 @Booster('save_file_tasks_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-def save_file_tasks(synthseg_file, david_file, wm_file, depth_number, save_mode, save_file_path):
-    synthseg_nii = nib.load(synthseg_file)
-    david_nii = nib.load(david_file)
-    seg_array = np.array(david_nii.dataobj)
-    affine = synthseg_nii.affine
-    header = synthseg_nii.header
-    match save_mode:
-        case InferenceEnum.CMB:
-            result_array = CMBProcess.run(seg_array)
-        case InferenceEnum.WMH_PVS:
-            synthseg_wm_nii = nib.load(wm_file)
-            synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
-            result_array = run_wmh(np.array(synthseg_nii.dataobj), synthseg_array_wm, depth_number)
-        case InferenceEnum.DWI:
-            result_array = DWIProcess.run(seg_array)
-        case _:
-            result_array = None
-    if result_array is not None:
-        out_nib = nib.Nifti1Image(result_array, affine, header)
-        nib.save(out_nib, save_file_path)
+def save_file_tasks(func_params  : Dict[str,any]):
+    task_params = intput_params.SaveFileTaskParams.model_validate(func_params)
+    synthseg_file = task_params.synthseg_file
+    david_file = task_params.david_file
+    wm_file = task_params.wm_file
+    depth_number = task_params.depth_number
+    save_mode = task_params.save_mode
+    save_file_path = task_params.save_file_path
+
+
+    cmd_str = ('export PYTHONPATH={} && '
+               '{} code_ai/pipeline/save_file.py '
+               '--synthseg_file {} '
+               '--david_file {} '
+               '--wm_file {} '
+               '--depth_number {} '
+               '--save_mode {} '
+               '--save_file_path {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                          PYTHON3,
+                                          synthseg_file,
+                                          david_file,
+                                          wm_file,
+                                          depth_number,
+                                          save_mode,
+                                          save_file_path)
+               )
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    # print(stderr)
+    # return stdout, stderr
+    return synthseg_file, david_file
+
+
+@Booster('post_process_synthseg_task_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+def post_process_synthseg_task(func_params  : Dict[str,any]):
+    task_params = intput_params.PostProcessSynthsegTaskParams.model_validate(func_params)
+    save_mode = task_params.save_mode
+    cmb_file_list = task_params.cmb_file_list
+
+    cmd_str = ('export PYTHONPATH={} && '
+               '{} code_ai/pipeline/save_file.py '
+               '--save_mode {} '
+               '--cmb_file_list {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                          PYTHON3,
+                                          save_mode,
+                                          cmb_file_list)
+               )
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    # print(stderr)
+    # return stdout, stderr
+    return stdout
+
+# @Booster('save_file_tasks_queue',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+# def post_process_synthseg_task(args,intput_args, ):
+#     print('post_process_synthseg_task',args)
+#     print('intput_args', intput_args)
+#     if intput_args.cmb:
+#         original_cmb_file_list: List[pathlib.Path] = list(map(lambda x:x.parent.joinpath(f"synthseg_{x.name.replace('resample', 'original')}"),intput_args.cmb_file_list))
+#         if original_cmb_file_list[0].name.startswith('synthseg_SWAN'):
+#             swan_file = original_cmb_file_list[0]
+#             t1_file = original_cmb_file_list[1]
+#         else:
+#             swan_file = original_cmb_file_list[1]
+#             t1_file = original_cmb_file_list[0]
+#
+#         template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
+#         synthseg_basename: str = replace_suffix(swan_file.name, '')
+#
+#         template_coregistration_file_name = swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
+#         cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
+#         # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
+#         print('cmd_str',cmd_str)
+#         process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
+#                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#         stdout, stderr = process.communicate()
+#         print('stdout',stdout)
+#         print('stderr',stderr)
+#     gc.collect()
+#     return intput_args
+#
+#
+# def post_process_synthseg_task(args,intput_args, ):
+#     print('post_process_synthseg_task',args)
+#     print('intput_args', intput_args)
+#     if intput_args.cmb:
+#         original_cmb_file_list: List[pathlib.Path] = list(map(lambda x:x.parent.joinpath(f"synthseg_{x.name.replace('resample', 'original')}"),intput_args.cmb_file_list))
+#         if original_cmb_file_list[0].name.startswith('synthseg_SWAN'):
+#             swan_file = original_cmb_file_list[0]
+#             t1_file = original_cmb_file_list[1]
+#         else:
+#             swan_file = original_cmb_file_list[1]
+#             t1_file = original_cmb_file_list[0]
+#
+#         template_basename: pathlib.Path = replace_suffix(t1_file.name, '')
+#         synthseg_basename: str = replace_suffix(swan_file.name, '')
+#
+#         template_coregistration_file_name = swan_file.parent.joinpath(f'{synthseg_basename}_from_{template_basename}')
+#         cmd_str = TemplateProcessor.flirt_cmd_base.format(t1_file,swan_file,template_coregistration_file_name)
+#         # apply_cmd_str = TemplateProcessor.flirt_cmd_apply.format(t1_file, swan_file, template_coregistration_file_name)
+#         print('cmd_str',cmd_str)
+#         process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
+#                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#         stdout, stderr = process.communicate()
+#         print('stdout',stdout)
+#         print('stderr',stderr)
+#     gc.collect()
+#     return intput_args
 
 
 def build_save_file_tasks(intput_args, index):
@@ -198,7 +296,7 @@ def funboost_workflow(inference_name, file_dict):
         process_synthseg_task((synthseg_file, synthseg33_file), depth_number, david_file, wm_file)
         for job in build_save_file_tasks(args, i):
             job()
-        post_process_synthseg_task(args, args)
+        # post_process_synthseg_task(args, args)
 
     return job_list
 
@@ -223,6 +321,6 @@ def build_synthseg(inference_name, file_dict):
         process_synthseg_task((synthseg_file, synthseg33_file), depth_number, david_file, wm_file)
         for job in build_save_file_tasks(args, i):
             job()
-        post_process_synthseg_task(args, args)
+        # post_process_synthseg_task(args, args)
 
     return job_list

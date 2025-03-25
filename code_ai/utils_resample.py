@@ -38,29 +38,6 @@ def resample_one(input_file_path, output_file_path):
     return output_file_path
 
 
-def resample_to_original(resample_file_path, original_file_path, output_file_path):
-    # 1. 讀取nii.gz檔為影像
-    resample_image = sitk.ReadImage(resample_file_path)
-    original_image = sitk.ReadImage(original_file_path)
-    # 2. 將影像的體素塊尺寸Resample為1x1x1並創建新的影像
-    original_origin = original_image.GetOrigin()
-    original_direction = original_image.GetDirection()
-    original_spacing = original_image.GetSpacing()
-    original_size = original_image.GetSize()
-    # 建立一个 Resample
-    resampler = sitk.ResampleImageFilter()
-    resampler.SetSize(original_size)
-    resampler.SetOutputSpacing(original_spacing)
-    resampler.SetOutputOrigin(original_origin)
-    resampler.SetOutputDirection(original_direction)
-    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-    # 进行 Resample
-    resampled_to_original_image = resampler.Execute(resample_image)
-    resampled_to_original_image.CopyInformation(original_image)
-    sitk.WriteImage(resampled_to_original_image, output_file_path)
-    return output_file_path
-
-
 def resampleSynthSEG2original_0204(raw_file:pathlib.Path,
                               resample_image_file:pathlib.Path,
                               resample_seg_file:pathlib.Path):
