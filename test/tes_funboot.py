@@ -91,24 +91,6 @@ def test_post_process_synthseg_task():
     from code_ai.task.schema.intput_params import PostProcessSynthsegTaskParams
     from code_ai.task.task_synthseg import save_file_tasks, post_process_synthseg_task,resample_task,synthseg_task,process_synthseg_task
     from code_ai.task.schema.intput_params import SaveFileTaskParams
-    # task_params = SaveFileTask(
-    #     file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz'),
-    #     resample_file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample.nii.gz'),
-    #     synthseg_file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_synthseg.nii.gz'),
-    #     synthseg33_file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_synthseg33.nii.gz'),
-    #     david_file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_david.nii.gz'),
-    #     wm_file=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_wm.nii.gz'),
-    #     save_mode='CMB',
-    #     save_file_path=Path(
-    #         '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_CMB.nii.gz'),
-    # )
-    # t1_task = save_file_tasks.push(task_params.get_str_dict())
     task_params = SaveFileTaskParams(
         file=Path(
             '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/SWAN.nii.gz'),
@@ -145,10 +127,25 @@ def test_post_process_synthseg_task():
                     return 'ok'
 
 
+## # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+def test_dicom2nii():
+    from code_ai.task.task_dicom2nii import dicom_to_nii,process_dir
+    from code_ai.task.schema.intput_params import Dicom2NiiParams
+    task_params = Dicom2NiiParams(
+        sub_dir=Path(
+            '/mnt/e/raw_dicom/02695350_21210300104'),
+        output_dicom_path=Path(
+            '/mnt/e/rename_dicom_0327'),
+        output_nifti_path=Path(
+            '/mnt/e/rename_nifti_0327'),
+        )
+    print('task_params.get_str_dict()',task_params.get_str_dict())
+    task = dicom_to_nii.push(task_params.get_str_dict())
+
+
 if __name__ == '__main__':
-    test_post_process_synthseg_task()
-
-
+    # test_post_process_synthseg_task()
+    test_dicom2nii()
     # from funboost import AsyncResult
     # result = AsyncResult(task_id='c3fa5495-8ee7-4690-a5c5-a214607696ab')
     # print(result)

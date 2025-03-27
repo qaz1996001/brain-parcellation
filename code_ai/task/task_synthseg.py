@@ -37,8 +37,9 @@ def resample_task(func_params  : Dict[str,any]):
         resample_one(str(file), str(resample_file))
     return str(resample_file)
 
-
-@Booster('synthseg_task_queue', broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+@Booster('synthseg_task_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+         concurrent_num = 2,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
          is_using_rpc_mode=True
@@ -106,7 +107,9 @@ def process_synthseg_task(func_params  : Dict[str,any]):
 
 
 @Booster('resample_to_original_task_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+         qps=10,
+         is_send_consumer_hearbeat_to_redis = True)
 def resample_to_original_task(func_params  : Dict[str,any]):
     task_params     = intput_params.ResampleToOriginalTaskParams.model_validate(func_params)
     original_file   = task_params.original_file
