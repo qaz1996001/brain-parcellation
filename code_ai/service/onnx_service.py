@@ -5,7 +5,7 @@ import gc
 import numpy as np
 import pandas as pd
 import nibabel as nib
-from scipy import signal
+from   import signal
 from scipy import ndimage as ndi
 from skimage.measure import label, regionprops, regionprops_table
 import bentoml
