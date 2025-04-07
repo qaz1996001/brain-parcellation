@@ -70,7 +70,7 @@ model_mapping_series_dict = {
     InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
 
     #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
-    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXIr],
+    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
     # InferenceEnum.CMBSynthSeg
@@ -108,8 +108,7 @@ def prepare_output_file_list(file_list:List[pathlib.Path],
     #         replace_suffix(x.name, suffix)) for x in file_list]
 
 
-def replace_suffix(filename:str, new_suffix:str):
-    pattern = r'\.nii\.gz$|\.nii$'
+def replace_suffix(filename:str, new_suffix:str,pattern = r'\.nii\.gz$|\.nii$'):
     return re.sub(pattern, new_suffix, filename)
 
 
@@ -125,7 +124,7 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
                 result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
-                if model_name == 'CMB':
+                if model_name == InferenceEnum.CMB:
                     print('model_name', model_name, model_mapping_series_list)
                     print('mapping_series_str',mapping_series_str)
                     print('df_file[file_name]', df_file['file_name'])

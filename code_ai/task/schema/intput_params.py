@@ -38,7 +38,7 @@ class PostProcessSynthsegTaskParams(BaseJsonAbleModel):
     cmb_file_list : List[Path]
 
 
-
+# *************************************************************************** #
 class Dicom2NiiParams(BaseJsonAbleModel):
     sub_dir           : Optional[Path]
     output_dicom_path : Optional[Path]
@@ -60,3 +60,7 @@ class CallDcm2niixParams(BaseJsonAbleModel):
     series_path              : Path
 
 
+# *************************************************************************** #
+class TaskInferenceParams(BaseJsonAbleModel):
+    input_study_nifti_path  : Path
+    output_study_nifti_path : Path

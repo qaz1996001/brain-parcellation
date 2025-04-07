@@ -61,19 +61,3 @@ if __name__ == '__main__':
                 output_dicom_path=input_dicom_path,
                 output_nifti_path=output_nifti_path, )
             task = dicom_to_nii.push(task_params.get_str_dict())
-
-
-
-    # input_dicom  = pathlib.Path(args.input_dicom)
-    # output_dicom_path = pathlib.Path(args.output_dicom)
-    # output_nifti_path = pathlib.Path(args.output_nifti)
-    #
-    # input_dicom_list = sorted(input_dicom.iterdir())
-    # input_dicom_list = list(filter(lambda x: x.is_dir(),input_dicom_list))
-    #
-    # for input_dicom_path in input_dicom_list:
-    #     task_params = Dicom2NiiParams(
-    #         sub_dir=input_dicom_path,
-    #         output_dicom_path=output_dicom_path,
-    #         output_nifti_path=output_nifti_path,)
-    #     task = dicom_to_nii.push(task_params.get_str_dict())

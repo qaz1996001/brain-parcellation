@@ -19,7 +19,7 @@ def test_resample_task():
 
 def test_synthseg_task():
     from code_ai.task.task_synthseg import synthseg_task
-    from code_ai.task.schema.intput_params import  SynthsegTaskParams
+    from code_ai.task.schema.intput_params import SynthsegTaskParams
     task_params = SynthsegTaskParams(
         file=Path(
             '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz'),
@@ -153,8 +153,25 @@ def test_file_processing():
         print(task)
 
 
+## # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+def test_task_inference():
+    from code_ai.task.task_inference import task_inference
+    for study in ['02695350_20240109_MR_21210300104',
+                  # '10089413_20210201_MR_21002010079',
+                  # '10516407_20231215_MR_21210200091',
+                  # '12472275_20231031_MR_21209070029'
+                  ]:
+
+        func_params = {'input_study_nifti_path':f'/mnt/e/rename_nifti_0407/{study}',
+                       'output_study_nifti_path' :f'/mnt/e/rename_nifti_0407/{study}',}
+        print('func_params', func_params)
+        task = task_inference.push(func_params)
+        print(task)
+
+
 if __name__ == '__main__':
-    test_file_processing()
+    test_task_inference()
     # test_post_process_synthseg_task()
     # test_dicom2nii()
     # from funboost import AsyncResult
