@@ -24,6 +24,8 @@ from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
 from skimage.measure import label, regionprops, regionprops_table
 
+from code_ai.pipeline import MODEL_DIR
+
 
 class CMBServiceTF:
 
@@ -63,7 +65,6 @@ class CMBServiceTF:
     overlap = 0.5
     name_rule = 'file'
 
-    MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resource', 'models')
     MODEL1_PATH = os.path.join(MODEL_DIR, "2025_02_10_MP-input64-aug_rot_bc10-bz32-unet5_32-bce_dice-Adam1e3_cosine_ema")
     MODEL2_PATH =  os.path.join(MODEL_DIR, "2025_02_10_MP-norm1-input26ch2_gauss_loc-aug2-bz64-Res32x3FPN-D128x4D1-cw-Adam1E3_ema")
 

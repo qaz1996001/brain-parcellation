@@ -27,15 +27,14 @@ import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
+from code_ai.pipeline import study_id_pattern
 
 autotune = tf.data.experimental.AUTOTUNE
 
 
-study_id_pattern = re.compile('.*(_[0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*', re.IGNORECASE)
 
 
 def get_study_id(file_name:str) -> Optional[str]:
-    global study_id_pattern
     result = study_id_pattern.match(file_name)
     if result is not None:
         return result.groups()[0]
@@ -67,7 +66,7 @@ def pipeline_synthseg(ID :str,
     FORMAT = '%(asctime)s %(levelname)s %(message)s'  # 日期時間, 格式為 YYYY-MM-DD HH:mm:SS,ms，日誌的等級名稱，訊息
     logging.basicConfig(level=logging.INFO, filename=log_file, filemode='a', format=FORMAT)
 
-    logging.info('!!! Pred CMB call.')
+    logging.info('!!! Pred DWI  call.')
     path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
     os.makedirs(path_processID,exist_ok=True) # 如果資料夾不存在就建立
     print(ID, ' Start...')

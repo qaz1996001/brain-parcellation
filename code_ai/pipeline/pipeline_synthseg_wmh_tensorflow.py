@@ -134,12 +134,12 @@ def pipeline_synthseg(ID :str,
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ID', type=str, default='00971591_20160503_MR_250425032',
+    parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
                         help='目前執行的case的patient_id or study id')
 
     parser.add_argument('--Inputs', type=str, nargs='+',
                         default=[
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/T2FLAIR_AXI.nii.gz', ],
+                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/T2FLAIR_AXI.nii.gz', ],
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
