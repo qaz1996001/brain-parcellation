@@ -1,7 +1,6 @@
 from code_ai.utils_synthseg import SynthSeg,TemplateProcessor
 from code_ai.utils_parcellation import CMBProcess,DWIProcess,run_wmh,run_with_WhiteMatterParcellation
-from code_ai.utils_resample import resample_one,resampleSynthSEG2original
-from code_ai.celery_app import app
+from code_ai.utils_resample import resample_one,resampleSynthSEG2original_z_index, save_original_seg_by_argmin_z_index
 
 # RabbitMQ 鎖配置
 RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"

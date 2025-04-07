@@ -9,20 +9,6 @@ from .ext.neuron import models as nrn_models
 from .SynthSeg.predict import get_flip_indices
 
 
-
-# Setup TensorFlow GPU configuration
-# gpus = tf.config.experimental.list_physical_devices('GPU')
-# if gpus:
-#     try:
-#         tf.config.experimental.set_virtual_device_configuration(
-#             gpus[0],
-#             [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=8192)]
-#         )
-#     except RuntimeError as e:
-#         print(e)
-
-
-
 def set_gpu(gpu_id='0'):
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
 

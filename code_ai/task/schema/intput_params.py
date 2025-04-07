@@ -23,9 +23,10 @@ class ProcessSynthsegTaskParams(SynthsegTaskParams):
 
 
 class ResampleToOriginalTaskParams(BaseJsonAbleModel):
-    original_file       :Path
-    resample_image_file :Path
-    resample_seg_file   :Path
+    original_file          :Path
+    resample_image_file    :Path
+    resample_seg_file      :Path
+    resample_seg_file_list :Optional[List[Path]] = None
 
 
 class SaveFileTaskParams(ProcessSynthsegTaskParams):
@@ -33,8 +34,13 @@ class SaveFileTaskParams(ProcessSynthsegTaskParams):
     save_file_path : Path
 
 
-class PostProcessSynthsegTaskParams(BaseJsonAbleModel):
-    save_mode : str
+class PostProcessSynthsegTaskParams(SaveFileTaskParams):
+    pass
+    # cmb_file_list : List[Path]
+
+
+class BuildSynthsegTaskParams(BaseJsonAbleModel):
+    inference_name : str
     cmb_file_list : List[Path]
 
 

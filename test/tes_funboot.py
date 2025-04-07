@@ -1,7 +1,9 @@
 from functools import partial
 from pathlib import Path
 import time
-from typing import Callable
+from typing import Callable, Dict
+
+from funboost import Booster, BrokerEnum
 
 
 def test_resample_task():
@@ -88,8 +90,7 @@ def call_chain(status_and_result: dict,func:Callable, *args, **kwargs):
 
 
 def test_post_process_synthseg_task():
-    from code_ai.task.schema.intput_params import PostProcessSynthsegTaskParams
-    from code_ai.task.task_synthseg import save_file_tasks, post_process_synthseg_task,resample_task,synthseg_task,process_synthseg_task
+    from code_ai.task.task_synthseg import resample_task,synthseg_task
     from code_ai.task.schema.intput_params import SaveFileTaskParams
     task_params = SaveFileTaskParams(
         file=Path(
@@ -140,34 +141,52 @@ def test_dicom2nii():
     task = dicom_to_nii.push(task_params.get_str_dict())
 
 
-def test_file_processing():
-    from code_ai.task.task_dicom2nii import nii_file_processing
-    for study in ['02695350_20240109_MR_21210300104',
-                  '10089413_20210201_MR_21002010079',
-                  '10516407_20231215_MR_21210200091',
-                  '12472275_20231031_MR_21209070029']:
-
-        func_params = {'study_folder_path':f'/mnt/e/rename_nifti_0327/{study}'}
-        print('func_params', func_params)
-        task = nii_file_processing.push(func_params)
-        print(task)
-
-
-## # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-
 def test_task_inference():
-    from code_ai.task.task_inference import task_inference
-    for study in ['02695350_20240109_MR_21210300104',
-                  # '10089413_20210201_MR_21002010079',
-                  # '10516407_20231215_MR_21210200091',
-                  # '12472275_20231031_MR_21209070029'
-                  ]:
+    from code_ai.task.workflow import ResampleHandler
+    from code_ai.task.workflow import SynthSegHandler
+    from code_ai.task.workflow import ProcessSynthSegHandler
+    from code_ai.task.workflow import PostProcessSynthSegHandler
+    from code_ai.task.workflow import ResampleToOriginalHandler
+    from code_ai.task.schema.intput_params import SaveFileTaskParams
 
-        func_params = {'input_study_nifti_path':f'/mnt/e/rename_nifti_0407/{study}',
-                       'output_study_nifti_path' :f'/mnt/e/rename_nifti_0407/{study}',}
-        print('func_params', func_params)
-        task = task_inference.push(func_params)
-        print(task)
+    task_params = SaveFileTaskParams(
+        file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz'),
+        resample_file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample.nii.gz'),
+        synthseg_file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_synthseg.nii.gz'),
+        synthseg33_file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_synthseg33.nii.gz'),
+        david_file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_david.nii.gz'),
+        wm_file=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_wm.nii.gz'),
+        save_mode='CMB',
+        save_file_path=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_synthseg/12292196_20200223_MR_20902230007/T1FLAIR_AXI_resample_CMB.nii.gz'),
+    )
+    # -----------------------------------------------------------------------------
+    # 以下示例展示如何構建整個任務流程鏈
+    # -----------------------------------------------------------------------------
+
+
+    # 例如，我們目前只構造一個簡單的鏈，只包含 ResampleHandler
+    # 構造責任鏈：ResampleHandler -> (後續可以 set_next 其他 Handler)
+    resample_handler              = ResampleHandler()
+    synthseg_handler              = SynthSegHandler()
+    process_synthseg_handler      = ProcessSynthSegHandler()
+    post_process_synthseg_handler = PostProcessSynthSegHandler()
+    resample_to_original_handler  = ResampleToOriginalHandler()
+    #
+    resample_handler.set_next(synthseg_handler)
+    synthseg_handler.set_next(process_synthseg_handler)
+    process_synthseg_handler.set_next(post_process_synthseg_handler)
+    post_process_synthseg_handler.set_next(resample_to_original_handler)
+
+    # 執行責任鏈
+    final_result = resample_handler.handle(task_params.get_str_dict())
+    print("Final result from chain:", final_result)
 
 
 if __name__ == '__main__':
