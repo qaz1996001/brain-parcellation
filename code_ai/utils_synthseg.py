@@ -52,6 +52,7 @@ class SynthSeg:
     def __init__(self,intput_size= None ):
         self.intput_size = intput_size
         self.args = None
+        self.net_unet = None
         self.net_unet2 = None
         self.net_convert = None
         self.net_parcellation = None
@@ -560,6 +561,94 @@ class SynthSeg:
                                topology_classes=topology_classes,
                                v1=v1)
         utils.save_volume(seg, aff, h, path_segmentations33, dtype='int32')
+
+    def build_model_by_5class(self, path_model_segmentation,
+                              labels_denoiser):
+        assert os.path.isfile(path_model_segmentation), "The provided model path does not exist."
+        # build first UNet
+        n_groups = len(labels_denoiser)
+        net = nrn_models.unet(input_shape=[self.intput_size, self.intput_size, self.intput_size, 1],
+                              nb_labels=n_groups,
+                              nb_levels=5,
+                              nb_conv_per_level=2,
+                              conv_size=3,
+                              nb_features=24,
+                              feat_mult=2,
+                              activation='elu',
+                              batch_norm=-1,
+                              name='unet')
+
+        # transition between the two networks: one_hot -> argmax -> one_hot (it simulates how the network was trained)
+        last_tensor = net.output
+        last_tensor = KL.Lambda(lambda x: tf.argmax(x, axis=-1))(last_tensor)
+        last_tensor = KL.Lambda(lambda x: tf.one_hot(tf.cast(x, 'int32'), depth=n_groups, axis=-1))(last_tensor)
+        net = Model(inputs=net.inputs, outputs=last_tensor, name='')
+
+        # build denoiser
+        net = nrn_models.unet(input_model=net,
+                              input_shape=[self.intput_size, self.intput_size, self.intput_size, 1],
+                              #   input_shape=[None, None, None, 1],
+                              nb_labels=n_groups,
+                              nb_levels=5,
+                              nb_conv_per_level=2,
+                              conv_size=5,
+                              nb_features=16,
+                              feat_mult=2,
+                              activation='elu',
+                              batch_norm=-1,
+                              skip_n_concatenations=2,
+                              name='l2l')
+
+        # transition between the two networks: one_hot -> argmax -> one_hot, and concatenate input image and labels
+        input_image = net.inputs[0]
+        last_tensor = net.output
+        net = Model(inputs=net.inputs, outputs=last_tensor)
+        return net
+    def run_segmentations5(self, path_images, path_segmentations5):
+        args = self.load_parameter()
+        path_model_segmentation = args['path_model_segmentation']
+        fast = args['fast']
+        v1 = args['v1']
+        labels_denoiser = np.unique(utils.get_list_labels(args['labels_denoiser'])[0])
+        cropping = args['crop']
+        ct = args['ct']
+
+        # set cropping/padding
+        if cropping is not None:
+            cropping = utils.reformat_to_list(cropping, length=3, dtype='int')
+            min_pad = cropping
+        else:
+            min_pad = 128
+
+        if self.net_unet is None:
+            net_unet = self.build_model_by_5class(path_model_segmentation=path_model_segmentation,
+                                                  labels_denoiser=labels_denoiser,
+                                                  )
+            net_unet.load_weights(path_model_segmentation, by_name=True)
+
+            self.net_unet = net_unet
+        else:
+            net_unet = self.net_unet
+
+        image, aff, h, im_res, shape, pad_idx, crop_idx = self.preprocess(path_image=path_images,
+                                                                          ct=ct,
+                                                                          crop=cropping,
+                                                                          min_pad=min_pad)
+        unet_output = net_unet.predict(image)
+
+        seg = self.postprocess(post_patch_seg=unet_output,
+                               post_patch_parc=None,
+                               shape=shape,
+                               pad_idx=pad_idx,
+                               crop_idx=crop_idx,
+                               labels_segmentation=labels_denoiser,
+                               labels_parcellation=None,
+                               aff=aff,
+                               im_res=im_res,
+                               fast=fast,
+                               topology_classes=None,
+                               v1=v1)
+        utils.save_volume(seg, aff, h, path_segmentations5, dtype='int16')
 
 
 # 基本的Volume處理器
