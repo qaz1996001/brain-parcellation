@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List
+from typing import List,Optional
 
 from funboost.core.func_params_model import BaseJsonAbleModel
 from pydantic import ConfigDict
@@ -40,9 +40,9 @@ class PostProcessSynthsegTaskParams(BaseJsonAbleModel):
 
 
 class Dicom2NiiParams(BaseJsonAbleModel):
-    sub_dir           : Path
-    output_dicom_path : Path
-    output_nifti_path : Path
+    sub_dir           : Optional[Path]
+    output_dicom_path : Optional[Path]
+    output_nifti_path : Optional[Path]
 
 class Dicom2NiiFileParams(BaseJsonAbleModel):
     dicom_study_folder_path : Path
@@ -58,3 +58,5 @@ class CallDcm2niixParams(BaseJsonAbleModel):
     output_series_file_path  : Path
     output_series_path       : Path
     series_path              : Path
+
+

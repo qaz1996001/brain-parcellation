@@ -110,9 +110,6 @@ def test_post_process_synthseg_task():
     )
     resample_swan_task = resample_task.push(task_params.get_str_dict())
     synthseg_swan_task = None
-    # temp = partial(call_chain,func = synthseg_task.push)
-    # resample_swan_task.set_callback(temp)
-    # swan_task = save_file_tasks.push(task_params.get_str_dict())
     while True :
         time.sleep(2)
         print('resample_swan_task id',resample_swan_task.task_id)
@@ -143,9 +140,24 @@ def test_dicom2nii():
     task = dicom_to_nii.push(task_params.get_str_dict())
 
 
+def test_file_processing():
+    from code_ai.task.task_dicom2nii import nii_file_processing
+    for study in ['02695350_20240109_MR_21210300104',
+                  '10089413_20210201_MR_21002010079',
+                  '10516407_20231215_MR_21210200091',
+                  '12472275_20231031_MR_21209070029']:
+
+        func_params = {'study_folder_path':f'/mnt/e/rename_nifti_0327/{study}'}
+        print('func_params', func_params)
+        task = nii_file_processing.push(func_params)
+        print(task)
+
+
 if __name__ == '__main__':
+    test_file_processing()
     # test_post_process_synthseg_task()
-    test_dicom2nii()
+    # test_dicom2nii()
     # from funboost import AsyncResult
     # result = AsyncResult(task_id='c3fa5495-8ee7-4690-a5c5-a214607696ab')
     # print(result)
+    # export PYTHONPATH=$(pwd) && python code_ai/pipeline/dicom_to_nii.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_0328 --output_nifti /mnt/e/rename_nifti_0328

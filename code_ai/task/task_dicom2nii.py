@@ -113,10 +113,11 @@ def copy_dicom_file(input_tuple, instance_path, output_path):
 
 
 def file_processing(func_params  : Dict[str,any]):
-    print('func_params',func_params)
-    # if study_folder_path is None:
-    #     return
-    # post_process_manager.post_process(study_folder_path)
+    study_folder_path = func_params.get('study_folder_path')
+    post_process_manager = func_params.get('post_process_manager')
+    if study_folder_path is None:
+        return
+    post_process_manager.post_process(study_folder_path)
 
 
 @Booster('call_dcm2niix_queue',
@@ -201,7 +202,7 @@ def dicom_2_nii_file(func_params  : Dict[str,any]):
 # ConcurrentModeEnum.GEVENT
 # BoosterParams
 @Booster('process_instances_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=3000,
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=1000,
          log_level =logging.WARNING,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
@@ -219,6 +220,7 @@ def process_instances(func_params  : Dict[str,any]):
                                             instance,
                                             output_dicom_path)
 
+
 def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
     instances_list = list(sub_dir.rglob('*.dcm'))
     if len(instances_list) > 0:
@@ -234,29 +236,73 @@ def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
 
 
 @Booster('process_dir_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         is_send_consumer_hearbeat_to_redis=True,
+         is_push_to_dlx_queue_when_retry_max_times=True,
+         is_using_rpc_mode=True)
 def process_dir(func_params  : Dict[str,any]):
+
     task_params       = intput_params.Dicom2NiiParams.model_validate(func_params,
                                                                      strict=False)
     sub_dir           = task_params.sub_dir
     output_dicom_path = task_params.output_dicom_path
-    output_nifti_path = task_params.output_nifti_path
-    instances_list = sorted(sub_dir.rglob('*.dcm'))
+    instances_list    = sorted(sub_dir.rglob('*.dcm'))
     async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance = instances,
                                                                                      output_dicom_path = output_dicom_path).get_str_dict()) for instances in instances_list]
     result_list = [ async_result.result for async_result in async_result_list]
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
-    print('dicom_study_folder_path',dicom_study_folder_path)
-    dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=dicom_study_folder_path,
-                                                               output_nifti_path=output_nifti_path)
-    result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
-    return result
+    return dicom_study_folder_path
+
 
 @Booster('dicom_to_nii_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
 def dicom_to_nii(func_params  : Dict[str,any]):
+    def dicom_to_nii_callback(result):
+        print('dicom_to_nii_callback result',result)
+        if result is not None:
+            dicom_study_folder_path = result['result']
+            output_nifti_path       = result['params']['func_params']['output_nifti_path']
+            dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=dicom_study_folder_path,
+                                                                       output_nifti_path=output_nifti_path)
+            result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
+            return result
+        else:
+            return None
+
+    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
+                                                               strict=False)
+        # 1. raw dicom -> rename dicom
+    if task_params.sub_dir is not None:
+        result = process_dir.push(func_params)
+        # 2. rename dicom -> rename nifti
+        if task_params.output_nifti_path is not None:
+            result.set_callback(dicom_to_nii_callback)
+    else:
+        # rename dicom -> rename nifti
+        dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=task_params.output_dicom_path,
+                                                                   output_nifti_path=task_params.output_nifti_path)
+        result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
+
+
+    return result
+
+
+@Booster('dicom_rename_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+def dicom_rename(func_params  : Dict[str,any]):
     process_dir_result = process_dir.push(func_params)
-    process_dir_result.set_callback(file_processing)
+    return process_dir_result
+
+
+@Booster('nii_file_processing_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
+def nii_file_processing(func_params  : Dict[str,any]):
+    print('nii_file_processing', func_params)
+    study_folder_path = func_params.get('study_folder_path')
+    if study_folder_path is None:
+        return
+    ConvertManager.nifti_post_process_manager.post_process(pathlib.Path(study_folder_path))
+
 
 
 # def build_dicom2nii(sub_dir,output_dicom_path,output_nifti_path):
