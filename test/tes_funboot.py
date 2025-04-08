@@ -141,7 +141,7 @@ def test_dicom2nii():
     task = dicom_to_nii.push(task_params.get_str_dict())
 
 
-def test_task_inference():
+def test_handler():
     from code_ai.task.workflow import ResampleHandler
     from code_ai.task.workflow import SynthSegHandler
     from code_ai.task.workflow import ProcessSynthSegHandler
@@ -189,7 +189,23 @@ def test_task_inference():
     print("Final result from chain:", final_result)
 
 
+def test_task_inference():
+    from code_ai.task.schema.intput_params import TaskInferenceParams
+    from code_ai.task.task_inference import task_inference
+
+
+    task_params = TaskInferenceParams(
+        input_study_nifti_path=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/example_input'),
+        output_study_nifti_path=Path(
+            '/mnt/d/wsl_ubuntu/pipeline/sean/example_input'))
+
+    final_result = task_inference.push(task_params.get_str_dict())
+    print("Final result from chain:", final_result)
+
+
 if __name__ == '__main__':
+    # test_handler
     test_task_inference()
     # test_post_process_synthseg_task()
     # test_dicom2nii()

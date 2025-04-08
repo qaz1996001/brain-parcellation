@@ -24,6 +24,7 @@ class Task(BaseModel):
 
 
 class Analysis(BaseModel):
+    study_id: str
     Area: Optional[Task] = None
     DWI: Optional[Task] = None
     WMH_PVS: Optional[Task] = None
@@ -124,11 +125,12 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
                 result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
-                if model_name == InferenceEnum.CMB:
-                    print('model_name', model_name, model_mapping_series_list)
-                    print('mapping_series_str',mapping_series_str)
-                    print('df_file[file_name]', df_file['file_name'])
-                    print('result',result)
+                # if model_name == InferenceEnum.CMB:
+                #
+                #     print('model_name', model_name, model_mapping_series_list)
+                #     print('mapping_series_str',mapping_series_str)
+                #     print('df_file[file_name]', df_file['file_name'])
+                #     print('result',result)
 
                 if result[0].shape[0] >= len(mapping_series_str):
                     df_result = df_file.iloc()[result[1]]
@@ -153,11 +155,6 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
     """
     output_files = []
     match task_name:
-        case InferenceEnum.Area:
-            for input_path in input_paths:
-                base_name = os.path.basename(input_path).split('.')[0]
-                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz"))
-                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg.nii.gz"))
         case InferenceEnum.WMH_PVS:
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
@@ -183,6 +180,11 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
                                                  ))
             output_files.append(os.path.join(base_output_path, f"Pred_CMB.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_CMB.json"))
+        case InferenceEnum.Area:
+            for input_path in input_paths:
+                base_name = os.path.basename(input_path).split('.')[0]
+                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz"))
+                output_files.append(os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg.nii.gz"))
         case InferenceEnum.Infarct:
             output_files.append(os.path.join(base_output_path, f"Pred_Infarct.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_Infarct_ADCth.nii.gz"))

@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List,Optional
 
 from funboost.core.func_params_model import BaseJsonAbleModel
-from pydantic import ConfigDict
+from pydantic import ConfigDict,field_serializer, model_serializer, BaseModel
 
 
 class ResampleTaskParams(BaseJsonAbleModel):
@@ -34,14 +34,14 @@ class SaveFileTaskParams(ProcessSynthsegTaskParams):
     save_file_path : Path
 
 
-class PostProcessSynthsegTaskParams(SaveFileTaskParams):
-    pass
-    # cmb_file_list : List[Path]
-
-
-class BuildSynthsegTaskParams(BaseJsonAbleModel):
-    inference_name : str
+class PostProcessSynthsegTaskParams(BaseJsonAbleModel):
+    save_mode: str
     cmb_file_list : List[Path]
+    model_config = ConfigDict(extra="allow")
+
+    @field_serializer('cmb_file_list')
+    def serialize_cmb_file_list(self, cmb_file_list: List[Path], _info):
+        return list(map(lambda cmb_file: str(cmb_file), cmb_file_list))
 
 
 # *************************************************************************** #

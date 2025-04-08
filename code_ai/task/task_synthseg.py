@@ -33,11 +33,12 @@ def resample_task(func_params  : Dict[str,any]):
 
 @Booster('synthseg_task_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_num = 2,
+         concurrent_mode=ConcurrentModeEnum.SOLO,
+         qps=1,
+         concurrent_num = 4,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True
-         )
+         is_using_rpc_mode=True)
 def synthseg_task(func_params  : Dict[str,any]):
     task_params     = intput_params.SynthsegTaskParams.model_validate(func_params)
     resample_file   = task_params.resample_file
@@ -46,7 +47,7 @@ def synthseg_task(func_params  : Dict[str,any]):
 
     try:
         if all([resample_file.exists(), synthseg_file.exists(), synthseg33_file.exists()]):
-            pass
+            return synthseg_file, synthseg33_file
         else:
             cmd_str = ('export PYTHONPATH={} && '
                        '{} code_ai/pipeline/synthseg_task.py '
@@ -68,9 +69,10 @@ def synthseg_task(func_params  : Dict[str,any]):
         raise e  # Funboost 會自動處理重試
 
 @Booster('process_synthseg_task_queue',
-         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
-         concurrent_mode = ConcurrentModeEnum.SOLO,
-         concurrent_num  = 1 ,
+         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+         concurrent_mode=ConcurrentModeEnum.SOLO,
+         qps=4,
+         concurrent_num  = 4 ,
          is_send_consumer_hearbeat_to_redis = True,
          is_using_rpc_mode=True
          )
@@ -112,40 +114,55 @@ def process_synthseg_task(func_params  : Dict[str,any]):
 @Booster('resample_to_original_task_queue',
          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
          qps=10,
+         concurrent_num  = 10 ,
          is_send_consumer_hearbeat_to_redis = True,
          is_using_rpc_mode=True)
 def resample_to_original_task(func_params  : Dict[str,any]):
-    task_params    = intput_params.PostProcessSynthsegTaskParams.model_validate(func_params)
-
-    original_seg_file, argmin = resampleSynthSEG2original_z_index(raw_file            = task_params.file,
-                                                          resample_image_file = task_params.resample_file,
-                                                          resample_seg_file   = task_params.synthseg_file)
-    original_synthseg33_seg_file = save_original_seg_by_argmin_z_index(raw_file          = task_params.file,
-                                                                       resample_seg_file = task_params.synthseg33_file,
-                                                                       argmin=argmin)
-    original_david_seg_file = save_original_seg_by_argmin_z_index(raw_file          = task_params.file,
-                                                                  resample_seg_file = task_params.david_file,
-                                                                  argmin=argmin)
-    original_save_seg_file = save_original_seg_by_argmin_z_index(raw_file=task_params.file,
-                                                                 resample_seg_file=task_params.save_file_path,
-                                                                 argmin=argmin)
+    task_params    = intput_params.SaveFileTaskParams.model_validate(func_params)
     original_file     = task_params.file
     resample_seg_file = task_params.save_file_path
+    base_path = task_params.synthseg_file.parent
 
-    outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
-    if str(original_file) == str(outpput_raw_file):
-        pass
+    original_seg_file = base_path.joinpath(
+        f"synthseg_{task_params.synthseg_file.name.replace('resample', 'original')}")
+    original_synthseg33_seg_file = base_path.joinpath(
+        f"synthseg_{task_params.synthseg33_file.name.replace('resample', 'original')}")
+    original_david_seg_file = base_path.joinpath(
+        f"synthseg_{task_params.david_file.name.replace('resample', 'original')}")
+    original_save_seg_file = base_path.joinpath(
+        f"synthseg_{task_params.save_file_path.name.replace('resample', 'original')}")
+    if all((original_synthseg33_seg_file.exists(),original_seg_file.exists(),
+            original_david_seg_file.exists(),original_david_seg_file.exists())):
+        return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
     else:
-        with open(original_file, mode='rb') as raw_file_f:
-            with open(outpput_raw_file, mode='wb') as outpput_raw_file_f:
-                shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
-    return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
+        original_seg_file, argmin = resampleSynthSEG2original_z_index(raw_file            = task_params.file,
+                                                              resample_image_file = task_params.resample_file,
+                                                              resample_seg_file   = task_params.synthseg_file)
+        original_synthseg33_seg_file = save_original_seg_by_argmin_z_index(raw_file          = task_params.file,
+                                                                           resample_seg_file = task_params.synthseg33_file,
+                                                                           argmin=argmin)
+        original_david_seg_file = save_original_seg_by_argmin_z_index(raw_file          = task_params.file,
+                                                                      resample_seg_file = task_params.david_file,
+                                                                      argmin=argmin)
+        original_save_seg_file = save_original_seg_by_argmin_z_index(raw_file=task_params.file,
+                                                                     resample_seg_file=task_params.save_file_path,
+                                                                     argmin=argmin)
+
+
+        outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
+        if str(original_file) == str(outpput_raw_file):
+            pass
+        else:
+            with open(original_file, mode='rb') as raw_file_f:
+                with open(outpput_raw_file, mode='wb') as outpput_raw_file_f:
+                    shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
+        return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
 
 
 @Booster('save_file_tasks_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True, qps=10)
+         is_using_rpc_mode=True, qps=4)
 def save_file_tasks(func_params  : Dict[str,any]):
     task_params = intput_params.SaveFileTaskParams.model_validate(func_params)
     synthseg_file = task_params.synthseg_file
@@ -155,63 +172,53 @@ def save_file_tasks(func_params  : Dict[str,any]):
     save_mode = task_params.save_mode
     save_file_path = task_params.save_file_path
 
-
-    cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/save_file.py '
-               '--synthseg_file {} '
-               '--david_file {} '
-               '--wm_file {} '
-               '--depth_number {} '
-               '--save_mode {} '
-               '--save_file_path {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
-                                          PYTHON3,
-                                          synthseg_file,
-                                          david_file,
-                                          wm_file,
-                                          depth_number,
-                                          save_mode,
-                                          save_file_path)
-               )
-    process = subprocess.Popen(args=cmd_str, shell=True,
-                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    # print(stderr)
-    # return stdout, stderr
-    return synthseg_file, david_file
+    if save_file_path.exists():
+        return save_file_path
+    else:
+        cmd_str = ('export PYTHONPATH={} && '
+                   '{} code_ai/pipeline/save_file.py '
+                   '--synthseg_file {} '
+                   '--david_file {} '
+                   '--wm_file {} '
+                   '--depth_number {} '
+                   '--save_mode {} '
+                   '--save_file_path {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                              PYTHON3,
+                                              synthseg_file,
+                                              david_file,
+                                              wm_file,
+                                              depth_number,
+                                              save_mode,
+                                              save_file_path)
+                   )
+        process = subprocess.Popen(args=cmd_str, shell=True,
+                                   # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate()
+        # print(stderr)
+        # return stdout, stderr
+        return save_file_path
 
 
 @Booster('post_process_synthseg_task_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True, qps=10)
+         is_using_rpc_mode=True, qps=4)
 def post_process_synthseg_task(func_params  : Dict[str,any]):
-    task_params = intput_params.SaveFileTaskParams.model_validate(func_params)
-    synthseg_file = task_params.synthseg_file
-    david_file = task_params.david_file
-    wm_file = task_params.wm_file
-    depth_number = task_params.depth_number
+    task_params = intput_params.PostProcessSynthsegTaskParams.model_validate(func_params)
     save_mode = task_params.save_mode
-    save_file_path = task_params.save_file_path
+    cmb_file_list = task_params.model_dump()['cmb_file_list']
 
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/save_file.py '
-               '--synthseg_file {} '
-               '--david_file {} '
-               '--wm_file {} '
-               '--depth_number {} '
+               '{} code_ai/pipeline/post_process_synthseg.py '
                '--save_mode {} '
-               '--save_file_path {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+               '--cmb_file_list {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                             PYTHON3,
-                                            synthseg_file,
-                                            david_file,
-                                            wm_file,
-                                            depth_number,
                                             save_mode,
-                                            save_file_path)
+                                            ' '.join(cmb_file_list),)
                )
     process = subprocess.Popen(args=cmd_str, shell=True,
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
-    return synthseg_file, david_file
+    return stdout,stderr
