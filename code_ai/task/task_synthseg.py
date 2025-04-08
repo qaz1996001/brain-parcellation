@@ -131,8 +131,8 @@ def resample_to_original_task(func_params  : Dict[str,any]):
         f"synthseg_{task_params.david_file.name.replace('resample', 'original')}")
     original_save_seg_file = base_path.joinpath(
         f"synthseg_{task_params.save_file_path.name.replace('resample', 'original')}")
-    if all((original_synthseg33_seg_file.exists(),original_seg_file.exists(),
-            original_david_seg_file.exists(),original_david_seg_file.exists())):
+    if all((original_seg_file.exists(), original_synthseg33_seg_file.exists(),
+            original_david_seg_file.exists(),original_save_seg_file.exists())):
         return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
     else:
         original_seg_file, argmin = resampleSynthSEG2original_z_index(raw_file            = task_params.file,
@@ -147,7 +147,6 @@ def resample_to_original_task(func_params  : Dict[str,any]):
         original_save_seg_file = save_original_seg_by_argmin_z_index(raw_file=task_params.file,
                                                                      resample_seg_file=task_params.save_file_path,
                                                                      argmin=argmin)
-
 
         outpput_raw_file = resample_seg_file.parent.joinpath(original_file.name)
         if str(original_file) == str(outpput_raw_file):
@@ -221,4 +220,5 @@ def post_process_synthseg_task(func_params  : Dict[str,any]):
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
+    print('post_process_synthseg_task', stdout, stderr)
     return stdout,stderr

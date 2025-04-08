@@ -25,10 +25,10 @@ class Task(BaseModel):
 
 class Analysis(BaseModel):
     study_id: str
-    Area: Optional[Task] = None
     DWI: Optional[Task] = None
     WMH_PVS: Optional[Task] = None
     CMB: Optional[Task] = None
+    Area: Optional[Task] = None
     AneurysmSynthSeg: Optional[Task] = None
     Infarct: Optional[Task] = None
     WMH: Optional[Task] = None

@@ -4,8 +4,8 @@ from funboost import BrokerEnum, ConcurrentModeEnum, Booster
 from code_ai.task.schema import intput_params
 from code_ai.utils_inference import Dataset, Analysis, check_study_mapping_inference, generate_output_files, Task, \
     InferenceEnum
-from  code_ai.task.task_infarct import inference_infarct
-
+from code_ai.task.task_infarct import inference_infarct
+from code_ai.task.task_CMB import inference_cmb
 from code_ai.task.workflow import ResampleHandler
 from code_ai.task.workflow import SynthSegHandler
 from code_ai.task.workflow import ProcessSynthSegHandler
@@ -15,7 +15,8 @@ from code_ai.task.workflow import ResampleToOriginalHandler
 
 
 @Booster('call_handler_inference_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=2,
+         concurrent_mode=ConcurrentModeEnum.SOLO,
          concurrent_num=4,
          is_send_consumer_hearbeat_to_redis=True,
          is_using_rpc_mode=True)
@@ -37,9 +38,9 @@ def call_handler_inference(func_params  : Dict[str,any]):
 
 
 @Booster('task_inference_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=2,
          concurrent_mode=ConcurrentModeEnum.SOLO,
-         concurrent_num=10,
+         concurrent_num=5,
          is_send_consumer_hearbeat_to_redis=True,
          is_using_rpc_mode=True)
 def task_inference(func_params  : Dict[str,any]):
@@ -52,14 +53,15 @@ def task_inference(func_params  : Dict[str,any]):
     print('study_list',study_list)
     mapping_inference_list = list(map(check_study_mapping_inference, study_list))
     call_handler_inference_task = []
+    print('mapping_inference_list', mapping_inference_list)
 
-    task_list = []
     for mapping_inference in mapping_inference_list:
         study_id = mapping_inference.keys()
         model_dict_values = mapping_inference.values()
         base_output_path = output_study_nifti_path.joinpath(*study_id)
         base_output_path_str = str(base_output_path)
         print('base_output_path', base_output_path_str)
+        task_list = []
         for task_dict in model_dict_values:
             tasks = {}
             for model_name, input_paths in task_dict.items():
@@ -79,14 +81,17 @@ def task_inference(func_params  : Dict[str,any]):
         # analyses[str(*study_id)] = Analysis(**tasks)
         task_result_list = [temp_task.get() for temp_task in call_handler_inference_task]
         cmb_list = list(filter(lambda x:x[0] == InferenceEnum.CMB,task_list))
-        cmd_save_file_path_list = list(map(lambda x:x[1].save_file_path,cmb_list))
+        if len(cmb_list) > 0:
+            cmd_save_file_path_list = list(map(lambda x:x[1].save_file_path,cmb_list))
 
-        post_process_synthseg_params = intput_params.PostProcessSynthsegTaskParams(save_mode=cmb_list[0][1].save_mode,
-                                                                                   cmb_file_list=cmd_save_file_path_list)
-        post_process_synthseg_handler = PostProcessSynthSegHandler()
-        post_process_synthseg_handler.handle(post_process_synthseg_params.model_dump())
+            post_process_synthseg_params = intput_params.PostProcessSynthsegTaskParams(save_mode=cmb_list[0][1].save_mode,
+                                                                                       cmb_file_list=cmd_save_file_path_list)
+            post_process_synthseg_handler = PostProcessSynthSegHandler()
+            post_process_synthseg_handler.handle(post_process_synthseg_params.model_dump())
         analyses = Analysis(study_id=base_output_path.name,
                             **tasks)
         print('analyses',analyses)
         infarct_result = inference_infarct.push(analyses.model_dump())
         print('infarct_result',infarct_result)
+        cmb_result = inference_cmb.push(analyses.model_dump())
+        print('cmb_result', cmb_result)

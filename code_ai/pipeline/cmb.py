@@ -8,7 +8,7 @@ numpy==1.26.0
 
 @author: sean
 """
-
+import argparse
 import datetime
 import itertools
 import pathlib
@@ -451,3 +451,34 @@ class CMBServiceTF:
         # df_tsv.to_csv(f"{out_root}/{case_name}_label.tsv", index=False, sep='\t')
         return df_tsv
 
+
+
+
+if __name__ == '__main__':
+    import tensorflow as tf
+    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+    tf.config.experimental.set_visible_devices(devices=gpus, device_type='GPU')
+    # print(gpus, cpus)
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--swan_path_str', type=str,
+                        default='/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/SWAN.nii.gz',
+                        help='用於輸入的檔案')
+    parser.add_argument('--temp_path_str', type=str,
+                        default='/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/synthseg_SWAN_original_CMB_from_synthseg_T1FLAIR_AXI_original_CMB.nii.gz',
+                        help='用於輸出結果的資料夾')
+    parser.add_argument('--output_nii_path_str', type=str,
+                        default='/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/Pred_CMB.nii.gz',
+                        help='用於輸出的檔案')
+    parser.add_argument('--output_json_path_str', type=str,
+                        default='/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/Pred_CMB.json',
+                        help='用於輸出的檔案')
+
+    args = parser.parse_args()
+    cmb_pipeline = CMBServiceTF()
+    cmb_pipeline.cmb_classify(swan_path_str=args.swan_path_str,
+                              temp_path_str=args.temp_path_str,
+                              output_nii_path_str=args.output_nii_path_str,
+                              output_json_path_str=args.output_json_path_str)
