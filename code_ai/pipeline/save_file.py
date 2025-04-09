@@ -7,10 +7,13 @@ import nibabel as nib
 import numpy as np
 
 if __name__ == '__main__':
+    import tensorflow as tf
+    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+    tf.config.experimental.set_visible_devices(devices=gpus, device_type='GPU')
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
     from code_ai.task import CMBProcess, DWIProcess, run_wmh
     from code_ai.utils_inference import InferenceEnum
-    from code_ai.utils_synthseg import TemplateProcessor
-    from code_ai.utils_inference import replace_suffix
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--synthseg_file', type=str, required=True,

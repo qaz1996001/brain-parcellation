@@ -104,3 +104,6 @@ def inference_cmb(func_params,):
 #             else:
 #                 print('inference_cmb retry')
 #                 self.retry(countdown=COUNTDOWN, max_retries=MAX_RETRIES)  # 重試任務
+
+#  uv tree  --universal
+#  uv tree  --locked > requirements_1.txt
