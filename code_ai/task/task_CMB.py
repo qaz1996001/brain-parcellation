@@ -1,15 +1,16 @@
 import os.path
 import pathlib
 import subprocess
-
-from funboost import BrokerEnum, Booster
+from funboost import BrokerEnum, Booster, ConcurrentModeEnum
 from code_ai import PYTHON3
-from code_ai.pipeline.cmb import CMBServiceTF
 
 
 @Booster('inference_cmb_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
-         concurrent_num=4,
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+         concurrent_mode=ConcurrentModeEnum.SOLO,
+         qps=5,
+         is_using_distributed_frequency_control=True,
+         concurrent_num=5,
          is_send_consumer_hearbeat_to_redis=True,
          is_using_rpc_mode=True)
 def inference_cmb(func_params,):
@@ -23,10 +24,6 @@ def inference_cmb(func_params,):
             swan_path_str = cmb_task.get('input_path_list')[0]
         else:
             swan_path_str = cmb_task.get('input_path_list')[1]
-
-        # output_path = cmb_task.get('output_path')
-        # if os.path.basename(output_path) == study_id:
-        #     output_path = os.path.dirname(output_path)
 
         temp_path_str = list(filter(lambda x: x.endswith('.nii.gz') and ('synthseg_' in x),
                                     cmb_task.get('output_path_list')))

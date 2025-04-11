@@ -278,3 +278,23 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
             return ( None, None )
 
 
+
+
+def build_analysis(study_path: pathlib.Path):
+    mapping_inference = check_study_mapping_inference(study_path)
+    study_id = study_path.name
+    model_dict_values = mapping_inference.values()
+    for task_dict in model_dict_values:
+        tasks = {}
+        for model_name, input_paths in task_dict.items():
+            task_output_files = generate_output_files(input_paths,
+                                                      model_name,
+                                                      str(study_path))
+            task = Task(intput_path_list=input_paths,
+                        output_path=str(study_path),
+                        output_path_list=task_output_files, )
+            tasks_dump = {model_name: task.model_dump()}
+            tasks[model_name] = task
+
+    analyses = Analysis(study_id=study_id, **tasks)
+    return analyses

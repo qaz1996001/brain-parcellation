@@ -10,7 +10,7 @@ from code_ai import PYTHON3
 
 
 @Booster('inference_infarct_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10,
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=4,
          concurrent_num=4,
          is_send_consumer_hearbeat_to_redis=True,
          is_using_rpc_mode=True)

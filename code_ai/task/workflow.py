@@ -165,13 +165,16 @@ class SaveFileTaskHandler(AbstractHandler):
             return self._next_handler.handle(request)
         return task_result
 
+
 class PostProcessSynthSegHandler(AbstractHandler):
     def handle(self, request: Dict[str, Any]) -> Any:
 
         # 使用 Funboost 的 apply_async 發送任務並等待結果
         # 注意：此處 request 必須包含 'resample_task' 的參數
         result = post_process_synthseg_task.apply_async({'func_params':request})
-        task_result = result.get()  # 阻塞等待結果返回
+        # task_result = result.status_and_result()  # 阻塞等待結果返回
+        task_result = result.status_and_result
+        # task_result = result.get()  # 阻塞等待結果返回
 
         # # 更新下游任務所需參數
         # if 'synthseg_task' not in request:

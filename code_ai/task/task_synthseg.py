@@ -35,7 +35,8 @@ def resample_task(func_params  : Dict[str,any]):
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          concurrent_mode=ConcurrentModeEnum.SOLO,
          qps=1,
-         concurrent_num = 4,
+         is_using_distributed_frequency_control=True,
+         concurrent_num = 5,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
          is_using_rpc_mode=True)
@@ -71,8 +72,9 @@ def synthseg_task(func_params  : Dict[str,any]):
 @Booster('process_synthseg_task_queue',
          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
          concurrent_mode=ConcurrentModeEnum.SOLO,
-         qps=4,
-         concurrent_num  = 4 ,
+         qps=5,
+         is_using_distributed_frequency_control=True,
+         concurrent_num=5,
          is_send_consumer_hearbeat_to_redis = True,
          is_using_rpc_mode=True
          )
@@ -160,8 +162,11 @@ def resample_to_original_task(func_params  : Dict[str,any]):
 
 @Booster('save_file_tasks_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+         qps=5,
+         is_using_distributed_frequency_control=True,
+         concurrent_num = 5,
          is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True, qps=4)
+         is_using_rpc_mode=True)
 def save_file_tasks(func_params  : Dict[str,any]):
     task_params = intput_params.SaveFileTaskParams.model_validate(func_params)
     synthseg_file = task_params.synthseg_file
@@ -194,15 +199,16 @@ def save_file_tasks(func_params  : Dict[str,any]):
                                    # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
-        # print(stderr)
-        # return stdout, stderr
         return save_file_path
 
 
 @Booster('post_process_synthseg_task_queue',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+         qps=8,
+         is_using_distributed_frequency_control=True,
+         concurrent_num = 16,
          is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True, qps=4)
+         is_using_rpc_mode=True)
 def post_process_synthseg_task(func_params  : Dict[str,any]):
     task_params = intput_params.PostProcessSynthsegTaskParams.model_validate(func_params)
     save_mode = task_params.save_mode
