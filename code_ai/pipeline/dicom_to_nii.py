@@ -1,10 +1,6 @@
 import argparse
 import pathlib
 import subprocess
-from typing import List
-
-import nibabel as nib
-import numpy as np
 
 if __name__ == '__main__':
     from code_ai.task.task_dicom2nii import dicom_to_nii
@@ -17,7 +13,6 @@ if __name__ == '__main__':
                         help='output_dicom /mnt/e/rename_dicom_0407 ')
     parser.add_argument('--output_nifti', type=str,
                         help='output_nifti /mnt/e/rename_nifti_0407')
-
 
 
     args = parser.parse_args()

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List,Optional
+from typing import List, Optional, Dict
 
 from funboost.core.func_params_model import BaseJsonAbleModel
 from pydantic import ConfigDict,field_serializer, model_serializer, BaseModel
@@ -70,3 +70,13 @@ class CallDcm2niixParams(BaseJsonAbleModel):
 class TaskInferenceParams(BaseJsonAbleModel):
     input_study_nifti_path  : Path
     output_study_nifti_path : Path
+
+
+# *************************************************************************** #
+
+
+
+class StudyTaskInferenceParams(BaseJsonAbleModel):
+    mapping_inference       : Dict[str, any]
+    output_study_nifti_path : Path
+    model_config = ConfigDict(extra="allow")

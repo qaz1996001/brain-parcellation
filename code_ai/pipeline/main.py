@@ -614,16 +614,17 @@ def main(args):
                 #
             else:
                 resample_one(str(file_list[i]), str(resample_file_list[i]))
-                synth_seg.run_segmentations5(path_images=str(resample_file_list[i]),
-                                             path_segmentations5=str(synthseg5_file_list[i]))
-                original_seg_file, argmin = resampleSynthSEG2original_z_index(file_list[i],
-                                                                              resample_file_list[i],
-                                                                              synthseg5_file_list[i])
 
                 synth_seg.run(path_images=str(resample_file_list[i]),
                               path_segmentations=str(synthseg_file_list[i]),
                               path_segmentations33=str(synthseg33_file_list[i]),
                               )
+                synth_seg.run_segmentations5(path_images=str(resample_file_list[i]),
+                                             path_segmentations5=str(synthseg5_file_list[i]))
+
+                original_seg_file, argmin = resampleSynthSEG2original_z_index(file_list[i],
+                                                                              resample_file_list[i],
+                                                                              synthseg5_file_list[i])
                 synthseg_nii = nib.load(synthseg_file_list[i])
                 synthseg_array = np.array(synthseg_nii.dataobj)
                 synthseg33_nii = nib.load(synthseg33_file_list[i])
@@ -638,6 +639,10 @@ def main(args):
                                                                         argmin)
                 original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
                                                                         synthseg33_file_list[i],
+                                                                        argmin)
+
+                original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
+                                                                        wm_file_list[i],
                                                                         argmin)
                 if args.cmb:
                     cmb_array = CMBProcess.run(seg_array)

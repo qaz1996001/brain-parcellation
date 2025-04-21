@@ -42,27 +42,6 @@ class SynthSeg:
         self.net_unet2 = None
         self.net_convert = None
         self.net_parcellation = None
-        args = self.load_parameter()
-        path_model_segmentation = args['path_model_segmentation']
-        labels_segmentation = args['labels_segmentation']
-        labels_denoiser = args['labels_denoiser']
-        path_model_parcellation = args['path_model_parcellation']
-        labels_parcellation = args['labels_parcellation']
-        # get label lists
-        labels_segmentation, _ = utils.get_list_labels(label_list=labels_segmentation)
-        labels_segmentation, unique_idx = np.unique(labels_segmentation, return_index=True)
-        labels_denoiser = np.unique(utils.get_list_labels(labels_denoiser)[0])
-
-        labels_parcellation, unique_i_parc = np.unique(utils.get_list_labels(labels_parcellation)[0],
-                                                       return_index=True)
-        net_unet2, net_convert, net_parcellation = self.build_model(path_model_segmentation=path_model_segmentation,
-                                                                    path_model_parcellation=path_model_parcellation,
-                                                                    labels_segmentation=labels_segmentation,
-                                                                    labels_denoiser=labels_denoiser,
-                                                                    labels_parcellation=labels_parcellation, )
-        self.net_unet2 = net_unet2
-        self.net_convert = net_convert
-        self.net_parcellation = net_parcellation
         
 
     def prepare_output_files(self, path_images, out_seg, recompute):
@@ -449,9 +428,9 @@ class SynthSeg:
                                                                           crop=cropping,
                                                                           min_pad=min_pad)
         unet2_output = net_unet2.predict(image)
+
         parc_input = net_convert.predict([unet2_output, image])
         post_patch_parcellation = net_parcellation.predict(parc_input)
-
         seg  = self.postprocess(post_patch_seg=unet2_output,
                                 post_patch_parc=post_patch_parcellation,
                                 shape=shape,

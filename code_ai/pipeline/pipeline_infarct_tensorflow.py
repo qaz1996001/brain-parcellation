@@ -693,8 +693,11 @@ if __name__ == '__main__':
     cuatom_model = CUATOM_MODEL
 
     # 建置資料夾
-    if not os.path.isdir(path_processModel):  # 如果資料夾不存在就建立
-        os.mkdir(path_processModel)  # 製作nii資料夾
+    os.makedirs(path_processModel, exist_ok=True)  # 如果資料夾不存在就建立，製作nii資料夾
+    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_output, exist_ok=True)
+
 
     # 直接當作function的輸入
     pipeline_infarct(ID, ADC_file, DWI0_file, DWI1000_file, SynthSEG_file, path_output, path_code, path_processModel,

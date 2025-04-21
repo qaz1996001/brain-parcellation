@@ -64,7 +64,7 @@ class Dicm2NiixConverter:
         # cmd_str = f'{dcm2niix.bin} -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
         cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
 
-        completed_process = subprocess.run(cmd_str, capture_output=True)
+        completed_process = subprocess.run(cmd_str,shell=True, capture_output=True)
         pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
         match_result = pattern.search(completed_process.stdout.decode())
         str_result = match_result.groups()[0]
@@ -108,7 +108,6 @@ class Dicm2NiixConverter:
                     f'{str(series_path).replace(str(study_path.parent), str(self.output_path))}')
                 output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
                 if output_series_file_path.exists():
-                    print(output_series_file_path)
                     continue
                 else:
                     os.makedirs(output_series_path.parent, exist_ok=True)
@@ -117,7 +116,7 @@ class Dicm2NiixConverter:
                         future_list.append(future)
                     else:
                         self.run_cmd(output_series_path=output_series_path, series_path=series_path)
-            self.copy_meta_dir(study_path=study_path)
+            # self.copy_meta_dir(study_path=study_path)
 
 
 def parse_arguments():
