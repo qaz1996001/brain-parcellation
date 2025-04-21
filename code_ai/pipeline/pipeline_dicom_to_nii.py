@@ -3,35 +3,7 @@ import os
 import pathlib
 from typing import List,Optional
 from code_ai import PYTHON3,PATH_DICOM2NII
-
-
-def pipeline_raw_dicom_rename_dicom_to_nii(input_dicom_path  : Optional[pathlib.Path] = None,
-                                           output_dicom_path : Optional[pathlib.Path] = None,
-                                           output_nifti_path : Optional[pathlib.Path] = None,) :
-    cmd_line = '{} {} --input_dicom {} --output_dicom {} --output_nifti {}'.format(
-        PYTHON3,PATH_DICOM2NII,
-        input_dicom_path, output_dicom_path,output_nifti_path)
-
-    print(cmd_line)
-    os.system(cmd_line)
-
-
-def pipeline_raw_dicom_rename_dicom(input_dicom_path  : Optional[pathlib.Path] = None,
-                                    output_dicom_path : Optional[pathlib.Path] = None,) :
-    cmd_line = '{} {} --input_dicom {} --output_dicom {}'.format(
-        PYTHON3,PATH_DICOM2NII,input_dicom_path,output_dicom_path)
-
-    print(cmd_line)
-    os.system(cmd_line)
-
-
-def pipeline_rename_dicom_to_nii(output_dicom_path : Optional[pathlib.Path] = None,
-                                 output_nifti_path : Optional[pathlib.Path] = None,):
-    cmd_line = '{} {} --output_dicom {} --output_nifti {}'.format(
-        PYTHON3, PATH_DICOM2NII, output_dicom_path, output_nifti_path)
-    print(cmd_line)
-    pass
-
+from code_ai.utils_inference import build_analysis
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -49,16 +21,16 @@ if __name__ == '__main__':
         input_dicom_path  = pathlib.Path(args.input_dicom)
         output_dicom_path = pathlib.Path(args.output_dicom)
         output_nifti_path = pathlib.Path(args.output_nifti)
-        pipeline_raw_dicom_rename_dicom_to_nii(input_dicom_path=input_dicom_path,
-                                               output_dicom_path=output_dicom_path,
-                                               output_nifti_path=output_nifti_path)
+
     elif all((args.input_dicom, args.output_dicom)):
         input_dicom_path = pathlib.Path(args.input_dicom)
         output_dicom_path = pathlib.Path(args.output_dicom)
-        pipeline_raw_dicom_rename_dicom(input_dicom_path=input_dicom_path,
-                                        output_dicom_path=output_dicom_path)
+
     elif all((args.output_dicom, args.output_nifti)):
         output_dicom_path = pathlib.Path(args.output_dicom)
         output_nifti_path = pathlib.Path(args.output_nifti)
-        pipeline_rename_dicom_to_nii(output_dicom_path=output_dicom_path,
-                                     output_nifti_path=output_nifti_path)
+
+    study_path_list = sorted(output_nifti_path.iterdir())
+    analysis = build_analysis(study_path_list[0])
+    print(analysis)
+    # 00_Chen/Task04_git/code_ai/pipeline/pipeline_dicom_to_nii.sh --input_dicom /mnt/e/raw_dicom/02695350_21210300104  --output_dicom /mnt/e/rename_dicom_20250421/202504211716 --output_nifti /mnt/e/rename_nifti_20250421/202504211716

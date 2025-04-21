@@ -29,9 +29,10 @@ import pynvml  # 导包
 import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
+from code_ai import PYTHON3
+
 from code_ai.pipeline.cmb import CMBServiceTF
 from code_ai.pipeline import study_id_pattern
-
 
 
 def get_study_id(file_name:str) -> Optional[str]:
@@ -99,7 +100,8 @@ def pipeline_cmb(ID :str,
             # 以下做predict，為了避免gpu out of memory，還是以.sh來執行好惹
             # python main.py -i './forler/Ax SWAN.nii.gz' --template './forler/Sag_FSPGR_BRAVO.nii.gz' --all False --CMB TRUE
             # gpu_line = 'python ' + os.path.join(path_synthseg, 'main.py -i ') + path_nii + ' --all False --CMB TRUE'
-            gpu_line = 'python {} -i {} --template {} --output {} --all False --CMB TRUE'.format(
+            gpu_line = '{} {} -i {} --template {} --output {} --all False --CMB TRUE'.format(
+                PYTHON3,
                 os.path.join(path_synthseg, 'main.py'),
                 swan_file,
                 t1_file,

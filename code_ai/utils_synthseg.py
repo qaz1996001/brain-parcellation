@@ -3,6 +3,8 @@ import numpy as np
 import tensorflow as tf
 import keras.layers as KL
 from keras.models import Model
+
+from . import FSL_FLIRT
 from .ext.lab2im import utils, layers, edit_volumes
 from .ext.neuron import models as nrn_models
 
@@ -767,13 +769,14 @@ class PostProcessContext:
 
 
 class TemplateProcessor:
-    flirt_cmd_base = (
-        'export FSLOUTPUTTYPE=NIFTI_GZ && /home/seanho/fsl/bin/flirt -in "{0}" -ref "{1}" -out '
+    flirt_cmd = 'export FSLOUTPUTTYPE=NIFTI_GZ && {} '.format(FSL_FLIRT)
+    flirt_cmd_base = (flirt_cmd +
+        '-in "{0}" -ref "{1}" -out '
         '"{2}" -dof 6 -cost corratio -omat '
         '"{2}.mat" -interp nearestneighbour'
     )
-    flirt_cmd_apply = (
-        'export FSLOUTPUTTYPE=NIFTI_GZ && /home/seanho/fsl/bin/flirt -in "{0}" -ref "{1}" '
+    flirt_cmd_apply = (flirt_cmd +
+        ' -in "{0}" -ref "{1}" '
         '-out "{2}" -init "{3}.mat" '
         '-applyxfm -interp nearestneighbour'
     )
