@@ -6,7 +6,6 @@ import orjson
 
 sys.path.append('/mnt/d/00_Chen/Task04_git')
 print('path', sys.path)
-from celery import Celery
 from code_ai.utils_inference import check_study_id,check_study_mapping_inference, generate_output_files
 from code_ai.utils_inference import get_synthseg_args_file
 from code_ai.utils_inference import Analysis,InferenceEnum,Dataset,Task,Result
