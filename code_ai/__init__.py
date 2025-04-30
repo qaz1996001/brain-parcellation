@@ -1,5 +1,8 @@
 import pathlib
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-PYTHON3 = '/home/seanho/anaconda3/envs/tf_2_14/bin/python3'
+PYTHON3 = os.getenv("PYTHON3")
 PATH_DICOM2NII = pathlib.Path(__file__).parent.joinpath('dicom2nii','main_call.py').absolute()
-FSL_FLIRT = '/home/seanho/fsl/bin/flirt'
+FSL_FLIRT = os.getenv("FSL_FLIRT")

@@ -1,8 +1,4 @@
-import os.path
-
 import orjson
-from code_ai.task import CMB_INFERENCE_URL,TIME_OUT,MAX_RETRIES,COUNTDOWN
-
 
 def inference_wmh(self,intput_args,):
     print(f'inference_wmh intput_args {intput_args} ')
@@ -21,6 +17,3 @@ def inference_wmh(self,intput_args,):
                                               temp_task.get('output_path_list')))
             output_json_path_str = list(filter(lambda x: x.endswith('.json'),
                                                temp_task.get('output_path_list')))
-            print('intput_path_str', intput_path_str)
-            print('output_nii_path_str', output_nii_path_str[0])
-            print('output_json_path_str', output_json_path_str[0])

@@ -1,8 +1,7 @@
-import pathlib
 from typing import Dict
 from funboost import BrokerEnum, ConcurrentModeEnum, Booster
 from code_ai.task.schema import intput_params
-from code_ai.utils_inference import Dataset, Analysis, check_study_mapping_inference, generate_output_files, Task, \
+from code_ai.utils_inference import Analysis, check_study_mapping_inference, generate_output_files, Task, \
     InferenceEnum
 from code_ai.task.task_infarct import inference_infarct
 from code_ai.task.task_CMB import inference_cmb

@@ -6,7 +6,7 @@ import pathlib
 import subprocess
 from typing import List, Dict
 
-from funboost import BrokerEnum, Booster, BoosterParams, ConcurrentModeEnum
+from funboost import BrokerEnum, Booster
 from pydicom import dcmread
 
 from code_ai.dicom2nii.convert import ModalityProcessingStrategy, MRAcquisitionTypeProcessingStrategy, \

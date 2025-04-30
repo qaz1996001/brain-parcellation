@@ -100,6 +100,8 @@ def run_convert_nifti_postprocess(output_nifti_path):
     else:
         post_process_manager.post_process(input_path)
 
+
+
 if __name__ == '__main__':
     args = parse_arguments()
     input_dicom_path = args.input_dicom
