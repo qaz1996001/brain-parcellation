@@ -14,13 +14,11 @@ pynvml==12.0.0
 @author: sean Ho
 """
 import glob
-import re
 import shutil
 import warnings
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 from typing import Optional
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
 import argparse
@@ -30,10 +28,10 @@ import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3
-
 from code_ai.pipeline.cmb import CMBServiceTF
 from code_ai.pipeline import study_id_pattern
-
+from dotenv import load_dotenv
+load_dotenv()
 
 def get_study_id(file_name:str) -> Optional[str]:
     result = study_id_pattern.match(file_name)
@@ -81,7 +79,9 @@ def pipeline_cmb(ID :str,
         handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_n)  # 获取GPU i的handle，后续通过handle来处理
         memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通过handle获取GPU i的信息
         gpumRate = memoryInfo.used / memoryInfo.total
-        # print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
+        print('used',memoryInfo.used)
+        print('total', memoryInfo.total)
+        print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
 
         if gpumRate < 0.6:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
@@ -183,23 +183,25 @@ if __name__ == '__main__':
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
-    path_code     = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
-    path_process  = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
-    path_processModel = os.path.join(path_process, 'Deep_CMB')  # 前處理dicom路徑(test case)
-    path_json     = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
-    path_log      = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
-    path_synthseg = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
+
+    path_code         = os.getenv("PATH_CODE")
+    path_process      = os.getenv("PATH_PROCESS")
+    path_processModel = os.path.join(path_process, 'Deep_CMB')
+    path_json         = os.getenv("PATH_JSON")
+    path_log          = os.getenv("PATH_LOG")
+    path_synthseg     = os.getenv("PATH_SYNTHSEG")
+
+    # path_code     = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
+    # path_process  = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
+    # path_processModel = os.path.join(path_process, 'Deep_CMB')  # 前處理dicom路徑(test case)
+    # path_json     = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
+    # path_log      = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
+    # path_synthseg = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
 
     gpu_n = 0  # 使用哪一顆gpu
 
     swan_path_str = Inputs[0]
     t1_path_str = Inputs[1]
-
-    # 這裡先沒有dicom
-    # path_json = '/mnt/d/wsl_ubuntu/pipeline/chuan/json/'  #存放json的路徑，回傳執行結果
-    # json_path_name = os.path.join(path_json, 'Pred_Infarct.json')
-    # path_log = '/mnt/d/wsl_ubuntu/pipeline/chuan/log/'  #log資料夾
-    # cuatom_model = '/mnt/d/wsl_ubuntu/pipeline/chuan/code/model_weights/Unet-0194-0.17124-0.14731-0.86344.h5'  #model路徑+檔案
 
     # 建置資料夾
     os.makedirs(path_processModel,exist_ok=True) # 如果資料夾不存在就建立，製作nii資料夾

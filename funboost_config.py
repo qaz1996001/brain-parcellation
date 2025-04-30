@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 import logging
 from pathlib import Path
-import pytz
-from funboost.constant import BrokerEnum, ConcurrentModeEnum
-from funboost.core.func_params_model import FunctionResultStatusPersistanceConfig
 from funboost.utils.simple_data_class import DataClassBase
 from nb_log import nb_log_config_default
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 '''
 funboost_config.py 文件是第一次运行框架自动生成到你的项目根目录的，不需要用由户手动创建。
@@ -31,68 +31,83 @@ class BrokerConnConfig(DataClassBase):
 
     MONGO_CONNECT_URL = f'mongodb://127.0.0.1:27017'  # 如果有密码连接 'mongodb://myUserAdmin:8mwTdy1klnSYepNo@192.168.199.202:27016/'   authSource 指定鉴权db，MONGO_CONNECT_URL = 'mongodb://root:123456@192.168.64.151:27017?authSource=admin'
 
-    RABBITMQ_USER = 'guest'
-    RABBITMQ_PASS = 'guest'
-    RABBITMQ_HOST = '127.0.0.1'
-    RABBITMQ_PORT = 5672
-    RABBITMQ_VIRTUAL_HOST = 'celery'  # my_host # 这个是rabbitmq的虚拟子host用户自己创建的，如果你想直接用rabbitmq的根host而不是使用虚拟子host，这里写 空字符串 即可。
+    # PYTHON3 = os.getenv("PYTHON3")
+    # RABBITMQ_USER = 'guest'
+    # RABBITMQ_PASS = 'guest'
+    # RABBITMQ_HOST = '127.0.0.1'
+    # RABBITMQ_PORT = 5672
+    # RABBITMQ_VIRTUAL_HOST = 'celery'  # my_host # 这个是rabbitmq的虚拟子host用户自己创建的，如果你想直接用rabbitmq的根host而不是使用虚拟子host，这里写 空字符串 即可。
+    # PYTHON3 = os.getenv("PYTHON3")
+    RABBITMQ_USER = os.getenv("RABBITMQ_USER")
+    RABBITMQ_PASS = os.getenv("RABBITMQ_PASS")
+    RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
+    RABBITMQ_PORT = os.getenv("RABBITMQ_PORT")
+    RABBITMQ_VIRTUAL_HOST = os.getenv("RABBITMQ_VIRTUAL_HOST")
     RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}/{RABBITMQ_VIRTUAL_HOST}'
 
-    REDIS_HOST = '127.0.0.1'
-    REDIS_USERNAME = ''
-    REDIS_PASSWORD = ''
-    REDIS_PORT = 10079
-    REDIS_DB = 2  # redis消息队列所在db，请不要在这个db放太多其他键值对，框架里面有的功能会scan扫描unacked的键名，使用单独的db。
-    REDIS_DB_FILTER_AND_RPC_RESULT = 3  # 如果函数做任务参数过滤 或者使用rpc获取结果，使用这个db，因为这个db的键值对多，和redis消息队列db分开
+    # REDIS_HOST = '127.0.0.1'
+    # REDIS_USERNAME = ''
+    # REDIS_PASSWORD = ''
+    # REDIS_PORT = 10079
+    # REDIS_DB = 2  # redis消息队列所在db，请不要在这个db放太多其他键值对，框架里面有的功能会scan扫描unacked的键名，使用单独的db。
+    # REDIS_DB_FILTER_AND_RPC_RESULT = 3  # 如果函数做任务参数过滤 或者使用rpc获取结果，使用这个db，因为这个db的键值对多，和redis消息队列db分开
+
+    REDIS_HOST     = os.getenv("REDIS_HOST")
+    REDIS_USERNAME = os.getenv("REDIS_USERNAME")
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+    REDIS_PORT     = os.getenv("REDIS_PORT")
+    REDIS_DB       = os.getenv("REDIS_DB")
+    REDIS_DB_FILTER_AND_RPC_RESULT = os.getenv("REDIS_DB_FILTER_AND_RPC_RESULT")
+
     REDIS_URL = f'redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
 
-    NSQD_TCP_ADDRESSES = ['127.0.0.1:4150']
-    NSQD_HTTP_CLIENT_HOST = '127.0.0.1'
-    NSQD_HTTP_CLIENT_PORT = 4151
+    # NSQD_TCP_ADDRESSES = ['127.0.0.1:4150']
+    # NSQD_HTTP_CLIENT_HOST = '127.0.0.1'
+    # NSQD_HTTP_CLIENT_PORT = 4151
 
-    KAFKA_BOOTSTRAP_SERVERS = ['127.0.0.1:9092']
-    KFFKA_SASL_CONFIG = {
-        "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
-        "sasl_plain_username": "",
-        "sasl_plain_password": "",
-        "sasl_mechanism": "SCRAM-SHA-256",
-        "security_protocol": "SASL_PLAINTEXT",
-    }
+    # KAFKA_BOOTSTRAP_SERVERS = ['127.0.0.1:9092']
+    # KFFKA_SASL_CONFIG = {
+    #     "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
+    #     "sasl_plain_username": "",
+    #     "sasl_plain_password": "",
+    #     "sasl_mechanism": "SCRAM-SHA-256",
+    #     "security_protocol": "SASL_PLAINTEXT",
+    # }
 
-    SQLACHEMY_ENGINE_URL = 'sqlite:////sqlachemy_queues/queues.db'
+    # SQLACHEMY_ENGINE_URL = 'sqlite:////sqlachemy_queues/queues.db'
 
     # 如果broker_kind 使用 peewee 中间件模式会使用mysql配置
-    MYSQL_HOST = '127.0.0.1'
-    MYSQL_PORT = 3306
-    MYSQL_USER = 'root'
-    MYSQL_PASSWORD = '123456'
-    MYSQL_DATABASE = 'testdb6'
+    # MYSQL_HOST = '127.0.0.1'
+    # MYSQL_PORT = 3306
+    # MYSQL_USER = 'root'
+    # MYSQL_PASSWORD = '123456'
+    # MYSQL_DATABASE = 'testdb6'
 
     # persist_quque中间件时候采用本机sqlite的方式，数据库文件生成的位置,如果linux账号在根目录没权限建文件夹，可以换文件夹。
-    SQLLITE_QUEUES_PATH = '/sqllite_queues'
+    # SQLLITE_QUEUES_PATH = '/sqllite_queues'
 
-    TXT_FILE_PATH = Path(__file__).parent / 'txt_queues'  # 不建议使用这个txt模拟消息队列中间件，本地持久化优先选择 PERSIST_QUQUE 中间件。
+    # TXT_FILE_PATH = Path(__file__).parent / 'txt_queues'  # 不建议使用这个txt模拟消息队列中间件，本地持久化优先选择 PERSIST_QUQUE 中间件。
 
-    ROCKETMQ_NAMESRV_ADDR = '192.168.199.202:9876'
+    # ROCKETMQ_NAMESRV_ADDR = '192.168.199.202:9876'
 
-    MQTT_HOST = '127.0.0.1'
-    MQTT_TCP_PORT = 1883
+    # MQTT_HOST = '127.0.0.1'
+    # MQTT_TCP_PORT = 1883
 
-    HTTPSQS_HOST = '127.0.0.1'
-    HTTPSQS_PORT = '1218'
-    HTTPSQS_AUTH = '123456'
+    # HTTPSQS_HOST = '127.0.0.1'
+    # HTTPSQS_PORT = '1218'
+    # HTTPSQS_AUTH = '123456'
 
-    NATS_URL = 'nats://192.168.6.134:4222'
+    # NATS_URL = 'nats://192.168.6.134:4222'
 
-    KOMBU_URL = 'redis://127.0.0.1:6379/9'  # 这个就是celery依赖包kombu使用的消息队列格式，所以funboost支持一切celery支持的消息队列种类。
+    # KOMBU_URL = 'redis://127.0.0.1:6379/9'  # 这个就是celery依赖包kombu使用的消息队列格式，所以funboost支持一切celery支持的消息队列种类。
     # KOMBU_URL =  'sqla+sqlite:////dssf_kombu_sqlite.sqlite'  # 4个//// 代表磁盘根目录下生成一个文件。推荐绝对路径。3个///是相对路径。
 
-    CELERY_BROKER_URL = 'redis://127.0.0.1:10079/12'  # 使用celery作为中间件。funboost新增支持celery框架来运行函数,url内容就是celery的broker形式.
-    CELERY_RESULT_BACKEND = 'redis://127.0.0.1:10079/13'  # celery结果存放，可以为None
+    # CELERY_BROKER_URL = 'redis://127.0.0.1:10079/12'  # 使用celery作为中间件。funboost新增支持celery框架来运行函数,url内容就是celery的broker形式.
+    # CELERY_RESULT_BACKEND = 'redis://127.0.0.1:10079/13'  # celery结果存放，可以为None
 
-    DRAMATIQ_URL = RABBITMQ_URL
+    # DRAMATIQ_URL = RABBITMQ_URL
 
-    PULSAR_URL = 'pulsar://192.168.70.128:6650'
+    # PULSAR_URL = 'pulsar://192.168.70.128:6650'
 
 
 class FunboostCommonConfig(DataClassBase):
@@ -102,7 +117,7 @@ class FunboostCommonConfig(DataClassBase):
         f'%(asctime)s-({nb_log_config_default.computer_ip},{nb_log_config_default.computer_name})-[p%(process)d_t%(thread)d] - %(name)s - "%(filename)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(task_id)s - %(message)s',
         "%Y-%m-%d %H:%M:%S",)   # 这个是带task_id的日志模板,日志可以显示task_id,方便用户串联起来排查某一个任务消息的所有日志.
 
-    TIMEZONE = 'Asia/Shanghai'  # 时区
+    TIMEZONE = 'Asia/Taipei'  # 时区
 
     # 以下配置是修改funboost的一些命名空间和启动时候的日志级别,新手不熟练就别去屏蔽日志了
     SHOW_HOW_FUNBOOST_CONFIG_SETTINGS = True  # 如果你单纯想屏蔽 "分布式函数调度框架会自动导入funboost_config模块当第一次运行脚本时候，函数调度框架会在你的python当前项目的根目录下 ...... "  这句话,

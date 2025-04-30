@@ -40,6 +40,7 @@ if __name__ == '__main__':
     fire.Fire(BoosterFire, )
     BoostersManager.multi_process_consume_all_queues(1)
 
+
 '''
 
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  push test_find_queue1 --x=1 --y=2
