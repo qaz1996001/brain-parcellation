@@ -33,14 +33,14 @@ def tes_pipeline_save_file_tasks():
             save_mode       = save_mode,
             save_file_path  = save_file_path,
         )
+        if save_file_path.exists() and save_file_path.stat().st_size > 102400 :
+            continue
         save_file_tasks.push(task_params.get_str_dict())
 
 
 
 if __name__ == '__main__':
     tes_pipeline_save_file_tasks()
-    import tensorflow as tf
-    devices = tf.config.experimental.list_physical_devices()
     # from funboost import AsyncResult
     # result = AsyncResult(task_id='c3fa5495-8ee7-4690-a5c5-a214607696ab')
     # print(result)

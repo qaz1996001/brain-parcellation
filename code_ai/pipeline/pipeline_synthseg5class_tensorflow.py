@@ -79,12 +79,10 @@ def pipeline_synthseg(ID :str,
         gpumRate = memoryInfo.used / memoryInfo.total
         # print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
 
-        if gpumRate < 0.6:
+        if gpumRate < 0.7:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
             # 一些記憶體的配置
             autotune = tf.data.experimental.AUTOTUNE
-            # print(keras.__version__)
-            # print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
             tf.config.experimental.set_visible_devices(devices=gpus[gpu_n], device_type='GPU')
             # print(gpus, cpus)

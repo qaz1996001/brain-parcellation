@@ -20,6 +20,10 @@ def test_pipeline_flirt():
         input_file         = study_path.joinpath('synthseg_ASLPROD_original_synthseg5.nii.gz')
         template_file      = study_path.joinpath('synthseg_T1BRAVO_AXI_original_CMB.nii.gz')
         coregistration_mat = study_path.joinpath('synthseg_ASLPROD_original_synthseg5_from_synthseg_T1BRAVO_AXI_original_synthseg5.mat')
+        # synthseg_ASLPROD_original_CMB_from_synthseg_T1BRAVO_AXI_original_CMB.nii.gz
+        output_coregistration_path = study_path.joinpath('synthseg_ASLPROD_original_CMB_from_synthseg_T1BRAVO_AXI_original_CMB.nii.gz')
+        if output_coregistration_path.exists():
+            continue
         if input_file.exists() and template_file.exists() and coregistration_mat.exists():
             func_params = {'input_file': str(input_file),
                            'template_file': str(template_file),

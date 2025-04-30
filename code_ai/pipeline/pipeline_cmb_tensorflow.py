@@ -166,11 +166,16 @@ if __name__ == '__main__':
                         help='目前執行的case的patient_id or study id')
 
     parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=['/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/SWAN.nii.gz',
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz', ],
+                        default=['/mnt/d/wsl_ubuntu/pipeline/sean/rename_nii/12292196_20200223_MR_20902230007/SWAN.nii.gz',
+                                 '/mnt/d/wsl_ubuntu/pipeline/sean/rename_nii/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz', ],
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
+    parser.add_argument('--InputsDicomDir', type=str, nargs='+',
+                        default=[
+                            '/mnt/d/wsl_ubuntu/pipeline/sean/rename_dicom/12292196_20200223_MR_20902230007/SWAN',
+                            '/mnt/d/wsl_ubuntu/pipeline/sean/rename_dicom/12292196_20200223_MR_20902230007/T1FLAIR_AXI', ],
+                        help='用於輸入的檔案')
 
     args = parser.parse_args()
 
@@ -205,4 +210,7 @@ if __name__ == '__main__':
     # 直接當作function的輸入
     pipeline_cmb(ID, swan_path_str, t1_path_str, path_output, path_code, path_processModel,
                      path_json, path_log, path_synthseg, gpu_n)
+    # dicom_seg()
+    # upload_dicom_seg()
+    # upload_json()
 
