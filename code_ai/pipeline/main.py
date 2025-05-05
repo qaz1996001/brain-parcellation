@@ -670,7 +670,8 @@ def main(args):
                                                                             dwi_file_list[i],
                                                                             argmin)
                 if args.wmh:
-                    wmh_array = run_wmh(synthseg_array=synthseg_array, synthseg_array_wm=synthseg_array_wm,
+                    wmh_array = run_wmh(synthseg_array=synthseg_array,
+                                        synthseg_array_wm=synthseg_array_wm,
                                         depth_number=depth_number)
                     out_nib = nib.Nifti1Image(wmh_array, synthseg_nii.affine, synthseg_nii.header)
                     nib.save(out_nib, wmh_file_list[i])

@@ -122,4 +122,5 @@ if __name__ == '__main__':
                                                         output_study_set=output_study_set,
                                                         output_path=output_nifti_path)
             run_convert_nifti_postprocess(nifti_output_study_set)
-
+            str_list = list(map(lambda x:str(x), nifti_output_study_set))
+            print('nifti_output_study_set',','.join(str_list),'nifti_output_study_set')

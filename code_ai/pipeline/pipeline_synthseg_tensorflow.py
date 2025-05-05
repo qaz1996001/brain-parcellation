@@ -134,7 +134,6 @@ def pipeline_synthseg(ID :str,
     return
 
 
-# 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
@@ -146,11 +145,6 @@ if __name__ == '__main__':
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
-    # parser.add_argument('--Inputs', type=str, nargs='+', default = ['/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/ADC.nii.gz',
-    #                                                                  '/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/DWI0.nii.gz',
-    #                                                                    '/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/DWI1000.nii.gz',
-    #                                                                      '/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/synthseg_DWI0_original_DWI.nii.gz'], help='用於輸入的檔案')
-    # parser.add_argument('--Output_folder', type=str, default = '/mnt/d/wsl_ubuntu/pipeline/chuan/example_output/',help='用於輸出結果的資料夾')
 
     args = parser.parse_args()
 

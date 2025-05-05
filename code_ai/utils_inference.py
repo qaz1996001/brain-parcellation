@@ -25,10 +25,10 @@ class Task(BaseModel):
 
 class Analysis(BaseModel):
     study_id: str
+    Area: Optional[Task] = None
     DWI: Optional[Task] = None
     WMH_PVS: Optional[Task] = None
     CMB: Optional[Task] = None
-    Area: Optional[Task] = None
     AneurysmSynthSeg: Optional[Task] = None
     Infarct: Optional[Task] = None
     WMH: Optional[Task] = None
@@ -75,7 +75,9 @@ model_mapping_series_dict = {
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
     # InferenceEnum.CMBSynthSeg
-    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,MRSeriesRenameEnum.DWI1000,MRSeriesRenameEnum.ADC],
+
+    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,MRSeriesRenameEnum.DWI1000,MRSeriesRenameEnum.ADC,]
+                             # MRSeriesRenameEnum.synthseg_DWI0_original_DWI],
                             ],
     InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
                          ]],
@@ -125,12 +127,7 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
                 result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
-                # if model_name == InferenceEnum.CMB:
-                #
-                #     print('model_name', model_name, model_mapping_series_list)
-                #     print('mapping_series_str',mapping_series_str)
-                #     print('df_file[file_name]', df_file['file_name'])
-                #     print('result',result)
+
 
                 if result[0].shape[0] >= len(mapping_series_str):
                     df_result = df_file.iloc()[result[1]]
@@ -279,6 +276,15 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
 
 
 
+def build_infarct_input_post_process(input_paths) -> List[Union[pathlib.Path,str]]:
+    input_name_list = list(map(lambda x: replace_suffix(os.path.basename(x),''), input_paths))
+    for mapping_series in model_mapping_series_dict[InferenceEnum.Infarct]:
+        mapping_series_str = list(map(lambda x: x.value, mapping_series))
+        result = np.intersect1d(input_name_list, mapping_series_str, return_indices=True)
+        if result[0].shape[0] == 3:
+            input_paths.append(input_paths[0].replace('ADC.nii.gz','synthseg_DWI0_original_DWI.nii.gz'))
+    return input_paths
+
 
 def build_analysis(study_path: pathlib.Path):
     mapping_inference = check_study_mapping_inference(study_path)
@@ -287,6 +293,10 @@ def build_analysis(study_path: pathlib.Path):
     for task_dict in model_dict_values:
         tasks = {}
         for model_name, input_paths in task_dict.items():
+            if model_name == InferenceEnum.Infarct:
+
+                input_paths = build_infarct_input_post_process(input_paths)
+
             task_output_files = generate_output_files(input_paths,
                                                       model_name,
                                                       str(study_path))

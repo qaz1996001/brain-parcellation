@@ -37,6 +37,7 @@ class MRSeriesRenameEnum(BaseEnum):
     ADC = 'ADC'
     DWI = 'DWI'
     DWI0 = 'DWI0'
+    synthseg_DWI0_original_DWI = 'synthseg_DWI0_original_DWI'
     DWI1000 = 'DWI1000'
     B_VALUES_1000 = '1000'
     B_VALUES_0 = '0'
