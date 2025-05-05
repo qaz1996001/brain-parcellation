@@ -1,11 +1,12 @@
 import argparse
+import json
 import os
 import pathlib
 import re
 import subprocess
-from typing import List,Optional
-from code_ai import PYTHON3,PATH_DICOM2NII
-from code_ai.utils_inference import build_analysis, Analysis, InferenceEnum
+from typing import Optional
+from code_ai import PYTHON3
+from code_ai.utils_inference import build_inference_cmd
 
 
 def build_dicom_to_nifti_cmd_str(args) -> Optional[str]:
@@ -52,16 +53,6 @@ def build_dicom_to_nifti_cmd_str(args) -> Optional[str]:
     return cmd_str
 
 
-def build_inference_cmd_str(nifti_study_path :pathlib.Path) -> Optional[str]:
-    from code_ai.pipeline import pipelines
-    analysis :Analysis = build_analysis(nifti_study_path)
-    # 使用管道配置
-    cmd_list = []
-    for key, value in analysis.model_dump().items():
-        if key in pipelines:
-            task = getattr(analysis,key)
-            cmd_str = pipelines[key].generate_cmd(analysis.study_id,task)
-            cmd_list.append((key, cmd_str))
 
 
 if __name__ == '__main__':
@@ -76,6 +67,17 @@ if __name__ == '__main__':
                              "--output_nifti output_nifti_path")
 
     args = parser.parse_args()
+
+    path_code = os.getenv("PATH_CODE")
+    path_process = os.getenv("PATH_PROCESS")
+    path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
+    path_json = os.getenv("PATH_JSON")
+    path_log = os.getenv("PATH_LOG")
+    # 建置資料夾
+    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
+
     dicom_to_nifti_cmd_str = build_dicom_to_nifti_cmd_str(args=args)
 
     process = subprocess.Popen(args=dicom_to_nifti_cmd_str, shell=True,
@@ -88,9 +90,13 @@ if __name__ == '__main__':
     match_result.groups()
     if match_result is not None :
         study_str:str = match_result.groups()[0]
-        print('study_str',study_str)
         study_str_list = study_str.split(',')
         nifti_study_list = list(map(lambda x:pathlib.Path(x),study_str_list))
-        print('nifti_study_list', nifti_study_list)
-        inference_cmd_str_list = list(map(lambda x:build_inference_cmd_str(x),nifti_study_list))
+        inference_item_cmd_list = list(map(lambda x:build_inference_cmd(x), nifti_study_list))
+        print('inference_item_cmd', inference_item_cmd_list)
+        for inference_item_cmd in inference_item_cmd_list:
+            cmd_output_path = os.path.join(path_cmd_tools,f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json')
+            with open(cmd_output_path, 'w') as f:
+                f.write(json.dumps(inference_item_cmd.model_dump()['cmd_items']))
+
 

@@ -3,7 +3,7 @@ import enum
 import os
 import pathlib
 import re
-from typing import List,  Dict, Optional, Tuple, Union
+from typing import List, Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -12,8 +12,19 @@ from code_ai.dicom2nii.convert.config import T1SeriesRenameEnum, MRSeriesRenameE
 
 
 
-class Result(BaseModel):
-    output_file: List[str]
+
+
+class InferenceCmdItem(BaseModel):
+    study_id : str
+    name: str
+    cmd_str: str
+    input_list: List[str]
+    output_list: List[str]
+
+
+class InferenceCmd(BaseModel):
+    cmd_items : List[InferenceCmdItem]
+
 
 
 class Task(BaseModel):
@@ -35,11 +46,6 @@ class Analysis(BaseModel):
     Aneurysm: Optional[Task] = None
 
 
-class Dataset(BaseModel):
-    # analyses: Dict[str, Analysis]
-    analyses: Dict[str, Analysis]
-
-
 class InferenceEnum(str, enum.Enum):
     SynthSeg = 'SynthSeg'
     Area = 'Area'
@@ -55,14 +61,13 @@ class InferenceEnum(str, enum.Enum):
     Aneurysm = 'Aneurysm'
 
 
-
 model_mapping_series_dict = {
     InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
                          [T1SeriesRenameEnum.T1BRAVO_SAG, ],
                          [T1SeriesRenameEnum.T1BRAVO_COR, ],
                          [T1SeriesRenameEnum.T1FLAIR_AXI, ],
                          [T1SeriesRenameEnum.T1FLAIR_SAG, ],
-                         [T1SeriesRenameEnum.T1FLAIR_COR, ],],
+                         [T1SeriesRenameEnum.T1FLAIR_COR, ], ],
     InferenceEnum.DWI: [
         #[MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1BRAVO_AXI,],
         # [MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1FLAIR_AXI,],
@@ -76,8 +81,8 @@ model_mapping_series_dict = {
                         ],
     # InferenceEnum.CMBSynthSeg
 
-    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0,MRSeriesRenameEnum.DWI1000,MRSeriesRenameEnum.ADC,]
-                             # MRSeriesRenameEnum.synthseg_DWI0_original_DWI],
+    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0, MRSeriesRenameEnum.DWI1000, MRSeriesRenameEnum.ADC, ]
+                            # MRSeriesRenameEnum.synthseg_DWI0_original_DWI],
                             ],
     InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
                          ]],
@@ -86,11 +91,10 @@ model_mapping_series_dict = {
                               ]]
 }
 
-
 study_id_pattern = re.compile('^[0-9]{8}_[0-9]{8}_(MR|CT|CR|PR).*$', re.IGNORECASE)
 
 
-def get_file_list(input_path:pathlib.Path, suffixes:str, filter_name=None) -> List[pathlib.Path]:
+def get_file_list(input_path: pathlib.Path, suffixes: str, filter_name=None) -> List[pathlib.Path]:
     if any(suffix in input_path.suffixes for suffix in suffixes):
         file_list = [input_path]
     else:
@@ -100,9 +104,9 @@ def get_file_list(input_path:pathlib.Path, suffixes:str, filter_name=None) -> Li
     return file_list
 
 
-def prepare_output_file_list(file_list:List[pathlib.Path],
-                             suffix:str,
-                             output_dir :Optional[pathlib.Path] =None) -> List[pathlib.Path]:
+def prepare_output_file_list(file_list: List[pathlib.Path],
+                             suffix: str,
+                             output_dir: Optional[pathlib.Path] = None) -> List[pathlib.Path]:
     return [
         output_dir.joinpath(replace_suffix(f'{x.name}', suffix)) if output_dir else x.parent.joinpath(
             replace_suffix(x.name, suffix)) for x in file_list]
@@ -111,7 +115,7 @@ def prepare_output_file_list(file_list:List[pathlib.Path],
     #         replace_suffix(x.name, suffix)) for x in file_list]
 
 
-def replace_suffix(filename:str, new_suffix:str,pattern = r'\.nii\.gz$|\.nii$'):
+def replace_suffix(filename: str, new_suffix: str, pattern=r'\.nii\.gz$|\.nii$'):
     return re.sub(pattern, new_suffix, filename)
 
 
@@ -127,7 +131,6 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
                 result = np.intersect1d(df_file['file_name'], mapping_series_str, return_indices=True)
-
 
                 if result[0].shape[0] >= len(mapping_series_str):
                     df_result = df_file.iloc()[result[1]]
@@ -205,8 +208,7 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
     return output_files
 
 
-
-def build_Area(mode,file_dict) -> Tuple :
+def build_Area(mode, file_dict) -> Tuple:
     """
     Build Area model based on input files.
 
@@ -227,10 +229,10 @@ def build_Area(mode,file_dict) -> Tuple :
     args.synthseg33_file_list = prepare_output_file_list(args.resample_file_list, '_synthseg33.nii.gz', output_path)
     args.david_file_list = prepare_output_file_list(args.resample_file_list, '_david.nii.gz', output_path)
     args.wm_file_list = prepare_output_file_list(args.resample_file_list, '_wm.nii.gz', output_path)
-    return args,args.intput_file_list
+    return args, args.intput_file_list
 
 
-def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
+def get_synthseg_args_file(inference_name, file_dict) -> Tuple:
     """
         args
         args.cmb = False
@@ -250,7 +252,7 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
     output_path = pathlib.Path(file_dict['output_path'])
     match inference_name:
         case InferenceEnum.WMH_PVS:
-            args,file_list = build_Area('wmh',file_dict)
+            args, file_list = build_Area('wmh', file_dict)
             args.wmh_file_list = prepare_output_file_list(args.resample_file_list, '_WMHPVS.nii.gz', output_path)
             return args, file_list
         case InferenceEnum.WMH_PVS:
@@ -266,23 +268,22 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple :
             args.cmb_file_list = prepare_output_file_list(args.resample_file_list, '_CMB.nii.gz', output_path)
             return args, file_list
         case InferenceEnum.Area:
-            args,file_list = build_Area('wm_file',file_dict)
+            args, file_list = build_Area('wm_file', file_dict)
             return args, file_list
         case InferenceEnum.Aneurysm:
             args, file_list = build_Area('wm_file', file_dict)
             return args, file_list
         case _:
-            return ( None, None )
+            return (None, None)
 
 
-
-def build_infarct_input_post_process(input_paths) -> List[Union[pathlib.Path,str]]:
-    input_name_list = list(map(lambda x: replace_suffix(os.path.basename(x),''), input_paths))
+def build_infarct_input_post_process(input_paths) -> List[Union[pathlib.Path, str]]:
+    input_name_list = list(map(lambda x: replace_suffix(os.path.basename(x), ''), input_paths))
     for mapping_series in model_mapping_series_dict[InferenceEnum.Infarct]:
         mapping_series_str = list(map(lambda x: x.value, mapping_series))
         result = np.intersect1d(input_name_list, mapping_series_str, return_indices=True)
         if result[0].shape[0] == 3:
-            input_paths.append(input_paths[0].replace('ADC.nii.gz','synthseg_DWI0_original_DWI.nii.gz'))
+            input_paths.append(input_paths[0].replace('ADC.nii.gz', 'synthseg_DWI0_original_DWI.nii.gz'))
     return input_paths
 
 
@@ -294,7 +295,6 @@ def build_analysis(study_path: pathlib.Path):
         tasks = {}
         for model_name, input_paths in task_dict.items():
             if model_name == InferenceEnum.Infarct:
-
                 input_paths = build_infarct_input_post_process(input_paths)
 
             task_output_files = generate_output_files(input_paths,
@@ -308,3 +308,24 @@ def build_analysis(study_path: pathlib.Path):
 
     analyses = Analysis(study_id=study_id, **tasks)
     return analyses
+
+
+def build_inference_cmd(nifti_study_path: pathlib.Path) -> Optional[
+    InferenceCmd]:  #-> Optional[List[Tuple[str,str]]]:
+    from code_ai.pipeline import pipelines
+    analysis: Analysis = build_analysis(nifti_study_path)
+    # 使用管道配置
+    inference_item_list = []
+    for key, value in analysis.model_dump().items():
+        if key in pipelines:
+            task = getattr(analysis, key)
+            cmd_str = pipelines[key].generate_cmd(analysis.study_id, task)
+            inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
+                                              cmd_str=cmd_str,
+                                              input_list=task.input_path_list,
+                                              output_list=task.output_path_list,
+                                              )
+            # (key, cmd_str,analysis.Infarct.input_path_list,analysis.Infarct.output_path_list)
+            inference_item_list.append(inference_item)
+
+    return InferenceCmd(cmd_items=inference_item_list)
