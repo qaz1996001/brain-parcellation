@@ -38,32 +38,21 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def run_dicom_rename_mr(executor: ProcessPoolExecutor,
+def run_dicom_rename_mr(work:int,
                         input_path,
                         output_path
                         ):
     from convert.dicom_rename_mr import ConvertManager
-    start = time.time()
-    # convert_manager = ConvertManager(input_path=input_path, output_path=output_path)
-    # convert_manager.run()
-    with executor:
-        convert_manager = ConvertManager(input_path=input_path, output_path=output_path)
-        convert_manager.run(executor=executor)
-    end = time.time()
-    print(start, end, end - start)
+    convert_manager = ConvertManager(input_path=input_path, output_path=output_path)
+    output_study_set = convert_manager.run_with_work(work)
+    return output_study_set
 
 
-def run_dicom_rename_postprocess(output_dicom_path):
+def run_dicom_rename_postprocess(output_study_set):
     from convert.dicom_rename_mr_postprocess import PostProcessManager
-    input_path = pathlib.Path(output_dicom_path)
-    is_dir_flag = all(list(map(lambda x: x.is_dir(), input_path.iterdir())))
     post_process_manager = PostProcessManager()
-    if is_dir_flag:
-        study_path_list = list(input_path.iterdir())
-        for study_path in study_path_list:
-            post_process_manager.post_process(study_path=study_path)
-    else:
-        post_process_manager.post_process(input_path)
+    for output_study in output_study_set:
+        post_process_manager.post_process(study_path=output_study)
 
 
 def run_list_dicom(output_dicom_path: str):
@@ -72,14 +61,29 @@ def run_list_dicom(output_dicom_path: str):
     list_dicom(data_path=data_path)
 
 
+def convert_dicom_task(converter):
+    return converter.convert_dicom_to_nifti()
+
+
 def run_convert_nifti(executor: ProcessPoolExecutor,
-                      input_path,
+                      output_study_set,
                       output_path
                       ):
     from convert.convert_nifti import Dicm2NiixConverter
+    converter_objects = [Dicm2NiixConverter(input_path=input_path, output_path=output_path)
+                         for input_path in output_study_set]
+
     with executor:
-        converter = Dicm2NiixConverter(input_path=input_path, output_path=output_path)
-        converter.convert_dicom_to_nifti(executor=executor)
+        results = list(executor.map(convert_dicom_task, converter_objects))
+        # 攤平結果
+        flattened_result = set()
+        for result in results:
+            if isinstance(result, set):
+                flattened_result.update(result)
+            else:
+                flattened_result.add(result)
+
+        return flattened_result
 
 
 def run_list_nifti(output_nifti_path: str):
@@ -88,17 +92,11 @@ def run_list_nifti(output_nifti_path: str):
     list_nifti(data_path=data_path)
 
 
-def run_convert_nifti_postprocess(output_nifti_path):
+def run_convert_nifti_postprocess(nifti_output_study_set):
     from convert.convert_nifti_postprocess import PostProcessManager
-    input_path = pathlib.Path(output_nifti_path)
-    is_dir_flag = all(list(map(lambda x: x.is_dir(), input_path.iterdir())))
     post_process_manager = PostProcessManager()
-    if is_dir_flag:
-        study_path_list = list(input_path.iterdir())
-        for study_path in study_path_list:
-            post_process_manager.post_process(study_path=study_path)
-    else:
-        post_process_manager.post_process(input_path)
+    for study_path in nifti_output_study_set:
+        post_process_manager.post_process(study_path=study_path)
 
 
 
@@ -110,18 +108,18 @@ if __name__ == '__main__':
     work_count = args.work
     file_path = pathlib.Path(__file__).absolute().parent
     sys.path.append(str(file_path))
-    if input_dicom_path and output_dicom_path:
-        dicom_work = min(2, max(1, args.work))
-        dicom_rename_executor = ProcessPoolExecutor(max_workers=dicom_work)
-        run_dicom_rename_mr(executor=dicom_rename_executor,
-                            input_path=input_dicom_path,
-                            output_path=output_dicom_path)
-        run_dicom_rename_postprocess(output_dicom_path=output_dicom_path)
+    if input_dicom_path and output_dicom_path and output_nifti_path:
+        dicom_work = min(4, max(1, args.work))
+        output_study_set = run_dicom_rename_mr(work=dicom_work,
+                                               input_path=input_dicom_path,
+                                               output_path=output_dicom_path)
+        run_dicom_rename_postprocess(output_study_set=output_study_set)
 
-    if output_dicom_path and output_nifti_path:
         nii_work = min(4, max(1, args.work))
         convert_nifti_executor = ProcessPoolExecutor(max_workers=nii_work)
-        run_convert_nifti(executor=convert_nifti_executor,
-                          input_path=output_dicom_path,
-                          output_path=output_nifti_path)
-        run_convert_nifti_postprocess(output_nifti_path)
+        if output_study_set is not None:
+            nifti_output_study_set =  run_convert_nifti(executor=convert_nifti_executor,
+                                                        output_study_set=output_study_set,
+                                                        output_path=output_nifti_path)
+            run_convert_nifti_postprocess(nifti_output_study_set)
+

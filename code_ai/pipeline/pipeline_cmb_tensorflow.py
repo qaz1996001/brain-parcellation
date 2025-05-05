@@ -79,9 +79,6 @@ def pipeline_cmb(ID :str,
         handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_n)  # 获取GPU i的handle，后续通过handle来处理
         memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通过handle获取GPU i的信息
         gpumRate = memoryInfo.used / memoryInfo.total
-        print('used',memoryInfo.used)
-        print('total', memoryInfo.total)
-        print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
 
         if gpumRate < 0.6:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過

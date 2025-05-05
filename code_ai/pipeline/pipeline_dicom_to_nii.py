@@ -1,9 +1,9 @@
 import argparse
-import os
 import pathlib
-from typing import List,Optional
-from code_ai import PYTHON3,PATH_DICOM2NII
-from code_ai.utils_inference import build_analysis
+import subprocess
+import sys
+
+from code_ai import PYTHON3
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -21,16 +21,45 @@ if __name__ == '__main__':
         input_dicom_path  = pathlib.Path(args.input_dicom)
         output_dicom_path = pathlib.Path(args.output_dicom)
         output_nifti_path = pathlib.Path(args.output_nifti)
+        cmd_str = ('export PYTHONPATH={} && '
+                   '{} code_ai/dicom2nii/main_call.py '
+                   '--input_dicom {} '
+                   '--output_dicom {} '
+                   '--output_nifti {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                             PYTHON3,
+                                             input_dicom_path,
+                                             output_dicom_path,
+                                             output_nifti_path)
+                   )
 
     elif all((args.input_dicom, args.output_dicom)):
         input_dicom_path = pathlib.Path(args.input_dicom)
         output_dicom_path = pathlib.Path(args.output_dicom)
+        cmd_str = ('export PYTHONPATH={} && '
+                   '{} code_ai/dicom2nii/main_call.py '
+                   '--input_dicom {} '
+                   '--output_dicom {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                               PYTHON3,
+                                               input_dicom_path,
+                                               output_dicom_path,)
+                   )
 
     elif all((args.output_dicom, args.output_nifti)):
         output_dicom_path = pathlib.Path(args.output_dicom)
         output_nifti_path = pathlib.Path(args.output_nifti)
+        cmd_str = ('export PYTHONPATH={} && '
+                   '{} code_ai/dicom2nii/main_call.py '
+                   '--output_dicom {} '
+                   '--output_nifti {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                               PYTHON3,
+                                               output_dicom_path,
+                                               output_nifti_path )
+                   )
+    else:
+        sys.exit(1)
 
-    study_path_list = sorted(output_nifti_path.iterdir())
-    analysis = build_analysis(study_path_list[0])
-    print(analysis)
-    # 00_Chen/Task04_git/code_ai/pipeline/pipeline_dicom_to_nii.sh --input_dicom /mnt/e/raw_dicom/02695350_21210300104  --output_dicom /mnt/e/rename_dicom_20250421/202504211716 --output_nifti /mnt/e/rename_nifti_20250421/202504211716
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    print(stdout,stderr)

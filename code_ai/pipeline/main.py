@@ -449,9 +449,10 @@ def main(args):
         else:
             wmh_file_list = []
 
-        wm_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
+        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
                                 template_resample_file_list))
-
+        wm_file_list    = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_wm.nii.gz')),
+                                   template_resample_file_list))
         resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
                                       file_list))
         synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg.nii.gz')),
@@ -487,8 +488,12 @@ def main(args):
         else:
             wmh_file_list = []
 
-        wm_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
+        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
                                 resample_file_list))
+
+        wm_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_wm.nii.gz')),
+                                   resample_file_list))
+
 
     if args.output:
         out_path = pathlib.Path(args.output)
@@ -497,6 +502,8 @@ def main(args):
         else:
             out_path = out_path.parent
 
+        david_file_list = list(map(lambda x: out_path.joinpath(f'{str(x.parent.name)}_{x.name}'),
+                                david_file_list))
         wm_file_list = list(map(lambda x: out_path.joinpath(f'{str(x.parent.name)}_{x.name}'),
                                 wm_file_list))
         resample_file_list = list(map(lambda x: out_path.joinpath(f'{str(x.parent.name)}_{x.name}'),
@@ -555,7 +562,7 @@ def main(args):
                                                                                 depth_number=depth_number)
                 if args.wm_file:
                     out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
-                    nib.save(out_nib, wm_file_list[i])
+                    nib.save(out_nib, david_file_list[i])
                 if args.cmb:
                     cmb_array = CMBProcess.run(seg_array)
                     out_nib = nib.Nifti1Image(cmb_array, synthseg_nii.affine, synthseg_nii.header)
@@ -632,17 +639,21 @@ def main(args):
                 seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(synthseg_array=synthseg_array,
                                                                                 synthseg33=synthseg33_array,
                                                                                 depth_number=depth_number)
-                out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
+                out_nib = nib.Nifti1Image(synthseg_array_wm, synthseg_nii.affine, synthseg_nii.header)
                 nib.save(out_nib, wm_file_list[i])
+                out_nib = nib.Nifti1Image(seg_array, synthseg_nii.affine, synthseg_nii.header)
+                nib.save(out_nib, david_file_list[i])
                 original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
                                                                         synthseg_file_list[i],
                                                                         argmin)
                 original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
                                                                         synthseg33_file_list[i],
                                                                         argmin)
-
                 original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
                                                                         wm_file_list[i],
+                                                                        argmin)
+                original_seg_file = save_original_seg_by_argmin_z_index(file_list[i],
+                                                                        david_file_list[i],
                                                                         argmin)
                 if args.cmb:
                     cmb_array = CMBProcess.run(seg_array)

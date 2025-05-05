@@ -5,7 +5,7 @@ import pathlib
 import re
 import shutil
 import traceback
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from typing import Tuple, Union, List, Callable
 
 import pydicom.errors
@@ -1957,19 +1957,29 @@ class ConvertManager:
                     else:
                         # print(output_study_instances)
                         shutil.copyfile(instances, output_study_instances)
+                return output_study
         except (pydicom.errors.InvalidDicomError, pydicom.errors.BytesLengthException):
             print(f'except {instances}')
         except:
             print(traceback.format_exc())
             print('Unknown except')
 
-    def run(self, executor: Union[ThreadPoolExecutor, None] = None):
+    def run_with_work(self, work: int):
+        """使用 work 參數運行"""
+        if work > 0:
+            with ProcessPoolExecutor(max_workers=work) as executor:
+                return self.run(executor)
+        else:
+            return self.run(None)
+
+    def run(self, executor: Union[ProcessPoolExecutor, None] = None):
         """Run the DICOM file conversion and renaming process.
 
         Parameters:
         executor (Union[ThreadPoolExecutor, None]): Thread pool executor for parallel processing.
         """
         is_dir_flag = all(list(map(lambda x: x.is_dir(), self.input_path.iterdir())))
+        output_study_set = set()
         if is_dir_flag:
             # for sub_dir in tqdm(list(self.input_path.iterdir()),desc=f'sub dir'):
             for sub_dir in self.input_path.iterdir():
@@ -1978,10 +1988,17 @@ class ConvertManager:
                     # executor.map(self.rename_process, (instances_list,))
                     results = list(tqdm(executor.map(self.rename_process, instances_list), total=len(instances_list),
                                         desc=f'dir:{sub_dir.name}', ))
+                    for result in results:
+                        if isinstance(result, set):
+                            output_study_set.update(result)
+                        else:
+                            output_study_set.add(result)
                 else:
                     for instances in tqdm(instances_list, total=len(instances_list),
                                           desc=f'dir:{sub_dir.name}', ):
-                        self.rename_process(instances=instances)
+                        output_study = self.rename_process(instances=instances)
+                        if output_study not in output_study_set:
+                            output_study_set.add(output_study)
         else:
             instances_list = list(self.input_path.rglob('*.dcm'))
             if executor:
@@ -1989,9 +2006,17 @@ class ConvertManager:
                 results = list(tqdm(executor.map(self.rename_process, instances_list),
                                     total=len(instances_list), desc=f'dir:{self.input_path.name}'),
                                )
+                for result in results:
+                    if isinstance(result, set):
+                        output_study_set.update(result)
+                    else:
+                        output_study_set.add(result)
             else:
                 for instances in tqdm(instances_list):
-                    self.rename_process(instances=instances)
+                    output_study = self.rename_process(instances=instances)
+                    if output_study not in output_study_set:
+                        output_study_set.add(output_study)
+        return output_study_set
 
     @property
     def input_path(self):

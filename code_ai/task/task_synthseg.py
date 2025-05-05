@@ -182,7 +182,7 @@ def save_file_tasks(func_params  : Dict[str,any]):
     save_mode = task_params.save_mode
     save_file_path = task_params.save_file_path
 
-    if save_file_path.exists():
+    if save_file_path.exists() and save_file_path.stat().st_size > 20240:
         return save_file_path
     else:
         cmd_str = ('export PYTHONPATH={} && '
@@ -237,11 +237,40 @@ def post_process_synthseg_task(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
+@Booster('call_pipeline_synthseg_tensorflow_queue',
+         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+         concurrent_mode=ConcurrentModeEnum.SOLO,
+         concurrent_num=5,
+         qps=1,
+         is_send_consumer_hearbeat_to_redis=True,
+         is_push_to_dlx_queue_when_retry_max_times=True,
+         is_using_rpc_mode=True)
+def call_pipeline_synthseg_tensorflow(func_params  : Dict[str,any]):
+    ID = func_params['ID']
+    Inputs = ','.join(func_params['Inputs'])
+    Output_folder = func_params['Output_folder']
+    cmd_str = ('export PYTHONPATH={} && '
+               '{} code_ai/pipeline/pipeline_synthseg_tensorflow.py '
+               '--ID {} '
+               '--Inputs {} '
+               '--Output_folder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                              PYTHON3,
+                                              ID,
+                                              Inputs,
+                                              Output_folder, )
+               )
+    print('cmd_str',cmd_str)
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    return stdout,stderr
 
+# 16784400_20240918
 @Booster('call_pipeline_synthseg5class_tensorflow',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          concurrent_mode=ConcurrentModeEnum.SOLO,
-         concurrent_num=10,
+         concurrent_num=5,
          qps=1,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
@@ -271,7 +300,7 @@ def call_pipeline_synthseg5class_tensorflow(func_params  : Dict[str,any]):
 @Booster('call_pipeline_flirt',
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          concurrent_mode=ConcurrentModeEnum.THREADING,
-         concurrent_num=10,
+         concurrent_num=6,
          qps=1,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
@@ -314,7 +343,7 @@ def call_pipeline_flirt(func_params  : Dict[str,any]):
          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
          concurrent_mode=ConcurrentModeEnum.THREADING,
          concurrent_num = 10,
-         qps=5,
+         qps=1,
          is_send_consumer_hearbeat_to_redis=True,
          is_push_to_dlx_queue_when_retry_max_times=True,
          is_using_rpc_mode=True)

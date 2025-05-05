@@ -223,16 +223,21 @@ def process_instances(func_params  : Dict[str,any]):
 
 def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
     instances_list = list(sub_dir.rglob('*.dcm'))
-    if len(instances_list) > 0:
+    if len(instances_list) == 0:
+        instances_list = sorted(sub_dir.rglob('*'))
+        instances_list = list(filter(lambda x: x.is_file(), instances_list))
         instance_path: pathlib.Path = instances_list[0]
-        with open(instance_path, mode='rb') as dcm:
-            dicom_ds = dcmread(dcm, stop_before_pixels=True)
-            study_folder_name = get_study_folder_name(dicom_ds)
-            study_folder_path = output_dicom_path.joinpath(study_folder_name)
-            file_processing(func_params = dict(study_folder_path=study_folder_path,
-                                               post_process_manager=ConvertManager.dicom_post_process_manager))
-            dicom_study_folder_path = study_folder_path
-        return dicom_study_folder_path
+    else:
+        instance_path: pathlib.Path = instances_list[0]
+
+    with open(instance_path, mode='rb') as dcm:
+        dicom_ds = dcmread(dcm, stop_before_pixels=True)
+        study_folder_name = get_study_folder_name(dicom_ds)
+        study_folder_path = output_dicom_path.joinpath(study_folder_name)
+        file_processing(func_params = dict(study_folder_path=study_folder_path,
+                                           post_process_manager=ConvertManager.dicom_post_process_manager))
+        dicom_study_folder_path = study_folder_path
+    return dicom_study_folder_path
 
 
 @Booster('process_dir_queue',
@@ -247,8 +252,17 @@ def process_dir(func_params  : Dict[str,any]):
     sub_dir           = task_params.sub_dir
     output_dicom_path = task_params.output_dicom_path
     instances_list    = sorted(sub_dir.rglob('*.dcm'))
-    async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance = instances,
-                                                                                     output_dicom_path = output_dicom_path).get_str_dict()) for instances in instances_list]
+    if len(instances_list) > 0:
+        async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance = instances,
+                                                                                     output_dicom_path = output_dicom_path).get_str_dict())
+                             for instances in instances_list]
+    else:
+        instances_list = sorted(sub_dir.rglob('*'))
+        instances_list = list(filter(lambda x: x.is_file(), instances_list))
+        async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance=instances,
+                                                                                         output_dicom_path=output_dicom_path).get_str_dict())
+                             for instances in instances_list]
+
     result_list = [ async_result.result for async_result in async_result_list]
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
     return dicom_study_folder_path

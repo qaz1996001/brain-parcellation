@@ -98,7 +98,8 @@ class Dicm2NiixConverter:
         """
         instances = list(self.input_path.rglob('*.dcm'))
         study_list = list(set(list(map(lambda x: x.parent.parent, instances))))
-        future_list = []
+        # future_list = []
+        nifti_study_path_set = set()
         for study_path in study_list:
             series_list = list(filter(lambda series_path : series_path.name != '.meta' ,study_path.iterdir()))
             for series_path in series_list:
@@ -107,16 +108,23 @@ class Dicm2NiixConverter:
                 output_series_path = pathlib.Path(
                     f'{str(series_path).replace(str(study_path.parent), str(self.output_path))}')
                 output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
+
+                if output_series_path.parent not in nifti_study_path_set:
+                    nifti_study_path_set.add(output_series_path.parent)
                 if output_series_file_path.exists():
                     continue
                 else:
                     os.makedirs(output_series_path.parent, exist_ok=True)
-                    if executor:
-                        future = executor.submit(self.run_cmd, output_series_path, series_path)
-                        future_list.append(future)
-                    else:
-                        self.run_cmd(output_series_path=output_series_path, series_path=series_path)
+                    self.run_cmd(output_series_path=output_series_path, series_path=series_path)
+
+                    # if executor:
+                    #     future = executor.submit(self.run_cmd, output_series_path, series_path)
+                    #     future_list.append(future)
+                    # else:
+                    #     self.run_cmd(output_series_path=output_series_path, series_path=series_path)
             # self.copy_meta_dir(study_path=study_path)
+        return nifti_study_path_set
+
 
 
 def parse_arguments():

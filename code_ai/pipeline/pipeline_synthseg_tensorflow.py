@@ -31,6 +31,8 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 
 from code_ai.pipeline import study_id_pattern
+from dotenv import load_dotenv
+load_dotenv()
 
 
 def get_study_id(file_name:str) -> Optional[str]:
@@ -156,11 +158,12 @@ if __name__ == '__main__':
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
-    path_code = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
-    path_process = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
-    path_processModel = os.path.join(path_process, 'Deep_synthseg')  # 前處理dicom路徑(test case)
-    path_json = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
-    path_log = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
+    path_code = os.getenv("PATH_CODE")
+    path_process = os.getenv("PATH_PROCESS")
+    path_processModel = os.path.join(path_process, 'Deep_synthseg')
+    path_json = os.getenv("PATH_JSON")
+    path_log = os.getenv("PATH_LOG")
+    path_synthseg = os.getenv("PATH_SYNTHSEG")
     gpu_n = 0  # 使用哪一顆gpu
 
     file_path_str = Inputs[0]
