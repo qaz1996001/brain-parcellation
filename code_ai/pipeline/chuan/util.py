@@ -718,47 +718,78 @@ def ADC_DWI1000_nor(path_dcm, case_name, path_test_img):
     np.save(os.path.join(path_npy, case_name + '_DWI1000.npy'), DWI1000_array)
     return 
 
-def T2FLAIR_nor(path_dcm, path_test_img, case_name):
-    path_npy = os.path.join(path_test_img, 'npy')
-    path_dcmT2FLAIR = os.path.join(path_dcm, 'T2FLAIR')
+# def T2FLAIR_nor(path_dcm, path_test_img, case_name):
+#     path_npy = os.path.join(path_test_img, 'npy')
+#     path_dcmT2FLAIR = os.path.join(path_dcm, 'T2FLAIR')
+#
+#     if not os.path.isdir(path_npy):  #如果資料夾不存在就建立
+#         os.mkdir(path_npy)
+#
+#     ROWS = 512 #y
+#     COLS = 512 #x
+#
+#     file_list = os.listdir(path_dcmT2FLAIR)
+#     file_list = sorted(file_list)
+#     X = np.zeros((len(file_list), ROWS, COLS, 1), dtype = 'float32')
+#
+#     #再跑做矩陣之前，要額外用一個for迴圈去計算出檔名的排列方式，接下來讀取dicom影像，讀dicom影像又要再依照dicom tag去做整理，會成照順序圖就是這麼麻煩(dcm2nii有自動排序，但這裡沒用到)
+#     T2FLAIR_list = []
+#     for j in range(len(file_list)):
+#         T2FLAIR_slice = pydicom.dcmread(os.path.join(path_dcmT2FLAIR, file_list[j]))
+#         try:
+#             T2FLAIR_sl = T2FLAIR_slice[0x0020,0x1041].value #slice location，但是頭是最高，所以需要修改
+#             T2FLAIR_list.append(T2FLAIR_sl) #紀錄該張影像的位置，貼回ptrdict要用
+#         except:
+#             #因為預防發生T2FLAIR沒有slice location，雷，只好改用instance number拚了(頭的數字大)
+#             T2FLAIR_in = T2FLAIR_slice[0x0020,0x0013].value #slice location，但是頭是最高，所以需要修改
+#             T2FLAIR_list.append(T2FLAIR_in) #紀錄該張影像的位置，貼回ptrdict要用
+#     T2FLAIR_list = np.array(T2FLAIR_list)
+#     sort_T2FLAIR_sl = np.argsort(T2FLAIR_list) #紀錄排序後的由小至大數字原先的位置
+#     sort_T2FLAIR_sl = sort_T2FLAIR_sl[::-1] #改降幕排列，真實頭到腳的順序
+#
+#     for i in range(len(file_list)):
+#         dcm = pydicom.dcmread(os.path.join(path_dcmT2FLAIR, file_list[sort_T2FLAIR_sl[i]]))
+#         l = dcm.pixel_array.shape[0]
+#         w = dcm.pixel_array.shape[1]
+#         img = np.expand_dims(np.expand_dims(dcm.pixel_array, axis = 0), axis = -1)
+#         img = (img - np.mean(img)) / np.std(img)
+#         slice_y = int((ROWS - l)/2)
+#         slice_x = int((COLS - w)/2)
+#         X[i,slice_y:slice_y+l,slice_x:slice_x+w,:] = img
+#
+#     np.save(os.path.join(path_npy, case_name + '.npy'), X)
+#     return
 
-    if not os.path.isdir(path_npy):  #如果資料夾不存在就建立
+
+def T2FLAIR_nor(path_nii, path_test_img, case_name):
+    path_npy = os.path.join(path_test_img, 'npy')
+
+    if not os.path.isdir(path_npy):  # 如果資料夾不存在就建立
         os.mkdir(path_npy)
 
-    ROWS = 512 #y
-    COLS = 512 #x
+    ROWS = 512  # y
+    COLS = 512  # x
 
-    file_list = os.listdir(path_dcmT2FLAIR)
-    file_list = sorted(file_list) 
-    X = np.zeros((len(file_list), ROWS, COLS, 1), dtype = 'float32')
+    # 讀取nifti檔
+    T2FLAIR_nii = nib.load(os.path.join(path_nii, 'nii', case_name + '_T2FLAIR.nii.gz'))  # 讀取影像
+    T2FLAIR_array = np.array(T2FLAIR_nii.dataobj).astype(float)  # 讀出image的array矩陣
+    T2FLAIR_array = data_translate(T2FLAIR_array)
+    X = np.zeros((T2FLAIR_array.shape[-1], ROWS, COLS, 1), dtype='float32')
 
-    #再跑做矩陣之前，要額外用一個for迴圈去計算出檔名的排列方式，接下來讀取dicom影像，讀dicom影像又要再依照dicom tag去做整理，會成照順序圖就是這麼麻煩(dcm2nii有自動排序，但這裡沒用到)
-    T2FLAIR_list = []
-    for j in range(len(file_list)):
-        T2FLAIR_slice = pydicom.dcmread(os.path.join(path_dcmT2FLAIR, file_list[j]))
-        try:
-            T2FLAIR_sl = T2FLAIR_slice[0x0020,0x1041].value #slice location，但是頭是最高，所以需要修改
-            T2FLAIR_list.append(T2FLAIR_sl) #紀錄該張影像的位置，貼回ptrdict要用
-        except:
-            #因為預防發生T2FLAIR沒有slice location，雷，只好改用instance number拚了(頭的數字大)
-            T2FLAIR_in = T2FLAIR_slice[0x0020,0x0013].value #slice location，但是頭是最高，所以需要修改
-            T2FLAIR_list.append(T2FLAIR_in) #紀錄該張影像的位置，貼回ptrdict要用
-    T2FLAIR_list = np.array(T2FLAIR_list)
-    sort_T2FLAIR_sl = np.argsort(T2FLAIR_list) #紀錄排序後的由小至大數字原先的位置
-    sort_T2FLAIR_sl = sort_T2FLAIR_sl[::-1] #改降幕排列，真實頭到腳的順序
-
-    for i in range(len(file_list)):
-        dcm = pydicom.dcmread(os.path.join(path_dcmT2FLAIR, file_list[sort_T2FLAIR_sl[i]]))
-        l = dcm.pixel_array.shape[0]
-        w = dcm.pixel_array.shape[1]
-        img = np.expand_dims(np.expand_dims(dcm.pixel_array, axis = 0), axis = -1)
+    # 一個NIFTI檔完成
+    for i in range(T2FLAIR_array.shape[-1]):
+        sample = T2FLAIR_array[:, :, i]
+        l = sample.shape[0]
+        w = sample.shape[1]
+        img = np.expand_dims(np.expand_dims(sample, axis=0), axis=-1)
         img = (img - np.mean(img)) / np.std(img)
-        slice_y = int((ROWS - l)/2)
-        slice_x = int((COLS - w)/2)
-        X[i,slice_y:slice_y+l,slice_x:slice_x+w,:] = img
-    
-    np.save(os.path.join(path_npy, case_name + '.npy'), X)
+        slice_y = int((ROWS - l) / 2)
+        slice_x = int((COLS - w) / 2)
+        X[i, slice_y:slice_y + l, slice_x:slice_x + w, :] = img
+
+    np.save(os.path.join(path_npy, case_name + '_T2FLAIR.npy'), X)
     return
+
 
 #%%這邊紀錄ICH的function
 #path_dicom是整理完的C-影像，path_csv是輸出的csv位置

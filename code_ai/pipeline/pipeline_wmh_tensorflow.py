@@ -20,9 +20,7 @@ import logging
 import glob
 import shutil
 import time
-from nii_transforms import nii_img_replace
-from util import class_studydescriptoion, dcm2nii, class_studydescriptoion, move_T2FLAIR, dcm2nii, T2FLAIR_nor, \
-    check_tag_num_wmh
+
 import json
 import pandas as pd
 import nibabel as nib
@@ -42,17 +40,13 @@ import skimage.measure
 from skimage import measure, color, morphology
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from random import uniform
-# import tensorflow_addons as tfa
-# import tensorflow_datasets as tfds
-from IPython.display import clear_output
-import math
-import scipy
-# import base64
+
 from collections import OrderedDict
-import matplotlib.colors as mcolors
 import numba as nb
-# from revise import revise2d, revise3d
-from gpu_wmh import model_predict_wmh
+
+from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
+from code_ai.pipeline.chuan.util import class_studydescriptoion, move_T2FLAIR, dcm2nii, T2FLAIR_nor, check_tag_num_wmh
+from code_ai.pipeline.chuan.gpu_wmh import model_predict_wmh
 
 
 # 會使用到的一些predict技巧
@@ -344,15 +338,7 @@ def pipeline_wmh(ID,
         logging.warning('Retry!!! have error code or no any study.')
         logging.error("Catch an exception.", exc_info=True)
         print('error!!!')
-        # 必須要清空opy資料夾跟class資料夾
-        # copy_list = os.listdir(path_copy)
-        # if len(copy_list) > 0:
-        #     for i in range(len(copy_list)):
-        #         os.remove(os.path.join(path_copy, copy_list[i])) #清除檔案
-        # class_list = os.listdir(path_class)
-        # if len(class_list) > 0:
-        #     for i in range(len(class_list)):
-        #         shutil.rmtree(os.path.join(path_class, class_list[i])) #清除檔案
+
 
     print('end!!!')
 
@@ -362,6 +348,7 @@ if __name__ == '__main__':
     from code_ai.pipeline.chuan import CUATOM_MODEL_WMH
     from code_ai.pipeline.chuan import gpu_n
     parser = argparse.ArgumentParser()
+
     parser.add_argument('--ID', type=str, default='00003092_20201007_MR_20910070157',
                         help='目前執行的case的patient_id or study id')
     parser.add_argument('--Inputs', type=str, nargs='+', default=[
@@ -369,7 +356,7 @@ if __name__ == '__main__':
         '/mnt/e/pipeline/chuan/example_input/00003092_20201007_MR_20910070157/synthseg_T2FLAIR_AXI_original_WMH.nii.gz',
         '/mnt/e/pipeline/chuan/example_input/00003092_20201007_MR_20910070157/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz'],
                         help='用於輸入的檔案')
-    parser.add_argument('--Output_folder', type=str, default='/mnt/e/pipeline/chuan/example_output/',
+    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/chuan/example_output/',
                         help='用於輸出結果的資料夾')
     args = parser.parse_args()
 
