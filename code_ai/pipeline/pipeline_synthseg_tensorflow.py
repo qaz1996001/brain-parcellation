@@ -67,7 +67,7 @@ def pipeline_synthseg(ID :str,
     FORMAT = '%(asctime)s %(levelname)s %(message)s'  # 日期時間, 格式為 YYYY-MM-DD HH:mm:SS,ms，日誌的等級名稱，訊息
     logging.basicConfig(level=logging.INFO, filename=log_file, filemode='a', format=FORMAT)
 
-    logging.info('!!! Pred CMB call.')
+    logging.info('!!! pipeline_synthseg_tensorflow.py call.')
     path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
     os.makedirs(path_processID,exist_ok=True) # 如果資料夾不存在就建立
     print(ID, ' Start...')

@@ -29,9 +29,9 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib
 
-from code_ai.pipeline.inacrct.gpu_stroke import model_predict_stroke
-from code_ai.pipeline.inacrct.nii_transforms import nii_img_replace
-from code_ai.pipeline.inacrct.util import use_BET_DWI0, make_BET_mask, make_BET_ADC_DWI1000, ADC_DWI1000_nor
+from code_ai.pipeline.chuan.gpu_stroke import model_predict_stroke
+from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
+from code_ai.pipeline.chuan.util import use_BET_DWI0, make_BET_mask, make_BET_ADC_DWI1000, ADC_DWI1000_nor
 
 # 會使用到的一些predict技巧
 def data_translate(img, nii):
@@ -652,9 +652,10 @@ def pipeline_infarct(ID,
 
     print('end!!!')
 
+
 if __name__ == '__main__':
-    from code_ai.pipeline.inacrct import DATASET_JSON_PATH, CUATOM_MODEL
-    from code_ai.pipeline.inacrct import path_code, path_json , path_log ,path_processModel, gpu_n
+    from code_ai.pipeline.chuan import DATASET_JSON_PATH, CUATOM_MODEL_INFARCT
+    from code_ai.pipeline.chuan import gpu_n
     parser = argparse.ArgumentParser()
     parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
                         help='目前執行的case的patient_id or study id')
@@ -690,7 +691,14 @@ if __name__ == '__main__':
     # path_processModel = os.path.join(path_process, 'Deep_Infarct')  #前處理dicom路徑(test case)
     # path_processID = os.path.join(path_processModel, ID)  #前處理dicom路徑(test case)
 
-    cuatom_model = CUATOM_MODEL
+    path_code = os.getenv("PATH_CODE")
+    path_process = os.getenv("PATH_PROCESS")
+    path_processModel = os.path.join(path_process, 'Deep_Infarct')
+    path_json = os.getenv("PATH_JSON")
+    path_log = os.getenv("PATH_LOG")
+    path_synthseg = os.getenv("PATH_SYNTHSEG")
+
+    cuatom_model = CUATOM_MODEL_INFARCT
 
     # 建置資料夾
     os.makedirs(path_processModel, exist_ok=True)  # 如果資料夾不存在就建立，製作nii資料夾
