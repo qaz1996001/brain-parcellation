@@ -359,6 +359,8 @@ def pipeline_wmh(ID,
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
+    from code_ai.pipeline.chuan import CUATOM_MODEL_WMH
+    from code_ai.pipeline.chuan import gpu_n
     parser = argparse.ArgumentParser()
     parser.add_argument('--ID', type=str, default='00003092_20201007_MR_20910070157',
                         help='目前執行的case的patient_id or study id')
@@ -387,12 +389,13 @@ if __name__ == '__main__':
     SynthSEG_WM_file = Inputs[1]
     SynthSEG_file = Inputs[2]
 
-    cuatom_model = '/mnt/e/pipeline/chuan/code/model_weights/Unet-0084-0.16622-0.19441-0.87395.h5'  # model路徑+檔案
-    gpu_n = 0  # 使用哪一顆gpu
+    cuatom_model = CUATOM_MODEL_WMH
 
     # 建置資料夾
-    if not os.path.isdir(path_processModel):  # 如果資料夾不存在就建立
-        os.mkdir(path_processModel)  # 製作nii資料夾
+    os.makedirs(path_processModel, exist_ok=True)  # 如果資料夾不存在就建立，製作nii資料夾
+    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_output, exist_ok=True)
 
     # 直接當作function的輸入
     pipeline_wmh(ID, T2FLAIR_file, SynthSEG_WM_file, SynthSEG_file, path_output, path_code, path_processModel,
