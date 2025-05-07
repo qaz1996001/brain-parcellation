@@ -7,7 +7,6 @@ from sqlalchemy.orm import relationship, Mapped
 from datetime import datetime
 
 from .base import Base
-from .backup_object import BackupObject
 
 
 class ObjectVersion(Base):

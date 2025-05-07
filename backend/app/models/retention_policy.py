@@ -6,7 +6,6 @@ from sqlalchemy.orm import relationship, Mapped
 from typing import List, Optional
 
 from .base import Base
-from .object_retention import ObjectRetention
 
 
 class RetentionPolicy(Base):

@@ -8,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from .base import Base  #
-from .backup_object import BackupObject
+
 
 
 class File(Base):

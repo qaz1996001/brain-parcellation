@@ -1,5 +1,7 @@
 # app/schemas/object_retention.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List
+from datetime import datetime
 
 
 class ObjectRetentionBase(BaseModel):

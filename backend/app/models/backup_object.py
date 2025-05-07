@@ -7,13 +7,8 @@ from sqlalchemy.orm import relationship, Mapped
 from typing import List, Optional
 from datetime import datetime
 
-from .base import Base  # or Base = declarative_base() if not imported
-from .backup_job import BackupJob
-from .bucket import Bucket
-from .file import File
-from .tag import Tag
-from .object_retention import ObjectRetention
-from .object_version import ObjectVersion
+from .base import Base
+
 
 
 class BackupObject(Base):

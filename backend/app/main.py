@@ -63,11 +63,11 @@ app.add_middleware(
 app.include_router(bucket.router, prefix="/buckets", tags=["buckets"])
 app.include_router(backup_job.router, prefix="/backup-jobs", tags=["backup jobs"])
 app.include_router(file.router, prefix="/files", tags=["files"])
-app.include_router(backup_objects.router, prefix="/backup-objects", tags=["backup objects"])
-app.include_router(object_versions.router, prefix="/object-versions", tags=["object versions"])
+app.include_router(backup_object.router, prefix="/backup-objects", tags=["backup objects"])
+app.include_router(object_version.router, prefix="/object-versions", tags=["object versions"])
 app.include_router(tag.router, prefix="/tags", tags=["tags"])
 app.include_router(retention_policie.router, prefix="/retention-policies", tags=["retention policies"])
-app.include_router(object_retentions.router, prefix="/object-retentions", tags=["object retentions"])
+app.include_router(object_retention.router, prefix="/object-retentions", tags=["object retentions"])
 app.include_router(backup_config.router, prefix="/backup-configs", tags=["backup configurations"])  # New router
 
 

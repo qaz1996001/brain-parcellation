@@ -8,8 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from .base import Base
-from .bucket import Bucket
-from .backup_object import BackupObject
+
 
 
 class BackupJob(Base):

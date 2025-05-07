@@ -2,7 +2,7 @@ from sqlalchemy import ( Column, ForeignKey, Integer, String, UniqueConstraint)
 from sqlalchemy.orm import relationship, Mapped
 
 from .base import Base
-from .backup_object import BackupObject
+
 
 class Tag(Base):
     """Model for object tags."""
