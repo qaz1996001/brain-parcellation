@@ -9,14 +9,15 @@ import asyncio
 from app.database import engine
 from app.models import Base
 from app.routers import (
-    buckets,
-    backup_jobs,
-    files,
-    backup_objects,
-    object_versions,
-    tags,
-    retention_policies,
-    object_retentions
+    bucket,
+    backup_job,
+    file,
+    backup_object,
+    object_version,
+    tag,
+    retention_policie,
+    object_retention,
+    backup_config  # New import
 )
 from app.tasks import TaskScheduler
 
@@ -59,14 +60,15 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(buckets.router, prefix="/buckets", tags=["buckets"])
-app.include_router(backup_jobs.router, prefix="/backup-jobs", tags=["backup jobs"])
-app.include_router(files.router, prefix="/files", tags=["files"])
+app.include_router(bucket.router, prefix="/buckets", tags=["buckets"])
+app.include_router(backup_job.router, prefix="/backup-jobs", tags=["backup jobs"])
+app.include_router(file.router, prefix="/files", tags=["files"])
 app.include_router(backup_objects.router, prefix="/backup-objects", tags=["backup objects"])
 app.include_router(object_versions.router, prefix="/object-versions", tags=["object versions"])
-app.include_router(tags.router, prefix="/tags", tags=["tags"])
-app.include_router(retention_policies.router, prefix="/retention-policies", tags=["retention policies"])
+app.include_router(tag.router, prefix="/tags", tags=["tags"])
+app.include_router(retention_policie.router, prefix="/retention-policies", tags=["retention policies"])
 app.include_router(object_retentions.router, prefix="/object-retentions", tags=["object retentions"])
+app.include_router(backup_config.router, prefix="/backup-configs", tags=["backup configurations"])  # New router
 
 
 # Task management endpoints

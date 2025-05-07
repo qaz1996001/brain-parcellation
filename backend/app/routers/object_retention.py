@@ -1,4 +1,4 @@
-# app/routers/object_retentions.py
+# app/routers/object_retention.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
