@@ -4,10 +4,11 @@ from sqlalchemy import (
     String, Float, Text, UniqueConstraint, Index
 )
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from datetime import datetime
+from sqlalchemy.orm import relationship, Mapped
 from typing import List, Optional
+from datetime import datetime
 
+# Base class for all models
 Base = declarative_base()
 
 
@@ -22,8 +23,8 @@ class Bucket(Base):
     description: Optional[str] = Column(Text)
 
     # Relationships
-    backup_jobs: List["BackupJob"] = relationship("BackupJob", back_populates="bucket")
-    backup_objects: List["BackupObject"] = relationship("BackupObject", back_populates="bucket")
+    backup_jobs: Mapped[List["BackupJob"]] = relationship("BackupJob", back_populates="bucket")
+    backup_objects: Mapped[List["BackupObject"]] = relationship("BackupObject", back_populates="bucket")
 
 
 class BackupJob(Base):
@@ -42,8 +43,8 @@ class BackupJob(Base):
     error_message: Optional[str] = Column(Text)
 
     # Relationships
-    bucket: Bucket = relationship("Bucket", back_populates="backup_jobs")
-    backup_objects: List["BackupObject"] = relationship("BackupObject", back_populates="backup_job")
+    bucket: Mapped["Bucket"] = relationship("Bucket", back_populates="backup_jobs")
+    backup_objects: Mapped[List["BackupObject"]] = relationship("BackupObject", back_populates="backup_job")
 
 
 class File(Base):
@@ -60,7 +61,7 @@ class File(Base):
     source_system: str = Column(String(255), nullable=False)
 
     # Relationships
-    backup_objects: List["BackupObject"] = relationship("BackupObject", back_populates="file")
+    backup_objects: Mapped[List["BackupObject"]] = relationship("BackupObject", back_populates="file")
 
     # Indexes
     __table_args__ = (
@@ -84,12 +85,12 @@ class BackupObject(Base):
     created_at: datetime = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # Relationships
-    file: File = relationship("File", back_populates="backup_objects")
-    backup_job: BackupJob = relationship("BackupJob", back_populates="backup_objects")
-    bucket: Bucket = relationship("Bucket", back_populates="backup_objects")
-    object_versions: List["ObjectVersion"] = relationship("ObjectVersion", back_populates="backup_object")
-    tags: List["Tag"] = relationship("Tag", back_populates="backup_object")
-    object_retentions: List["ObjectRetention"] = relationship("ObjectRetention", back_populates="backup_object")
+    file: Mapped["File"] = relationship("File", back_populates="backup_objects")
+    backup_job: Mapped["BackupJob"] = relationship("BackupJob", back_populates="backup_objects")
+    bucket: Mapped["Bucket"] = relationship("Bucket", back_populates="backup_objects")
+    object_versions: Mapped[List["ObjectVersion"]] = relationship("ObjectVersion", back_populates="backup_object")
+    tags: Mapped[List["Tag"]] = relationship("Tag", back_populates="backup_object")
+    object_retentions: Mapped[List["ObjectRetention"]] = relationship("ObjectRetention", back_populates="backup_object")
 
     # Indexes
     __table_args__ = (
@@ -112,7 +113,7 @@ class ObjectVersion(Base):
     is_delete_marker: bool = Column(Boolean, nullable=False, default=False)
 
     # Relationships
-    backup_object: BackupObject = relationship("BackupObject", back_populates="object_versions")
+    backup_object: Mapped["BackupObject"] = relationship("BackupObject", back_populates="object_versions")
 
     # Indexes
     __table_args__ = (
@@ -131,7 +132,7 @@ class Tag(Base):
     value: str = Column(String(256), nullable=False)
 
     # Relationships
-    backup_object: BackupObject = relationship("BackupObject", back_populates="tags")
+    backup_object: Mapped["BackupObject"] = relationship("BackupObject", back_populates="tags")
 
     # Constraints
     __table_args__ = (
@@ -150,7 +151,8 @@ class RetentionPolicy(Base):
     description: Optional[str] = Column(Text)
 
     # Relationships
-    object_retentions: List["ObjectRetention"] = relationship("ObjectRetention", back_populates="retention_policy")
+    object_retentions: Mapped[List["ObjectRetention"]] = relationship("ObjectRetention",
+                                                                      back_populates="retention_policy")
 
 
 class ObjectRetention(Base):
@@ -165,5 +167,5 @@ class ObjectRetention(Base):
     legal_hold: bool = Column(Boolean, nullable=False, default=False)
 
     # Relationships
-    backup_object: BackupObject = relationship("BackupObject", back_populates="object_retentions")
-    retention_policy: RetentionPolicy = relationship("RetentionPolicy", back_populates="object_retentions")
+    backup_object: Mapped["BackupObject"] = relationship("BackupObject", back_populates="object_retentions")
+    retention_policy: Mapped["RetentionPolicy"] = relationship("RetentionPolicy", back_populates="object_retentions")
