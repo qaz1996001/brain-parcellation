@@ -22,9 +22,11 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
     os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
     os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
     os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
 
     nifti_study_path = func_params['nifti_study_path']
-    inference_item_cmd = build_inference_cmd(pathlib.Path(nifti_study_path))
+    dicom_study_path = func_params['dicom_study_path']
+    inference_item_cmd = build_inference_cmd(pathlib.Path(nifti_study_path),pathlib.Path(dicom_study_path))
     print('inference_item_cmd', inference_item_cmd)
     cmd_output_path = os.path.join(path_cmd_tools, f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json')
     with open(cmd_output_path, 'w') as f:
