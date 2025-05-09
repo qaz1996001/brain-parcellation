@@ -62,7 +62,7 @@ class InferenceEnum(str, enum.Enum):
     Aneurysm = 'Aneurysm'
 
 
-model_mapping_series_dict = {
+MODEL_MAPPING_SERIES_DICT = {
     InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
                          [T1SeriesRenameEnum.T1BRAVO_SAG, ],
                          [T1SeriesRenameEnum.T1BRAVO_COR, ],
@@ -127,7 +127,7 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
         df_file = pd.DataFrame(file_list, columns=['file_path'])
         df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
         model_mapping_dict = {}
-        for model_name, model_mapping_series_list in model_mapping_series_dict.items():
+        for model_name, model_mapping_series_list in MODEL_MAPPING_SERIES_DICT.items():
 
             for mapping_series in model_mapping_series_list:
                 mapping_series_str = list(map(lambda x: x.value, mapping_series))
@@ -278,13 +278,26 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple:
             return (None, None)
 
 
-def build_infarct_input_post_process(input_paths) -> List[Union[pathlib.Path, str]]:
+def build_input_post_process(input_paths,model_name) -> List[Union[pathlib.Path, str]]:
     input_name_list = list(map(lambda x: replace_suffix(os.path.basename(x), ''), input_paths))
-    for mapping_series in model_mapping_series_dict[InferenceEnum.Infarct]:
-        mapping_series_str = list(map(lambda x: x.value, mapping_series))
-        result = np.intersect1d(input_name_list, mapping_series_str, return_indices=True)
-        if result[0].shape[0] == 3:
-            input_paths.append(input_paths[0].replace('ADC.nii.gz', 'synthseg_DWI0_original_DWI.nii.gz'))
+    match model_name:
+        case InferenceEnum.Infarct:
+            for mapping_series in MODEL_MAPPING_SERIES_DICT[InferenceEnum.Infarct]:
+                mapping_series_str = list(map(lambda x: x.value, mapping_series))
+                result = np.intersect1d(input_name_list, mapping_series_str, return_indices=True)
+                if result[0].shape[0] == 3:
+                    input_paths.append(input_paths[0].replace('ADC.nii.gz', 'synthseg_DWI0_original_DWI.nii.gz'))
+        case InferenceEnum.WMH:
+            for mapping_series in MODEL_MAPPING_SERIES_DICT[InferenceEnum.WMH]:
+                mapping_series_str = list(map(lambda x: x.value, mapping_series))
+                result = np.intersect1d(input_name_list, mapping_series_str, return_indices=True)
+                if result[0].shape[0] == 1:
+                    input_paths.append(input_paths[0].replace('T2FLAIR_AXI.nii.gz',
+                                                              'synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz'))
+                    input_paths.append(input_paths[0].replace('T2FLAIR_AXI.nii.gz',
+                                                              'synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz'))
+        case _:
+            pass
     return input_paths
 
 
@@ -295,8 +308,7 @@ def build_analysis(study_path: pathlib.Path):
     for task_dict in model_dict_values:
         tasks = {}
         for model_name, input_paths in task_dict.items():
-            if model_name == InferenceEnum.Infarct:
-                input_paths = build_infarct_input_post_process(input_paths)
+            input_paths = build_input_post_process(input_paths,model_name)
 
             task_output_files = generate_output_files(input_paths,
                                                       model_name,
@@ -320,8 +332,10 @@ def build_inference_cmd(nifti_study_path: pathlib.Path,
     for key, value in analysis.model_dump().items():
         if key in pipelines:
             task = getattr(analysis, key)
-
-            basename = os.path.basename(task.input_path_list[0]).split('.')[0]
+            if key == InferenceEnum.Infarct:
+                basename = os.path.basename(task.input_path_list[1]).split('.')[0]
+            else:
+                basename = os.path.basename(task.input_path_list[0]).split('.')[0]
             intput_dicom = dicom_study_path.joinpath(basename)
             input_dicom_dir = str(intput_dicom)
             cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
