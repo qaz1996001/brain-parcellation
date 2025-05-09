@@ -213,3 +213,5 @@ if __name__ == '__main__':
     # result = AsyncResult(task_id='c3fa5495-8ee7-4690-a5c5-a214607696ab')
     # print(result)
     # export PYTHONPATH=$(pwd) && python code_ai/pipeline/dicom_to_nii.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_0328 --output_nifti /mnt/e/rename_nifti_0328
+
+from funboost import FunctionResultStatus
