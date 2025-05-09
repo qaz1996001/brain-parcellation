@@ -14,8 +14,13 @@ pynvml==12.0.0
 @author: sean Ho
 """
 import glob
+import pathlib
 import shutil
+import subprocess
 import warnings
+
+from gevent.tests.test__server import _file
+
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 from typing import Optional
@@ -29,7 +34,7 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import study_id_pattern
+from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -107,13 +112,14 @@ def pipeline_cmb(ID :str,
             print(gpu_line)
             os.system(gpu_line)
 
-            temp_path_str = glob.glob('{}/*SWAN_original_CMB*.nii.gz'.format(path_processID))[0]
+            temp_path_str = glob.glob('{}/synthseg_*SWAN_original_CMB*.nii.gz'.format(path_processID))[0]
             if not os.path.exists(temp_path_str):
                 raise FileNotFoundError(temp_path_str)
             path_output_dir = os.path.join(path_output, ID)
             os.makedirs(path_output_dir, exist_ok=True)
             temp_path_basename = os.path.basename(temp_path_str)
             temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+            synthseg_temp_path_basename = os.path.join(path_output_dir, temp_path_basename)
             shutil.copy(temp_path_str,os.path.join(path_output_dir, temp_path_basename))
             output_nii_path_str = os.path.join(path_output_dir ,'Pred_CMB.nii.gz')
             output_json_path_str = os.path.join(path_output_dir, 'Pred_CMB.json')
@@ -125,7 +131,7 @@ def pipeline_cmb(ID :str,
                                       output_json_path_str=output_json_path_str
                                       )
             logging.info('!!! ' + str(ID) + ' gpu_cmb finish.')
-
+            return synthseg_temp_path_basename, output_nii_path_str,output_json_path_str
         else:
             logging.error('!!! ' + str(ID) + ' Insufficient GPU Memory.')
             # 以json做輸出
@@ -146,7 +152,7 @@ def pipeline_cmb(ID :str,
         # if os.path.isdir(path_process):  #如果資料夾存在
         #     shutil.rmtree(path_process) #清掉整個資料夾
 
-    return
+    return None,None,None
 
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
@@ -159,25 +165,24 @@ if __name__ == '__main__':
         tf.config.experimental.set_memory_growth(gpu, True)
     # python /mnt/d/wsl_ubuntu/pipeline/sean/code/pipeline_cmb_tensorflow.py --ID 00971591_20160503_MR_250425032 --Inputs /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/SWAN.nii.gz /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/T1FLAIR_AXI.nii.gz
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
+    parser.add_argument('--ID', type=str, default='10516407_20231215_MR_21210200091',
                         help='目前執行的case的patient_id or study id')
 
     parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=['/mnt/d/wsl_ubuntu/pipeline/sean/rename_nii/12292196_20200223_MR_20902230007/SWAN.nii.gz',
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/rename_nii/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz', ],
+                        default=['/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/SWAN.nii.gz',
+                                 '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz' ],
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
-    parser.add_argument('--InputsDicomDir', type=str, nargs='+',
-                        default=[
-                            '/mnt/d/wsl_ubuntu/pipeline/sean/rename_dicom/12292196_20200223_MR_20902230007/SWAN',
-                            '/mnt/d/wsl_ubuntu/pipeline/sean/rename_dicom/12292196_20200223_MR_20902230007/T1FLAIR_AXI', ],
+    parser.add_argument('--InputsDicomDir', type=str,
+                        default='/mnt/e/rename_dicom_202505051/10516407_20231215_MR_21210200091/SWAN',
                         help='用於輸入的檔案')
 
     args = parser.parse_args()
 
     ID = str(args.ID)
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
+    InputsDicomDir = args.InputsDicomDir  # 將列表合併為字符串，保留順序
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
 
@@ -187,13 +192,6 @@ if __name__ == '__main__':
     path_json         = os.getenv("PATH_JSON")
     path_log          = os.getenv("PATH_LOG")
     path_synthseg     = os.getenv("PATH_SYNTHSEG")
-
-    # path_code     = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
-    # path_process  = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
-    # path_processModel = os.path.join(path_process, 'Deep_CMB')  # 前處理dicom路徑(test case)
-    # path_json     = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
-    # path_log      = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
-    # path_synthseg = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
 
     gpu_n = 0  # 使用哪一顆gpu
 
@@ -207,9 +205,18 @@ if __name__ == '__main__':
     os.makedirs(path_output,exist_ok=True)
 
     # 直接當作function的輸入
-    pipeline_cmb(ID, swan_path_str, t1_path_str, path_output, path_code, path_processModel,
-                     path_json, path_log, path_synthseg, gpu_n)
-    # dicom_seg()
-    # upload_dicom_seg()
+    cmb_path_str,output_nii_path_str,output_json_path_str = pipeline_cmb(ID, swan_path_str, t1_path_str, path_output,
+                                                            path_code, path_processModel,path_json,
+                                                            path_log, path_synthseg, gpu_n)
+    # dicom_seg
+    if cmb_path_str is not None:
+        stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,cmb_path_str,path_output )
+        upload_dicom_seg(path_output,cmb_path_str,)
+    # if output_nii_path_str is not None:
+    #     stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
+    #     upload_dicom_seg(path_output, output_nii_path_str, )
+
+
+
     # upload_json()
 

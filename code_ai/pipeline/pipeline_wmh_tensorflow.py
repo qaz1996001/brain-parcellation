@@ -6,7 +6,11 @@ Created on Tue Sep 22 13:18:23 2020
 
 @author: chuan
 """
+import pathlib
+import subprocess
 import warnings
+
+from code_ai import PYTHON3
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 
@@ -149,6 +153,8 @@ def pipeline_wmh(ID,
     print(ID, ' Start...')
 
     # 依照不同情境拆分try需要小心的事項 <= 重要
+    path_output_dir = os.path.join(path_output, ID)
+    os.makedirs(path_output_dir, exist_ok=True)
     try:
         path_nii = os.path.join(path_processID, 'nii')
         if not os.path.isdir(path_nii):  # 如果資料夾不存在就建立
@@ -184,10 +190,6 @@ def pipeline_wmh(ID,
             # if os.path.isdir(path_processID):  #如果資料夾存在
             #     shutil.rmtree(path_processID) #清掉整個資料夾
 
-        # 接下來，以下運行gpu領域
-        # 以下做predict，為了避免gpu out of memory，還是以.sh來執行好惹
-        # gpu_line = 'bash ' + path_code + 'gpu_stroke.sh ' + ID + ' ' + path_processID
-        # os.system(gpu_line)
 
         # 因為松諭會用排程，所以這邊改成call function不管gpu了
         model_predict_wmh(path_code, path_processID, cuatom_model, ID, path_log, gpu_n)
@@ -300,8 +302,11 @@ def pipeline_wmh(ID,
         new_y_pred_nor1_nii = nii_img_replace(T2FLAIR_nii, new_y_pred_nor1)
         new_y_pred_synthseg = data_translate_back(Y_SynthSEG_WMH, T2FLAIR_nii).astype(int)
         new_y_pred_synthseg_nii = nii_img_replace(T2FLAIR_nii, new_y_pred_synthseg)
-        nib.save(new_y_pred_nor1_nii, os.path.join(path_output, 'Pred_WMH.nii.gz'))
-        nib.save(new_y_pred_synthseg_nii, os.path.join(path_output, 'Pred_WMH_synthseg.nii.gz'))
+
+        Pred_WMH = os.path.join(str(path_output_dir), 'Pred_WMH.nii.gz')
+        Pred_WMH_synthseg = os.path.join(str(path_output_dir), 'Pred_WMH_synthseg.nii.gz')
+        nib.save(new_y_pred_nor1_nii, Pred_WMH)
+        nib.save(new_y_pred_synthseg_nii, Pred_WMH_synthseg)
 
         # 報告敘述是連圖上沒有的小點也顯示出來
         text = 'T2 hyperintense lesions, estimated about ' + str(WMHVolume) + ' ml, '
@@ -327,12 +332,13 @@ def pipeline_wmh(ID,
         # 以json做輸出
         Report = text
         json_path_name = os.path.join(path_json, 'Pred_WMH.json')
-        json_path_name2 = os.path.join(path_output, 'Pred_WMH.json')
+        json_path_name2 = os.path.join(str(path_output_dir), 'Pred_WMH.json')
         case_json(json_path_name, ID, WMHVolume, Fazekas, Report)
         case_json(json_path_name2, ID, WMHVolume, Fazekas, Report)
 
         logging.info('!!! ' + ID + ' post_wmh finish.')
 
+        return Pred_WMH_synthseg,Pred_WMH,json_path_name2
 
     except:
         logging.warning('Retry!!! have error code or no any study.')
@@ -341,6 +347,7 @@ def pipeline_wmh(ID,
 
 
     print('end!!!')
+    return None, None, None
 
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
@@ -349,20 +356,24 @@ if __name__ == '__main__':
     from code_ai.pipeline.chuan import gpu_n
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--ID', type=str, default='00003092_20201007_MR_20910070157',
+    parser.add_argument('--ID', type=str, default='10516407_20231215_MR_21210200091',
                         help='目前執行的case的patient_id or study id')
     parser.add_argument('--Inputs', type=str, nargs='+', default=[
-        '/mnt/e/pipeline/chuan/example_input/00003092_20201007_MR_20910070157/T2FLAIR_AXI.nii.gz',
-        '/mnt/e/pipeline/chuan/example_input/00003092_20201007_MR_20910070157/synthseg_T2FLAIR_AXI_original_WMH.nii.gz',
-        '/mnt/e/pipeline/chuan/example_input/00003092_20201007_MR_20910070157/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz'],
+        '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T2FLAIR_AXI.nii.gz',
+        '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/synthseg_T2FLAIR_AXI_original_WMH.nii.gz',
+        '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz'],
                         help='用於輸入的檔案')
-    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/chuan/example_output/',
+    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
+    parser.add_argument('--InputsDicomDir', type=str,
+                        default='/mnt/e/rename_dicom_202505051/10516407_20231215_MR_21210200091/T2FLAIR_AXI',
+                        help='用於輸入的檔案')
     args = parser.parse_args()
 
     ID = str(args.ID)
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
     path_output = str(args.Output_folder)
+    InputsDicomDir = args.InputsDicomDir  # 將列表合併為字符串，保留順序
 
     path_code = os.getenv("PATH_CODE")
     path_process = os.getenv("PATH_PROCESS")
@@ -385,11 +396,14 @@ if __name__ == '__main__':
     os.makedirs(path_output, exist_ok=True)
 
     # 直接當作function的輸入
-    pipeline_wmh(ID, T2FLAIR_file, SynthSEG_WM_file, SynthSEG_file, path_output, path_code, path_processModel,
-                 path_json, path_log, cuatom_model, gpu_n)
-
-    # #最後再讀取json檔結果
-    # with open(json_path_name) as f:
-    #     data = json.load(f)
-
-    # logging.info('Json!!! ' + str(data))
+    Pred_WMH_synthseg,Pred_WMH,json_path_name2 = pipeline_wmh(ID,
+                                                              T2FLAIR_file, SynthSEG_WM_file, SynthSEG_file,
+                                                              path_output, path_code, path_processModel,
+                                                              path_json, path_log, cuatom_model, gpu_n)
+    # dicom_seg
+    if Pred_WMH is not None:
+        stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,Pred_WMH,path_output )
+    if Pred_WMH_synthseg is not None:
+        stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,Pred_WMH_synthseg,path_output )
+    if SynthSEG_WM_file is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,SynthSEG_WM_file, path_output)

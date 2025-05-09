@@ -1,9 +1,8 @@
 import argparse
 import pathlib
-import subprocess
 
 if __name__ == '__main__':
-    from code_ai.task.task_dicom2nii import dicom_to_nii
+    from code_ai.task.task_dicom2nii import dicom_to_nii, dicom_rename
     from code_ai.task.schema.intput_params import Dicom2NiiParams
 
     parser = argparse.ArgumentParser()
