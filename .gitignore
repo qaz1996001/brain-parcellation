@@ -2,3 +2,4 @@
 /.ipynb_checkpoints/
 *.h5
 /code_ai/resource/models/*
+/.venv/*
