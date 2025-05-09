@@ -31,7 +31,9 @@ from funboost.core.cli.discovery_boosters import BoosterDiscovery
 '''
 env_dict['project_root_path'] = project_root_path
 
+
 if __name__ == '__main__':
+
     # booster_dirs 用户可以自己增加扫描的文件夹,这样可以命令行少传了 --booster_dirs_str
     # BoosterDiscovery 可以多次调用
     BoosterDiscovery(project_root_path,
@@ -42,9 +44,6 @@ if __name__ == '__main__':
 
 
 '''
-
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  push test_find_queue1 --x=1 --y=2
-
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  consume test_find_queue1 
-
 '''

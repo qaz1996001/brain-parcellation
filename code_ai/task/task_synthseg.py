@@ -10,20 +10,26 @@ from code_ai import PYTHON3
 from code_ai.task import resample_one, resampleSynthSEG2original_z_index, save_original_seg_by_argmin_z_index
 
 from code_ai.task.schema import intput_params
+from code_ai.task.task_params import BoosterParamsMyAI
 from code_ai.utils_inference import replace_suffix
 from code_ai.utils_synthseg import TemplateProcessor
 
 
 # 定義 Funboost 任務
-@Booster('resample_task_queue',
-         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode = ConcurrentModeEnum.SOLO,
-         concurrent_num  = 8,
-         qps=2,
-         is_send_consumer_hearbeat_to_redis = True,
-         is_push_to_dlx_queue_when_retry_max_times  = True,
-         is_using_rpc_mode =True)
+# @Booster('resample_task_queue',
+#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode = ConcurrentModeEnum.SOLO,
+#          concurrent_num  = 8,
+#          qps=2,
+#          is_send_consumer_hearbeat_to_redis = True,
+#          is_push_to_dlx_queue_when_retry_max_times  = True,
+#          is_using_rpc_mode =True)
 # def resample_task(file, resample_file):
+@Booster(BoosterParamsMyAI(queue_name ='resample_task_queue',
+                           concurrent_mode = ConcurrentModeEnum.THREADING,
+                           qps = 2
+                           )
+         )
 def resample_task(func_params  : Dict[str,any]):
     task_params = intput_params.ResampleTaskParams.model_validate(func_params,strict=False)
     file = task_params.file
@@ -34,15 +40,19 @@ def resample_task(func_params  : Dict[str,any]):
         resample_one(str(file), str(resample_file))
     return str(resample_file)
 
-@Booster('synthseg_task_queue',
-         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode = ConcurrentModeEnum.SOLO,
-         concurrent_num  = 4,
-         qps=1,
-         # is_using_distributed_frequency_control=True,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('synthseg_task_queue',
+#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode = ConcurrentModeEnum.SOLO,
+#          concurrent_num  = 4,
+#          qps=1,
+#          # is_using_distributed_frequency_control=True,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+
+
+@Booster(BoosterParamsMyAI(queue_name ='synthseg_task_queue',)
+         )
 def synthseg_task(func_params  : Dict[str,any]):
     task_params     = intput_params.SynthsegTaskParams.model_validate(func_params)
     resample_file   = task_params.resample_file
@@ -72,15 +82,17 @@ def synthseg_task(func_params  : Dict[str,any]):
         print(e)
         raise e  # Funboost 會自動處理重試
 
-@Booster('process_synthseg_task_queue',
-         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode = ConcurrentModeEnum.SOLO,
-         concurrent_num  = 4,
-         qps=1,
-         # is_using_distributed_frequency_control=True,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('process_synthseg_task_queue',
+#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode = ConcurrentModeEnum.SOLO,
+#          concurrent_num  = 4,
+#          qps=1,
+#          # is_using_distributed_frequency_control=True,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='process_synthseg_task_queue',)
+         )
 def process_synthseg_task(func_params  : Dict[str,any]):
     # BoosterParams()
     task_params     = intput_params.ProcessSynthsegTaskParams.model_validate(func_params)
@@ -116,13 +128,16 @@ def process_synthseg_task(func_params  : Dict[str,any]):
         return synthseg_file, david_file
 
 
-@Booster('resample_to_original_task_queue',
-         broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode = ConcurrentModeEnum.THREADING,
-         concurrent_num  = 4,
-         qps=1,
-         is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True)
+# @Booster('resample_to_original_task_queue',
+#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode = ConcurrentModeEnum.THREADING,
+#          concurrent_num  = 4,
+#          qps=1,
+#          is_send_consumer_hearbeat_to_redis = True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+                           concurrent_mode = ConcurrentModeEnum.THREADING,)
+         )
 def resample_to_original_task(func_params  : Dict[str,any]):
     task_params    = intput_params.SaveFileTaskParams.model_validate(func_params)
     original_file     = task_params.file
@@ -165,14 +180,17 @@ def resample_to_original_task(func_params  : Dict[str,any]):
         return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
 
 
-@Booster('save_file_tasks_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.THREADING,
-         concurrent_num=4,
-         qps=1,
-         # is_using_distributed_frequency_control=True,
-         is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True)
+# @Booster('save_file_tasks_queue',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.THREADING,
+#          concurrent_num=4,
+#          qps=1,
+#          # is_using_distributed_frequency_control=True,
+#          is_send_consumer_hearbeat_to_redis = True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+                           concurrent_mode = ConcurrentModeEnum.THREADING,)
+         )
 def save_file_tasks(func_params  : Dict[str,any]):
     task_params = intput_params.SaveFileTaskParams.model_validate(func_params)
     synthseg_file = task_params.synthseg_file
@@ -208,14 +226,17 @@ def save_file_tasks(func_params  : Dict[str,any]):
         return save_file_path
 
 
-@Booster('post_process_synthseg_task_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.THREADING,
-         concurrent_num=4,
-         qps=1,
-         # is_using_distributed_frequency_control=True,
-         is_send_consumer_hearbeat_to_redis = True,
-         is_using_rpc_mode=True)
+# @Booster('post_process_synthseg_task_queue',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.THREADING,
+#          concurrent_num=4,
+#          qps=1,
+#          # is_using_distributed_frequency_control=True,
+#          is_send_consumer_hearbeat_to_redis = True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+                           concurrent_mode = ConcurrentModeEnum.THREADING,)
+         )
 def post_process_synthseg_task(func_params  : Dict[str,any]):
     task_params = intput_params.PostProcessSynthsegTaskParams.model_validate(func_params)
     save_mode = task_params.save_mode
@@ -237,14 +258,19 @@ def post_process_synthseg_task(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-@Booster('call_pipeline_synthseg_tensorflow_queue',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.SOLO,
-         concurrent_num=5,
-         qps=1,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('call_pipeline_synthseg_tensorflow_queue',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.SOLO,
+#          concurrent_num=5,
+#          qps=1,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+
+@Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg_tensorflow_queue',
+                           concurrent_num = 2,
+                           concurrent_mode = ConcurrentModeEnum.THREADING,)
+         )
 def call_pipeline_synthseg_tensorflow(func_params  : Dict[str,any]):
     ID = func_params['ID']
     Inputs = ','.join(func_params['Inputs'])
@@ -267,14 +293,17 @@ def call_pipeline_synthseg_tensorflow(func_params  : Dict[str,any]):
     return stdout,stderr
 
 # 16784400_20240918
-@Booster('call_pipeline_synthseg5class_tensorflow',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.SOLO,
-         concurrent_num=5,
-         qps=1,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('call_pipeline_synthseg5class_tensorflow',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.SOLO,
+#          concurrent_num=5,
+#          qps=1,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg5class_tensorflow',
+                           )
+         )
 def call_pipeline_synthseg5class_tensorflow(func_params  : Dict[str,any]):
     ID = func_params['ID']
     Inputs = ','.join(func_params['Inputs'])
@@ -297,14 +326,18 @@ def call_pipeline_synthseg5class_tensorflow(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-@Booster('call_pipeline_flirt',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.THREADING,
-         concurrent_num=6,
-         qps=1,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('call_pipeline_flirt',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.THREADING,
+#          concurrent_num=6,
+#          qps=1,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='call_pipeline_flirt',
+                           concurrent_mode=ConcurrentModeEnum.THREADING,
+                           )
+         )
 def call_pipeline_flirt(func_params  : Dict[str,any]):
     input_file         = pathlib.Path(func_params['input_file'])
     template_file      = pathlib.Path(func_params['template_file'])
@@ -339,14 +372,18 @@ def call_pipeline_flirt(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-@Booster('call_resample_to_original_task',
-         broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-         concurrent_mode=ConcurrentModeEnum.THREADING,
-         concurrent_num = 10,
-         qps=1,
-         is_send_consumer_hearbeat_to_redis=True,
-         is_push_to_dlx_queue_when_retry_max_times=True,
-         is_using_rpc_mode=True)
+# @Booster('call_resample_to_original_task',
+#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#          concurrent_mode=ConcurrentModeEnum.THREADING,
+#          concurrent_num = 10,
+#          qps=1,
+#          is_send_consumer_hearbeat_to_redis=True,
+#          is_push_to_dlx_queue_when_retry_max_times=True,
+#          is_using_rpc_mode=True)
+@Booster(BoosterParamsMyAI(queue_name ='call_resample_to_original_task',
+                           concurrent_mode=ConcurrentModeEnum.THREADING,
+                           )
+         )
 def call_resample_to_original_task(func_params: Dict[str, any]):
     raw_file            = pathlib.Path(func_params['raw_file'])
     resample_image_file = pathlib.Path(func_params['resample_image_file'])

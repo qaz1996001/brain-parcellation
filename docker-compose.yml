@@ -5,48 +5,71 @@ services:
     container_name: rabbitmq_server
     image: rabbitmq:3-management
     environment:
-      - RABBITMQ_DEFAULT_VHOST=/
-      - RABBITMQ_DEFAULT_USER=admin
-      - RABBITMQ_DEFAULT_PASS=pass.123
-      - RABBITMQ_ERLANG_COOKIE= yowkotest
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
     volumes:
-      - /mnt/d/wsl_ubuntu/volumes_data/rabbitmq:/var/lib/rabbitmq
+      - rabbitmq_server_volumes:/var/lib/rabbitmq
+#      - /mnt/d/wsl_ubuntu/volumes_data/rabbitmq:/var/lib/rabbitmq
     ports:
       # Expose the port for the worker to add/get tasks
-      - 5672:5672
+      - ${RABBITMQ_PORT}:5672
       # OPTIONAL: Expose the GUI port
-      - 15672:15672
+      - ${RABBITMQ_UI_PORT}:15672
   redis_server:
     restart: always
     container_name: redis_server
     image: redis:7.4-alpine
     ports:
-      - 10079:6379
+      - ${REDIS_PORT}:6379
     volumes:
-      - /mnt/d/wsl_ubuntu/volumes_data/redis-data:/data
+      - redis_server_volumes:/data
+#      - /mnt/d/wsl_ubuntu/volumes_data/redis-data:/data
   db_server:
     image: postgres
     restart: always
     container_name: db_server
     volumes:
-      - /mnt/d/wsl_ubuntu/volumes_data/postgres-data:/var/lib/postgresql/data
+      - db_server_volumes:/var/lib/postgresql/data
+#      - /mnt/d/wsl_ubuntu/volumes_data/postgres-data:/var/lib/postgresql/data
     environment:
-      POSTGRES_DB: db_name
-      POSTGRES_USER: postgres_n
-      POSTGRES_PASSWORD: postgres_p
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - 15433:5432
-  fast_api_app:
-    build:
-      context: ./backend
-    container_name: fast_api_app
-    restart: always
-    depends_on:
-      - db_server
-      - redis_server
-      - rabbitmq_server
-    volumes:
-      - ./backend:/backend
-      - /mnt/d/wsl_ubuntu:/mnt/d/wsl_ubuntu
-    ports:
-      - 8800:8800
+      - ${POSTGRES_PORT}:5432
+#  fast_api_app:
+#    build:
+#      context: ./backend
+#    container_name: fast_api_app
+#    restart: always
+#    depends_on:
+#      - db_server
+#      - redis_server
+#      - rabbitmq_server
+#    volumes:
+#      - ./backend:/backend
+#      - /mnt/d/wsl_ubuntu:/mnt/d/wsl_ubuntu
+#    ports:
+#      - 8800:8800
+
+volumes:
+  rabbitmq_server_volumes:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${VOLUMES_PATH}/rabbitmq
+      o: bind
+  redis_server_volumes:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${VOLUMES_PATH}/redis-data
+      o: bind
+  db_server_volumes:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${VOLUMES_PATH}/postgres-data
+      o: bind
