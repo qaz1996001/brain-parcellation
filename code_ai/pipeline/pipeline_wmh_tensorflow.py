@@ -6,35 +6,27 @@ Created on Tue Sep 22 13:18:23 2020
 
 @author: chuan
 """
-import pathlib
-import subprocess
 import warnings
-
-from code_ai import PYTHON3
-from code_ai.pipeline import dicom_seg_multi_file
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 import numpy as np
-
 import logging
 import shutil
 import time
-
 import json
 import nibabel as nib
-
 import argparse
 import tensorflow as tf
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 from collections import OrderedDict
 import numba as nb
-
 from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
-from code_ai.pipeline.chuan.util import class_studydescriptoion, move_T2FLAIR, dcm2nii, T2FLAIR_nor, check_tag_num_wmh
+from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg
+from code_ai.pipeline.chuan.util import T2FLAIR_nor
 from code_ai.pipeline.chuan.gpu_wmh import model_predict_wmh
+from dotenv import load_dotenv
+load_dotenv()
 
 
 # 會使用到的一些predict技巧
@@ -364,7 +356,6 @@ if __name__ == '__main__':
     path_processModel = os.path.join(path_process, 'Deep_WMH')
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
-    path_synthseg = os.getenv("PATH_SYNTHSEG")
 
     # 讀出DWI, DWI0, ADC, SynthSEG的檔案
     T2FLAIR_file = Inputs[0]
@@ -387,7 +378,9 @@ if __name__ == '__main__':
     # dicom_seg
     if Pred_WMH is not None:
         stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,Pred_WMH,path_output )
+        upload_dicom_seg(path_output, Pred_WMH, )
     if Pred_WMH_synthseg is not None:
         stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,Pred_WMH_synthseg,path_output )
+        upload_dicom_seg(path_output, Pred_WMH_synthseg, )
     if SynthSEG_WM_file is not None:
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,SynthSEG_WM_file, path_output)

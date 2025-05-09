@@ -29,6 +29,7 @@ def pipeline_parser():
                         help='用於輸入的檔案')
     return parser
 
+
 class PipelineConfig:
     base_path = pathlib.Path(__file__).parent.parent.parent.absolute()
     python3   = os.getenv("PYTHON3")
@@ -61,7 +62,7 @@ pipelines = {
     InferenceEnum.CMB: PipelineConfig('pipeline_cmb_tensorflow.py', 'CMB'),
     InferenceEnum.DWI: PipelineConfig('pipeline_synthseg_dwi_tensorflow.py', 'DWI'),
     InferenceEnum.WMH_PVS: PipelineConfig('pipeline_synthseg_wmh_tensorflow.py', 'WMH_PVS'),
-
+    InferenceEnum.WMH: PipelineConfig('pipeline_wmh_tensorflow.py', 'WMH'),
     InferenceEnum.Infarct: PipelineConfig('pipeline_infarct_tensorflow.py', 'Infarct'),
     }
 
@@ -98,7 +99,7 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
     file_list = sorted(input_dicom_seg_folder_path.rglob(dicom_seg_base_name + '*.dcm'))
     file_str_list = list(map(lambda x: str(x), file_list))
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/upload_dicom_seg.py '
+               '{} code_ai/pipeline/upload_dicom.py '
                '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                     PYTHON3,
                                     ' '.join(file_str_list)

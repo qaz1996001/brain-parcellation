@@ -17,6 +17,9 @@ import glob
 import re
 import shutil
 import warnings
+
+from code_ai import PYTHON3
+
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 from typing import Optional
@@ -27,8 +30,9 @@ import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
-from code_ai.pipeline import study_id_pattern, pipeline_parser
-
+from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file
+from dotenv import load_dotenv
+load_dotenv()
 autotune = tf.data.experimental.AUTOTUNE
 
 
@@ -80,34 +84,32 @@ def pipeline_synthseg(ID :str,
         if gpumRate < 0.6:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
             # 一些記憶體的配置
-            autotune = tf.data.experimental.AUTOTUNE
-            # print(keras.__version__)
-            # print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
             tf.config.experimental.set_visible_devices(devices=gpus[gpu_n], device_type='GPU')
-            # print(gpus, cpus)
             tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
 
-            gpu_line = 'python {} -i {} --output {} --all False --WMH TRUE'.format(
+            gpu_line = '{} {} -i {} --output {} --all False --WMH TRUE'.format(PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main.py'),
                 file_path_str,
                 path_processID)
 
             print('gpu_line',gpu_line)
             os.system(gpu_line)
-
+            temp_base_name = os.path.basename(file_path_str).replace('.nii.gz', '_original')
             path_output_dir = os.path.join(path_output, ID)
             os.makedirs(path_output_dir, exist_ok=True)
-            original_file_path_list = glob.glob('{}/*_original_*.nii.gz'.format(path_processID))
+            original_file_path_list         = glob.glob('{}/synthseg*{}*.nii.gz'.format(path_processID,temp_base_name))
+            WMH_PVS_original_file_path_list = list(filter(lambda x: 'WMH_PVS' in x, original_file_path_list))
             for original_file_path_str in original_file_path_list:
                 if not os.path.exists(original_file_path_str):
                     continue
                 temp_path_basename = os.path.basename(original_file_path_str)
                 temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
                 shutil.copy(original_file_path_str, os.path.join(path_output_dir, temp_path_basename))
-
-            logging.info('!!! ' + str(ID) + ' gpu_synthseg finish.')
-
+            if len(WMH_PVS_original_file_path_list)> 0:
+                temp_path_basename = os.path.basename(WMH_PVS_original_file_path_list[0])
+                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+                return os.path.join(path_output_dir, temp_path_basename)
         else:
             logging.error('!!! ' + str(ID) + ' Insufficient GPU Memory.')
             # 以json做輸出
@@ -148,18 +150,21 @@ if __name__ == '__main__':
     #                                                                    '/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/DWI1000.nii.gz',
     #                                                                      '/mnt/d/wsl_ubuntu/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/synthseg_DWI0_original_DWI.nii.gz'], help='用於輸入的檔案')
     # parser.add_argument('--Output_folder', type=str, default = '/mnt/d/wsl_ubuntu/pipeline/chuan/example_output/',help='用於輸出結果的資料夾')
+
     parser = pipeline_parser()
     args = parser.parse_args()
 
     ID = str(args.ID)
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
+    InputsDicomDir = args.InputsDicomDir
+
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
-    path_code = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
-    path_process = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
-    path_processModel = os.path.join(path_process, 'Deep_synthseg')  # 前處理dicom路徑(test case)
-    path_json = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
-    path_log = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
+    path_code = os.getenv("PATH_CODE")
+    path_process = os.getenv("PATH_PROCESS")
+    path_processModel = os.path.join(path_process, 'Deep_synthseg')
+    path_json = os.getenv("PATH_JSON")
+    path_log = os.getenv("PATH_LOG")
     gpu_n = 0  # 使用哪一顆gpu
 
     file_path_str = Inputs[0]
@@ -171,6 +176,8 @@ if __name__ == '__main__':
     os.makedirs(path_output,exist_ok=True)
 
     # 直接當作function的輸入
-    pipeline_synthseg(ID, file_path_str, path_output, path_code, path_processModel,
+    WMH_PVS_path = pipeline_synthseg(ID, file_path_str, path_output, path_code, path_processModel,
                       path_json, path_log, gpu_n)
-
+    if WMH_PVS_path is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,
+                                              WMH_PVS_path, path_output)

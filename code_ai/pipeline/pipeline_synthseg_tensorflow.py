@@ -30,7 +30,7 @@ import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
 
-from code_ai.pipeline import study_id_pattern, pipeline_parser
+from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -101,7 +101,12 @@ def pipeline_synthseg(ID :str,
 
             path_output_dir = os.path.join(path_output, ID)
             os.makedirs(path_output_dir, exist_ok=True)
-            original_file_path_list = glob.glob('{}/*_original_*.nii.gz'.format(path_processID))
+
+            temp_base_name = os.path.basename(file_path_str).replace('.nii.gz', '_original')
+
+            original_file_path_list = glob.glob('{}/synthseg*{}*.nii.gz'.format(path_processID,temp_base_name))
+            david_original_file_path_list = list(filter(lambda x: 'david' in x, original_file_path_list))
+
             for original_file_path_str in original_file_path_list:
                 if not os.path.exists(original_file_path_str):
                     continue
@@ -110,7 +115,10 @@ def pipeline_synthseg(ID :str,
                 shutil.copy(original_file_path_str, os.path.join(path_output_dir, temp_path_basename))
 
             logging.info('!!! ' + str(ID) + ' gpu_synthseg finish.')
-
+            if len(david_original_file_path_list)> 0:
+                temp_path_basename = os.path.basename(david_original_file_path_list[0])
+                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+                return os.path.join(path_output_dir, temp_path_basename)
         else:
             logging.error('!!! ' + str(ID) + ' Insufficient GPU Memory.')
             # 以json做輸出
@@ -150,6 +158,7 @@ if __name__ == '__main__':
 
     ID = str(args.ID)
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
+    InputsDicomDir = args.InputsDicomDir
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
     path_code = os.getenv("PATH_CODE")
@@ -157,7 +166,6 @@ if __name__ == '__main__':
     path_processModel = os.path.join(path_process, 'Deep_synthseg')
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
-    path_synthseg = os.getenv("PATH_SYNTHSEG")
     gpu_n = 0  # 使用哪一顆gpu
 
     file_path_str = Inputs[0]
@@ -169,6 +177,9 @@ if __name__ == '__main__':
     os.makedirs(path_output,exist_ok=True)
 
     # 直接當作function的輸入
-    pipeline_synthseg(ID, file_path_str, path_output, path_code, path_processModel,
-                      path_json, path_log, gpu_n)
-
+    file_path = pipeline_synthseg(ID, file_path_str, path_output, path_code, path_processModel,
+                                  path_json, path_log, gpu_n)
+    if file_path is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,
+                                              file_path, path_output)
+        upload_dicom_seg(path_output, file_path, )

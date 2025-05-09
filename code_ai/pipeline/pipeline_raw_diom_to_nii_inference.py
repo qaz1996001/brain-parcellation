@@ -7,7 +7,8 @@ import subprocess
 from typing import Optional
 from code_ai import PYTHON3
 from code_ai.utils_inference import build_inference_cmd
-
+from dotenv import load_dotenv
+load_dotenv()
 
 def build_dicom_to_nifti_cmd_str(args) -> Optional[str]:
     cmd_str = None

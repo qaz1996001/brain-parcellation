@@ -741,7 +741,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--WMH', '--wmh', dest='wmh', type=str_to_bool, default=False,
                         help="output WMH Mask")
-    parser.add_argument('--WMHFile', '--wmhFile', dest='wmh_file', type=str, default='WMH',
+    parser.add_argument('--WMHFile', '--wmhFile', dest='wmh_file', type=str, default='WMH_PVS',
                         help="WMH Mask file name，default is \'{output}_WMH.nii.gz\'")
 
     parser.add_argument('--depth_number', dest='depth_number', default=5, type=int, choices=[4, 5, 6, 7, 8, 9, 10]

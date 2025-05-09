@@ -7,6 +7,8 @@ Created on Tue Sep 22 13:18:23 2020
 """
 import warnings
 
+from code_ai.pipeline import pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
+
 warnings.filterwarnings("ignore")  # 忽略警告输出
 
 from collections import OrderedDict
@@ -20,7 +22,6 @@ import time
 
 import json
 import nibabel as nib
-import argparse
 import tensorflow as tf
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from skimage import measure, color, morphology
@@ -32,6 +33,8 @@ import matplotlib
 from code_ai.pipeline.chuan.gpu_stroke import model_predict_stroke
 from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
 from code_ai.pipeline.chuan.util import use_BET_DWI0, make_BET_mask, make_BET_ADC_DWI1000, ADC_DWI1000_nor
+from dotenv import load_dotenv
+load_dotenv()
 
 # 會使用到的一些predict技巧
 def data_translate(img, nii):
@@ -241,7 +244,7 @@ def pipeline_infarct(ID,
 
         path_predict = os.path.join(path_processID, 'predict_map')
 
-        path_output_dir = os.path.join(path_output, ID)
+        path_output_dir = os.path.join(str(path_output), ID)
         os.makedirs(path_output_dir, exist_ok=True)
 
         # 讀取predict的結果，已經修改成nifti
@@ -626,7 +629,7 @@ def pipeline_infarct(ID,
         # 以json做輸出
         Report = text
         json_path_name = os.path.join(path_json, 'Pred_Infarct.json')
-        json_path_name2 = os.path.join(path_output_dir, 'Pred_Infarct.json')
+        json_path_name2 = os.path.join(str(path_output_dir), 'Pred_Infarct.json')
         case_json(json_path_name, ID, InfarctVolume, MeanADC, Report)
         case_json(json_path_name2, ID, InfarctVolume, MeanADC, Report)
         # 刪除資料夾
@@ -634,6 +637,9 @@ def pipeline_infarct(ID,
         #     shutil.rmtree(path_process) #清掉整個資料夾
 
         logging.info('!!! ' + ID + ' post_stroke finish.')
+        return (os.path.join(path_output_dir, 'Pred_Infarct.nii.gz'),
+                os.path.join(path_output_dir, 'Pred_Infarct_ADCth.nii.gz'),
+                os.path.join(path_output_dir, 'Pred_Infarct_synthseg.nii.gz'),json_path_name2)
 
 
     except:
@@ -651,6 +657,7 @@ def pipeline_infarct(ID,
         #         shutil.rmtree(os.path.join(path_class, class_list[i])) #清除檔案
 
     print('end!!!')
+    return (None, None, None, None)
 
 
 if __name__ == '__main__':
@@ -661,6 +668,8 @@ if __name__ == '__main__':
 
     ID = str(args.ID)
     Inputs = args.Inputs  # 將列表合併為字符串，保留順序
+    InputsDicomDir = args.InputsDicomDir
+
     path_output = str(args.Output_folder)
 
     # 讀出DWI, DWI0, ADC, SynthSEG的檔案
@@ -692,11 +701,21 @@ if __name__ == '__main__':
 
 
     # 直接當作function的輸入
-    pipeline_infarct(ID, ADC_file, DWI0_file, DWI1000_file, SynthSEG_file, path_output, path_code, path_processModel,
-                     path_json, path_log, cuatom_model, gpu_n)
-
-    # #最後再讀取json檔結果
-    # with open(json_path_name) as f:
-    #     data = json.load(f)
-
-    # logging.info('Json!!! ' + str(data))
+    Pred_Infarct,Pred_Infarct_ADCth, \
+    Pred_Infarct_synthseg, json_path_name2 = pipeline_infarct(ID,
+                                                              ADC_file, DWI0_file, DWI1000_file, SynthSEG_file,
+                                                              path_output, path_code, path_processModel,
+                                                              path_json, path_log, cuatom_model, gpu_n)
+    # upload_dicom_seg
+    if Pred_Infarct is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct, path_output)
+        upload_dicom_seg(path_output, Pred_Infarct, )
+    if Pred_Infarct_ADCth is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct_ADCth, path_output)
+        upload_dicom_seg(path_output, Pred_Infarct_ADCth, )
+    if Pred_Infarct_synthseg is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct_synthseg, path_output)
+        upload_dicom_seg(path_output, Pred_Infarct_synthseg, )
+    # upload json
+    if json_path_name2 is not None:
+        pass
