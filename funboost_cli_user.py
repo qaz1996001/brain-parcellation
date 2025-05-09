@@ -3,9 +3,19 @@ funboost现在 新增 命令行启动消费 发布  和清空消息
 
 
 """
+import os
 import sys
 from pathlib import Path
 import fire
+from dotenv import load_dotenv
+load_dotenv()
+path_process = os.getenv("PATH_PROCESS")
+path_json = os.getenv("PATH_JSON")
+path_log = os.getenv("PATH_LOG")
+# 建置資料夾
+os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
+os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
 
 project_root_path = Path(__file__).absolute().parent
 print(f'project_root_path is : {project_root_path}  ,请确认是否正确')
