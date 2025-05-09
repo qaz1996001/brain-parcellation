@@ -20,6 +20,7 @@ class InferenceCmdItem(BaseModel):
     cmd_str: str
     input_list: List[str]
     output_list: List[str]
+    input_dicom_dir: str
 
 
 class InferenceCmd(BaseModel):
@@ -310,8 +311,8 @@ def build_analysis(study_path: pathlib.Path):
     return analyses
 
 
-def build_inference_cmd(nifti_study_path: pathlib.Path) -> Optional[
-    InferenceCmd]:  #-> Optional[List[Tuple[str,str]]]:
+def build_inference_cmd(nifti_study_path: pathlib.Path,
+                        dicom_study_path: pathlib.Path,) -> Optional[InferenceCmd]:  #-> Optional[List[Tuple[str,str]]]:
     from code_ai.pipeline import pipelines
     analysis: Analysis = build_analysis(nifti_study_path)
     # 使用管道配置
@@ -319,11 +320,16 @@ def build_inference_cmd(nifti_study_path: pathlib.Path) -> Optional[
     for key, value in analysis.model_dump().items():
         if key in pipelines:
             task = getattr(analysis, key)
-            cmd_str = pipelines[key].generate_cmd(analysis.study_id, task)
+
+            basename = os.path.basename(task.input_path_list[0]).split('.')[0]
+            intput_dicom = dicom_study_path.joinpath(basename)
+            input_dicom_dir = str(intput_dicom)
+            cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
             inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
                                               cmd_str=cmd_str,
                                               input_list=task.input_path_list,
                                               output_list=task.output_path_list,
+                                              input_dicom_dir = str(intput_dicom)
                                               )
             # (key, cmd_str,analysis.Infarct.input_path_list,analysis.Infarct.output_path_list)
             inference_item_list.append(inference_item)
