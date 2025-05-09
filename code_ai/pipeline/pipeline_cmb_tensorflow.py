@@ -104,7 +104,7 @@ def pipeline_cmb(ID :str,
             # gpu_line = 'python ' + os.path.join(path_synthseg, 'main.py -i ') + path_nii + ' --all False --CMB TRUE'
             gpu_line = '{} {} -i {} --template {} --output {} --all False --CMB TRUE'.format(
                 PYTHON3,
-                os.path.join(path_synthseg, 'main.py'),
+                os.path.join(os.path.dirname(__file__), 'main.py'),
                 swan_file,
                 t1_file,
                 path_processID)
