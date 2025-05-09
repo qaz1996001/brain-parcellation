@@ -213,7 +213,7 @@ def process_instances(func_params: Dict[str, any]):
                                             output_dicom_path)
     if copy_dicom_file_tuple:
         return str(copy_dicom_file_tuple)
-    return
+    return None
 
 
 def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
@@ -253,6 +253,8 @@ def process_dir(func_params: Dict[str, any]):
         async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance=instances,
                                                                                          output_dicom_path=output_dicom_path).get_str_dict())
                              for instances in instances_list]
+    for async_result in async_result_list:
+        async_result.set_timeout(3600)
 
     result_list = [async_result.result for async_result in async_result_list]
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
@@ -263,6 +265,8 @@ def process_dir(func_params: Dict[str, any]):
                                                                    output_nifti_path=output_nifti_path)
 
         dicom_2_nii_file_result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
+        dicom_2_nii_file_result.set_timeout(3600)
+        dicom_2_nii_file_result.get()
     return dicom_study_folder_path
 
 
@@ -275,14 +279,16 @@ def dicom_to_nii(func_params: Dict[str, any]):
     # 1. raw dicom -> rename dicom
     if task_params.sub_dir is not None:
         result = process_dir.push(func_params)
+        result.set_timeout(3600)
     else:
         # rename dicom -> rename nifti
         dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(
             dicom_study_folder_path=task_params.output_dicom_path,
             output_nifti_path=task_params.output_nifti_path)
         result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
-
-    return result
+        result.set_timeout(3600)
+    data = result.get()
+    return data
 
 
 # @Booster('dicom_rename_queue',

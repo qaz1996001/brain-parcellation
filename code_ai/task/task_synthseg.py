@@ -372,14 +372,6 @@ def call_pipeline_flirt(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-# @Booster('call_resample_to_original_task',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.THREADING,
-#          concurrent_num = 10,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
 @Booster(BoosterParamsMyAI(queue_name ='call_resample_to_original_task',
                            concurrent_mode=ConcurrentModeEnum.THREADING,
                            )
