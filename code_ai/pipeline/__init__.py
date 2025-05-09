@@ -88,6 +88,7 @@ def dicom_seg_multi_file(ID:str,
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
+    print('dicom_seg_multi_file',cmd_str)
     return stdout, stderr
 
 
@@ -99,7 +100,7 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
     file_list = sorted(input_dicom_seg_folder_path.rglob(dicom_seg_base_name + '*.dcm'))
     file_str_list = list(map(lambda x: str(x), file_list))
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/upload_dicom.py '
+               '{} code_ai/pipeline/upload_dicom_seg.py '
                '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                     PYTHON3,
                                     ' '.join(file_str_list)

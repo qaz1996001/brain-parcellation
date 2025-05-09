@@ -357,7 +357,6 @@ if __name__ == '__main__':
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
 
-    # 讀出DWI, DWI0, ADC, SynthSEG的檔案
     T2FLAIR_file = Inputs[0]
     SynthSEG_WM_file = Inputs[1]
     SynthSEG_file = Inputs[2]

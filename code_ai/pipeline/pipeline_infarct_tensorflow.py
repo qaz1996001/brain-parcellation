@@ -709,6 +709,7 @@ if __name__ == '__main__':
     # upload_dicom_seg
     if Pred_Infarct is not None:
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct, path_output)
+        print('stdout', stdout)
         upload_dicom_seg(path_output, Pred_Infarct, )
     if Pred_Infarct_ADCth is not None:
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct_ADCth, path_output)
