@@ -39,7 +39,7 @@ class CRUDFile(CRUDBase[File, FileCreate, FileUpdate]):
         """
         return db.query(File).filter(
             File.file_name == file_name,
-            File.file_path == file_path
+            File.path_nii == file_path
         ).first()
 
     def create(self, db: Session, *, obj_in: FileCreate) -> File:
@@ -54,7 +54,7 @@ class CRUDFile(CRUDBase[File, FileCreate, FileUpdate]):
             Created file object
         """
         db_obj = File(
-            file_path=obj_in.file_path,
+            file_path=obj_in.path_nii,
             file_name=obj_in.file_name,
             file_extension=obj_in.file_extension,
             original_size=obj_in.original_size,

@@ -1,0 +1,26 @@
+{
+  "Name": "ORTHANC PostgreSQL and MinIO",
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+
+  "PostgreSQL": {
+    "Host": "orthanc-index",
+    "EnableVerboseLogs": true
+  },
+
+  "AwsS3Storage": {
+    "BucketName": "my-sample-bucket",
+    "Region": "us-east-1",
+    "AccessKey": "minioadmin",
+    "SecretKey": "minioadmin",
+    "Endpoint": "http://minio:9000",
+    "VirtualAddressing": false
+  },
+
+  "Plugins": [
+    "/usr/share/orthanc/plugins",
+    "/usr/local/share/orthanc/plugins"
+  ]
+}

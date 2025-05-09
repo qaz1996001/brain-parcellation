@@ -1,7 +1,8 @@
 # app/main.py
 # app/main.py
+import orjson
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
@@ -83,6 +84,16 @@ async def run_manual_check() -> dict[str, str]:
     """Manually trigger a check for pending backup tasks."""
     await task_scheduler.check_pending_jobs()
     return {"message": "Manual check for pending tasks initiated"}
+
+
+@app.post("/upload_json", tags=["upload_json"])
+async def run_manual_check(request:Request) -> dict[str, str]:
+    """Manually trigger a check for pending backup tasks."""
+    json = await request.json()
+    print('request.keys()',request.keys())
+    print(json)
+    return {"message":orjson.dumps(json)}
+
 
 
 if __name__ == "__main__":
