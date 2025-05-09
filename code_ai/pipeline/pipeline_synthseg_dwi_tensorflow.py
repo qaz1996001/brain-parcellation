@@ -27,7 +27,7 @@ import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
-from code_ai.pipeline import study_id_pattern
+from code_ai.pipeline import study_id_pattern, pipeline_parser
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -147,7 +147,7 @@ if __name__ == '__main__':
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
-
+    parser = pipeline_parser()
     args = parser.parse_args()
 
     ID = str(args.ID)

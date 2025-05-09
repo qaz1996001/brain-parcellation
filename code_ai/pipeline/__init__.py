@@ -1,7 +1,9 @@
+import argparse
 import os
 import pathlib
 import re
 import subprocess
+from typing import Optional
 
 from code_ai import PYTHON3
 from code_ai.utils_inference import InferenceEnum, Task
@@ -11,6 +13,22 @@ study_id_pattern = re.compile('.*(_[0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resource', 'models')
 
 
+def pipeline_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ID', type=str, default='10516407_20231215_MR_21210200091',
+                        help='目前執行的case的patient_id or study id')
+
+    parser.add_argument('--Inputs', type=str, nargs='+',
+                        default=['/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/SWAN.nii.gz',
+                                 '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz' ],
+                        help='用於輸入的檔案')
+    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
+                        help='用於輸出結果的資料夾')
+    parser.add_argument('--InputsDicomDir', type=str,
+                        default='/mnt/e/rename_dicom_202505051/10516407_20231215_MR_21210200091/SWAN',
+                        help='用於輸入的檔案')
+    return parser
+
 class PipelineConfig:
     base_path = pathlib.Path(__file__).parent.parent.parent.absolute()
     python3   = os.getenv("PYTHON3")
@@ -19,15 +37,23 @@ class PipelineConfig:
         self.script_name = script_name
         self.data_key = data_key
 
-    def generate_cmd(self, study_id: str,task:Task):
+    def generate_cmd(self, study_id: str,task:Task,input_dicom_dir:Optional[str] =None):
         input_path_list = [str(x) for x in task.input_path_list]
         output_path = os.path.dirname(task.output_path)
-
-        return (f'export PYTHONPATH={self.base_path} && '
-                f'{self.python3} code_ai/pipeline/{self.script_name} '
-                f'--ID {study_id} '
-                f'--Inputs {" ".join(input_path_list)} '
-                f'--Output_folder {output_path} ')
+        if input_dicom_dir is None:
+            return (f'export PYTHONPATH={self.base_path} && '
+                    f'{self.python3} code_ai/pipeline/{self.script_name} '
+                    f'--ID {study_id} '
+                    f'--Inputs {" ".join(input_path_list)} '
+                    f'--Output_folder {output_path} ')
+        else:
+            return (f'export PYTHONPATH={self.base_path} && '
+                    f'{self.python3} code_ai/pipeline/{self.script_name} '
+                    f'--ID {study_id} '
+                    f'--Inputs {" ".join(input_path_list)} '
+                    f'--Output_folder {output_path} '
+                    f'--InputsDicomDir {input_dicom_dir} '
+                    )
 
 
 pipelines = {

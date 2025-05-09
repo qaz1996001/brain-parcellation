@@ -34,7 +34,7 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg
+from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg, pipeline_parser
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -164,20 +164,7 @@ if __name__ == '__main__':
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
     # python /mnt/d/wsl_ubuntu/pipeline/sean/code/pipeline_cmb_tensorflow.py --ID 00971591_20160503_MR_250425032 --Inputs /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/SWAN.nii.gz /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/T1FLAIR_AXI.nii.gz
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--ID', type=str, default='10516407_20231215_MR_21210200091',
-                        help='目前執行的case的patient_id or study id')
-
-    parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=['/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/SWAN.nii.gz',
-                                 '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz' ],
-                        help='用於輸入的檔案')
-    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
-                        help='用於輸出結果的資料夾')
-    parser.add_argument('--InputsDicomDir', type=str,
-                        default='/mnt/e/rename_dicom_202505051/10516407_20231215_MR_21210200091/SWAN',
-                        help='用於輸入的檔案')
-
+    parser = pipeline_parser()
     args = parser.parse_args()
 
     ID = str(args.ID)
@@ -212,9 +199,9 @@ if __name__ == '__main__':
     if cmb_path_str is not None:
         stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,cmb_path_str,path_output )
         upload_dicom_seg(path_output,cmb_path_str,)
-    # if output_nii_path_str is not None:
-    #     stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
-    #     upload_dicom_seg(path_output, output_nii_path_str, )
+    if output_nii_path_str is not None:
+        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
+        upload_dicom_seg(path_output, output_nii_path_str, )
 
 
 

@@ -30,7 +30,7 @@ import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
 
-from code_ai.pipeline import study_id_pattern
+from code_ai.pipeline import study_id_pattern, pipeline_parser
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -135,17 +135,17 @@ def pipeline_synthseg(ID :str,
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
-                        help='目前執行的case的patient_id or study id')
-
-    parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=[
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz', ],
-                        help='用於輸入的檔案')
-    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
-                        help='用於輸出結果的資料夾')
-
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
+    #                     help='目前執行的case的patient_id or study id')
+    #
+    # parser.add_argument('--Inputs', type=str, nargs='+',
+    #                     default=[
+    #                              '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/T1FLAIR_AXI.nii.gz', ],
+    #                     help='用於輸入的檔案')
+    # parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
+    #                     help='用於輸出結果的資料夾')
+    parser = pipeline_parser()
     args = parser.parse_args()
 
     ID = str(args.ID)

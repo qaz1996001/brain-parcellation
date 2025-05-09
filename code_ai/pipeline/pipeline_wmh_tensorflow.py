@@ -11,39 +11,23 @@ import subprocess
 import warnings
 
 from code_ai import PYTHON3
+from code_ai.pipeline import dicom_seg_multi_file
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
-
-from asyncio.log import logger
 import os
-import time
 import numpy as np
-import pydicom
-import nibabel
+
 import logging
-import glob
 import shutil
 import time
 
 import json
-import pandas as pd
 import nibabel as nib
-import cv2
-import matplotlib.pyplot as plt
-import matplotlib
+
 import argparse
 import tensorflow as tf
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import keras
-import pandas as pd
-# from layers import MaxPoolingWithArgmax2D, MaxUnpooling2D
-import skimage
-import skimage.feature
-import skimage.measure
-from skimage import measure, color, morphology
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from random import uniform
 
 from collections import OrderedDict
 import numba as nb

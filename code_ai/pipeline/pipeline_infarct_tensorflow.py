@@ -656,23 +656,7 @@ def pipeline_infarct(ID,
 if __name__ == '__main__':
     from code_ai.pipeline.chuan import DATASET_JSON_PATH, CUATOM_MODEL_INFARCT
     from code_ai.pipeline.chuan import gpu_n
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--ID', type=str, default='12292196_20200223_MR_20902230007',
-                        help='目前執行的case的patient_id or study id')
-    # parser.add_argument('--Inputs', type=str, nargs='+', default = ['/data/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/ADC.nii.gz',
-    #                                                                  '/data/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/DWI0.nii.gz',
-    #                                                                    '/data/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/DWI1000.nii.gz',
-    #                                                                      '/data/pipeline/chuan/example_input/00052669_20191210_MR_20812100074/synthseg_DWI0_original_DWI.nii.gz'], help='用於輸入的檔案')
-    # parser.add_argument('--Output_folder', type=str, default = '/data/pipeline/chuan/example_output/',help='用於輸出結果的資料夾')
-    parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=['/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/ADC.nii.gz',
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/DWI0.nii.gz',
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_input/12292196_20200223_MR_20902230007/DWI1000.nii.gz',
-                                 '/mnt/d/wsl_ubuntu/pipeline/sean/example_output/12292196_20200223_MR_20902230007/synthseg_DWI0_original_DWI.nii.gz'],
-                        help='用於輸入的檔案')
-    parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
-                        help='用於輸出結果的資料夾')
-
+    parser = pipeline_parser()
     args = parser.parse_args()
 
     ID = str(args.ID)

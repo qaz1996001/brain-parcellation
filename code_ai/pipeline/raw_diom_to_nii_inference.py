@@ -1,4 +1,5 @@
 import argparse
+import os.path
 import pathlib
 
 if __name__ == '__main__':
@@ -63,7 +64,13 @@ if __name__ == '__main__':
 
     result_list = [async_result.result for async_result in result_list]
     print('result_list',result_list)
-    output_nifti_path = pathlib.Path(args.output_nifti)
-    output_nifti_path_list = sorted(output_nifti_path.iterdir())
-    for output_nifti_path in output_nifti_path_list:
-        task_pipeline_result = task_pipeline_inference.push({'nifti_study_path':str(output_nifti_path)})
+    if len(result_list) > 0:
+        output_nifti_path = pathlib.Path(args.output_nifti)
+        dicom_path = pathlib.Path(args.output_dicom)
+        output_nifti_path_list = list(map(lambda x:output_nifti_path.joinpath(os.path.basename(x)),
+                                          result_list))
+        for nifti_study_path in output_nifti_path_list:
+            dicom_study_path = dicom_path.joinpath(nifti_study_path.name)
+            task_pipeline_result = task_pipeline_inference.push({'nifti_study_path':str(nifti_study_path),
+                                                                 'dicom_study_path':str(dicom_study_path),
+                                                                 })
