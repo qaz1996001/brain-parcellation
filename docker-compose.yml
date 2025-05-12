@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   rabbitmq_server:
     restart: always
@@ -42,66 +41,66 @@ services:
       timeout: 5s
       retries: 5
 
-  orthanc:
-    image: orthancteam/orthanc:24.7.1
-    depends_on:
-      - db_server
-      - minio
-    restart: unless-stopped
-    ports:
-      - "4242:4242"
-      - "8042:8042"
-    volumes:
-      - orthanc-storage:/var/lib/orthanc/db
-      - ./orthanc.json:/etc/orthanc/orthanc.json:ro  # 映射設定檔到宿主機
-    environment:
-      VERBOSE_STARTUP: "true"
-      VERBOSE_ENABLED: "true"
-      ORTHANC__NAME: "ORTHANC PostgreSQL and MinIO"
-      # PostgreSQL configuration
-      ORTHANC__POSTGRESQL: |
-        {
-          "Host": "db_server",
-          "EnableVerboseLogs": true
-        }
-      # MinIO/S3 configuration
-      ORTHANC__AWS_S3_STORAGE__BUCKET_NAME: "my-sample-bucket"
-      ORTHANC__AWS_S3_STORAGE__REGION: "us-east-1"
-      ORTHANC__AWS_S3_STORAGE__ACCESS_KEY: "minioadmin"
-      ORTHANC__AWS_S3_STORAGE__SECRET_KEY: "minioadmin"
-      ORTHANC__AWS_S3_STORAGE__ENDPOINT: "http://minio:9000"
-      ORTHANC__AWS_S3_STORAGE__VIRTUAL_ADDRESSING: "false"
-      # Optional hybrid mode - uncomment one if needed
-      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToObjectStorage"
-      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToFileSystem"
-
-      # Plugin configuration
-      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
-      STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
-      DICOM_WEB_PLUGIN_ENABLED: "true"
-      ORTHANC__DICOM_WEB__PUBLIC_ROOT: "/dicom-web"
-      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__ENABLE_OPEN_IN_OHIF_VIEWER_3: "true"
-      # Authentication
-      ORTHANC__AUTHENTICATION_ENABLED: "false"
-
-  # MinIO server
-  minio:
-    image: minio/minio
-    container_name: minio-backup-minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+#  orthanc:
+#    image: orthancteam/orthanc:24.7.1
+#    depends_on:
+#      - db_server
+#      - minio
+#    restart: unless-stopped
+#    ports:
+#      - "4242:4242"
+#      - "8042:8042"
+#    volumes:
+#      - orthanc-storage:/var/lib/orthanc/db
+#      - ./orthanc.json:/etc/orthanc/orthanc.json:ro  # 映射設定檔到宿主機
+#    environment:
+#      VERBOSE_STARTUP: "true"
+#      VERBOSE_ENABLED: "true"
+#      ORTHANC__NAME: "ORTHANC PostgreSQL and MinIO"
+#      # PostgreSQL configuration
+#      ORTHANC__POSTGRESQL: |
+#        {
+#          "Host": "db_server",
+#          "EnableVerboseLogs": true
+#        }
+#      # MinIO/S3 configuration
+#      ORTHANC__AWS_S3_STORAGE__BUCKET_NAME: "my-sample-bucket"
+#      ORTHANC__AWS_S3_STORAGE__REGION: "us-east-1"
+#      ORTHANC__AWS_S3_STORAGE__ACCESS_KEY: "minioadmin"
+#      ORTHANC__AWS_S3_STORAGE__SECRET_KEY: "minioadmin"
+#      ORTHANC__AWS_S3_STORAGE__ENDPOINT: "http://minio:9000"
+#      ORTHANC__AWS_S3_STORAGE__VIRTUAL_ADDRESSING: "false"
+#      # Optional hybrid mode - uncomment one if needed
+#      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToObjectStorage"
+#      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToFileSystem"
+#
+#      # Plugin configuration
+#      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
+#      STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+#      DICOM_WEB_PLUGIN_ENABLED: "true"
+#      ORTHANC__DICOM_WEB__PUBLIC_ROOT: "/dicom-web"
+#      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__ENABLE_OPEN_IN_OHIF_VIEWER_3: "true"
+#      # Authentication
+#      ORTHANC__AUTHENTICATION_ENABLED: "false"
+#
+#  # MinIO server
+#  minio:
+#    image: minio/minio
+#    container_name: minio-backup-minio
+#    environment:
+#      MINIO_ROOT_USER: minioadmin
+#      MINIO_ROOT_PASSWORD: minioadmin
+#    ports:
+#      - "9000:9000"
+#      - "9001:9001"
+#    volumes:
+#      - minio_data:/data
+#    command: server /data --console-address ":9001"
+#    healthcheck:
+#      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+#      interval: 30s
+#      timeout: 20s
+#      retries: 3
 #  fast_api_app:
 #    build:
 #      context: ./backend
@@ -136,16 +135,16 @@ volumes:
       type: none
       device: ${VOLUMES_PATH}/postgres-data
       o: bind
-  minio_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${VOLUMES_PATH}/minio-data
-      o: bind
-  orthanc-storage:
-    driver: local
-    driver_opts:
-      type: none
-      device: ${VOLUMES_PATH}/orthanc-storage
-      o: bind
-  backup_data:
+#  minio_data:
+#    driver: local
+#    driver_opts:
+#      type: none
+#      device: ${VOLUMES_PATH}/minio-data
+#      o: bind
+#  orthanc-storage:
+#    driver: local
+#    driver_opts:
+#      type: none
+#      device: ${VOLUMES_PATH}/orthanc-storage
+#      o: bind
+#  backup_data:
