@@ -10,6 +10,7 @@ from code_ai.utils_inference import build_inference_cmd
 from dotenv import load_dotenv
 load_dotenv()
 
+
 def build_dicom_to_nifti_cmd_str(args) -> Optional[str]:
     cmd_str = None
     if all((args.input_dicom, args.output_dicom, args.output_nifti)):
@@ -18,7 +19,7 @@ def build_dicom_to_nifti_cmd_str(args) -> Optional[str]:
         output_nifti_path = pathlib.Path(args.output_nifti)
         cmd_str = ('export PYTHONPATH={} && '
                    '{} code_ai/dicom2nii/main_call.py '
-                   '--input_dicom {} '
+                   '--input_dicom \"{}\" '
                    '--output_dicom {} '
                    '--output_nifti {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                                PYTHON3,
@@ -80,7 +81,7 @@ if __name__ == '__main__':
     os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
 
     dicom_to_nifti_cmd_str = build_dicom_to_nifti_cmd_str(args=args)
-
+    print(dicom_to_nifti_cmd_str)
     process = subprocess.Popen(args=dicom_to_nifti_cmd_str, shell=True,
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -90,10 +91,11 @@ if __name__ == '__main__':
     match_result = pattern.match(stdout.decode('utf-8'))
     match_result.groups()
     if match_result is not None :
+        output_dicom = pathlib.Path(args.output_dicom)
         study_str:str = match_result.groups()[0]
         study_str_list = study_str.split(',')
         nifti_study_list = list(map(lambda x:pathlib.Path(x),study_str_list))
-        inference_item_cmd_list = list(map(lambda x:build_inference_cmd(x), nifti_study_list))
+        inference_item_cmd_list = list(map(lambda x:build_inference_cmd(x,output_dicom), nifti_study_list))
         print('inference_item_cmd', inference_item_cmd_list)
         for inference_item_cmd in inference_item_cmd_list:
             cmd_output_path = os.path.join(path_cmd_tools,f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json')

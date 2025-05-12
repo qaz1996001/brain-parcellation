@@ -336,7 +336,7 @@ def build_inference_cmd(nifti_study_path: pathlib.Path,
                 basename = os.path.basename(task.input_path_list[1]).split('.')[0]
             else:
                 basename = os.path.basename(task.input_path_list[0]).split('.')[0]
-            intput_dicom = dicom_study_path.joinpath(basename)
+            intput_dicom = dicom_study_path.joinpath(nifti_study_path.parent,basename)
             input_dicom_dir = str(intput_dicom)
             cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
             inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
