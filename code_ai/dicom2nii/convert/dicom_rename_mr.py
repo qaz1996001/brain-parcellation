@@ -1940,7 +1940,7 @@ class ConvertManager:
         instances_list (list): List of DICOM file instances.
         """
         try:
-            dicom_ds = dcmread(str(instances), stop_before_pixels=True)
+            dicom_ds = dcmread(str(instances), stop_before_pixels=True,force=True)
             output_study = self.get_output_study(dicom_ds=dicom_ds, output_path=self.output_path)
             if output_study:
                 rename_series = self.rename_dicom_path(dicom_ds=dicom_ds)
