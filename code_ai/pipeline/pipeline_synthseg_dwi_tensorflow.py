@@ -28,6 +28,7 @@ import logging
 import pynvml  # 导包
 import tensorflow as tf
 from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
+from code_ai import PYTHON3
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -92,7 +93,9 @@ def pipeline_synthseg(ID :str,
             # print(gpus, cpus)
             tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
 
-            gpu_line = 'python {} -i {} --output {} --all False --DWI TRUE '.format(
+            gpu_line = 'export CUDA_VISIBLE_DEVICES={} && {} {} -i {} --output {} --all False --DWI TRUE '.format(
+                gpu_n,
+                PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main.py'),
                 file_path_str,
                 path_processID)
@@ -155,12 +158,7 @@ if __name__ == '__main__':
     InputsDicomDir = args.InputsDicomDir
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
-    # path_code = '/mnt/d/wsl_ubuntu/pipeline/sean/code/'
-    # path_process = '/mnt/d/wsl_ubuntu/pipeline/sean/process/'  # 前處理dicom路徑(test case)
-    # path_processModel = os.path.join(path_process, 'Deep_synthseg')  # 前處理dicom路徑(test case)
-    # path_json = '/mnt/d/wsl_ubuntu/pipeline/sean/json/'  # 存放json的路徑，回傳執行結果
-    # path_log = '/mnt/d/wsl_ubuntu/pipeline/sean/log/'  # log資料夾
-    # gpu_n = 0  # 使用哪一顆gpu
+
 
 
     path_code = os.getenv("PATH_CODE")
@@ -169,7 +167,8 @@ if __name__ == '__main__':
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
     path_synthseg = os.getenv("PATH_SYNTHSEG")
-    gpu_n = 0  # 使用哪一顆gpu
+    # 使用哪一顆gpu
+    gpu_n = os.getenv("GPU_N",0)
 
     file_path_str = Inputs[0]
 

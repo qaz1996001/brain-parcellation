@@ -22,12 +22,12 @@ from typing import Optional
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
-import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
 
 from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file
+from code_ai import PYTHON3
 
 autotune = tf.data.experimental.AUTOTUNE
 from dotenv import load_dotenv
@@ -89,7 +89,9 @@ def pipeline_synthseg(ID :str,
             # print(gpus, cpus)
             tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
 
-            gpu_line = 'python {} -i {} --output {} '.format(
+            gpu_line = 'export CUDA_VISIBLE_DEVICES={} && {} {} -i {} --output {} '.format(
+                gpu_n,
+                PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main5class.py'),
                 file_path_str,
                 path_processID)
@@ -156,8 +158,8 @@ if __name__ == '__main__':
     path_processModel = os.path.join(path_process, 'Deep_synthseg')
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
-
-    gpu_n = 0  # 使用哪一顆gpu
+    # 使用哪一顆gpu
+    gpu_n = os.getenv("GPU_N",0)
 
     file_path_str = Inputs[0]
 
