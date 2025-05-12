@@ -64,8 +64,8 @@ pipelines = {
     InferenceEnum.WMH_PVS: PipelineConfig('pipeline_synthseg_wmh_tensorflow.py', 'WMH_PVS'),
     InferenceEnum.WMH: PipelineConfig('pipeline_wmh_tensorflow.py', 'WMH'),
     InferenceEnum.Infarct: PipelineConfig('pipeline_infarct_tensorflow.py', 'Infarct'),
+    InferenceEnum.Aneurysm: PipelineConfig('pipeline_synthseg5class_tensorflow.py', 'Aneurysm'),
     }
-
 
 def dicom_seg_multi_file(ID:str,
                          InputsDicomDir:str,
