@@ -330,22 +330,23 @@ def build_inference_cmd(nifti_study_path: pathlib.Path,
     # 使用管道配置
     inference_item_list = []
     for key, value in analysis.model_dump().items():
-        if key in pipelines:
-            task = getattr(analysis, key)
-            if key == InferenceEnum.Infarct:
-                basename = os.path.basename(task.input_path_list[1]).split('.')[0]
-            else:
-                basename = os.path.basename(task.input_path_list[0]).split('.')[0]
-            intput_dicom = dicom_study_path.joinpath(nifti_study_path.parent,basename)
-            input_dicom_dir = str(intput_dicom)
-            cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
-            inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
-                                              cmd_str=cmd_str,
-                                              input_list=task.input_path_list,
-                                              output_list=task.output_path_list,
-                                              input_dicom_dir = str(intput_dicom)
-                                              )
-            # (key, cmd_str,analysis.Infarct.input_path_list,analysis.Infarct.output_path_list)
-            inference_item_list.append(inference_item)
+        if value is not None:
+            if key in pipelines:
+                task = getattr(analysis, key)
+                if key == InferenceEnum.Infarct:
+                    basename = os.path.basename(task.input_path_list[1]).split('.')[0]
+                else:
+                    basename = os.path.basename(task.input_path_list[0]).split('.')[0]
+                intput_dicom = dicom_study_path.joinpath(nifti_study_path.parent,basename)
+                input_dicom_dir = str(intput_dicom)
+                cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
+                inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
+                                                  cmd_str=cmd_str,
+                                                  input_list=task.input_path_list,
+                                                  output_list=task.output_path_list,
+                                                  input_dicom_dir = str(intput_dicom)
+                                                  )
+                # (key, cmd_str,analysis.Infarct.input_path_list,analysis.Infarct.output_path_list)
+                inference_item_list.append(inference_item)
 
     return InferenceCmd(cmd_items=inference_item_list)
