@@ -8,6 +8,7 @@ dependencies = [
     "aiofiles>=24.1.0",
     "bentoml==1.4.3",
     "celery==5.4.0",
+    "db-libs>=1.1",
     "funboost==48.4",
     "httpx==0.28.1",
     "matplotlib==3.8.2",

@@ -9,6 +9,7 @@ from typing import List, Dict
 from funboost import BrokerEnum, Booster
 from pydicom import dcmread
 
+from code_ai import utils_database
 from code_ai.dicom2nii.convert import ModalityProcessingStrategy, MRAcquisitionTypeProcessingStrategy, \
     MRRenameSeriesProcessingStrategy
 from code_ai.dicom2nii.convert import DwiProcessingStrategy, ADCProcessingStrategy, EADCProcessingStrategy, \
@@ -24,7 +25,7 @@ from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
 from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
 from code_ai.task.task_params import BoosterParamsMyRABBITMQ
-
+from code_ai.utils_database import save_result_status_to_sqlalchemy
 
 def get_output_study(dicom_ds):
     if dicom_ds is None:
@@ -105,7 +106,7 @@ def copy_dicom_file(input_tuple, instance_path, output_path):
     output_study_instance: pathlib.Path = output_study_series.joinpath(instance_path.name)
     if output_study_series.is_dir():
         if output_study_instance.exists():
-            return
+            return output_study_instance
         else:
             with open(instance_path, mode='rb') as instance:
                 with open(output_study_instance, 'wb+') as output_instance:
@@ -122,6 +123,7 @@ def file_processing(func_params: Dict[str, any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
+                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
 def call_dcm2niix(func_params: Dict[str, any]):
     task_params = intput_params.CallDcm2niixParams.model_validate(func_params,
@@ -200,7 +202,8 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_instances_queue',
                                  qps=100,
-                                 #log_level=logging.WARNING,
+                                 log_level=logging.WARNING,
+                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy
                                  ))
 def process_instances(func_params: Dict[str, any]):
     task_params = intput_params.ProcessInstancesParams.model_validate(func_params,
@@ -239,6 +242,7 @@ def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
+                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10,))
 def process_dir(func_params: Dict[str, any]):
     task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
@@ -274,6 +278,7 @@ def process_dir(func_params: Dict[str, any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
+                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
                                  qps=10,))
 def dicom_to_nii(func_params: Dict[str, any]):
 

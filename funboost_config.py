@@ -74,7 +74,9 @@ class BrokerConnConfig(DataClassBase):
     #     "security_protocol": "SASL_PLAINTEXT",
     # }
 
-    # SQLACHEMY_ENGINE_URL = 'sqlite:////sqlachemy_queues/queues.db'
+    # SQLACHEMY_ENGINE_URL = f'sqlite:////sqlachemy_queues/queues.db'
+    SQLACHEMY_ENGINE_URL = f'sqlite:///{os.getenv("LOCAL_DB","database.sqlite3")}'
+
 
     # 如果broker_kind 使用 peewee 中间件模式会使用mysql配置
     # MYSQL_HOST = '127.0.0.1'
