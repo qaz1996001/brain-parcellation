@@ -6,8 +6,10 @@
   "AuthenticationEnabled": false,
 
   "PostgreSQL": {
-    "Host": "orthanc-index",
-    "EnableVerboseLogs": true
+    "Host": "db_server",
+    "EnableVerboseLogs": true,
+     "Username" : "postgres_n",
+     "Password" : "postgres_p"
   },
 
   "AwsS3Storage": {
