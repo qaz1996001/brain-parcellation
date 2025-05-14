@@ -9,7 +9,6 @@ from typing import List, Dict
 from funboost import BrokerEnum, Booster
 from pydicom import dcmread
 
-from code_ai import utils_database
 from code_ai.dicom2nii.convert import ModalityProcessingStrategy, MRAcquisitionTypeProcessingStrategy, \
     MRRenameSeriesProcessingStrategy
 from code_ai.dicom2nii.convert import DwiProcessingStrategy, ADCProcessingStrategy, EADCProcessingStrategy, \
@@ -25,7 +24,7 @@ from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
 from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
 from code_ai.task.task_params import BoosterParamsMyRABBITMQ
-from code_ai.utils_database import save_result_status_to_sqlalchemy
+from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 def get_output_study(dicom_ds):
     if dicom_ds is None:
