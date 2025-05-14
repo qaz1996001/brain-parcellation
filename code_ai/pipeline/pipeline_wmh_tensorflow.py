@@ -25,7 +25,7 @@ from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
 from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg
 from code_ai.pipeline.chuan.util import T2FLAIR_nor
 from code_ai.pipeline.chuan.gpu_wmh import model_predict_wmh
-from dotenv import load_dotenv
+from code_ai import load_dotenv
 load_dotenv()
 
 

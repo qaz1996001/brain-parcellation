@@ -26,16 +26,14 @@ import os
 from typing import Optional
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
-import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
-from code_ai import PYTHON3
+from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline.cmb import CMBServiceTF
 from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg, pipeline_parser
-from dotenv import load_dotenv
 load_dotenv()
 
 def get_study_id(file_name:str) -> Optional[str]:
@@ -202,8 +200,6 @@ if __name__ == '__main__':
     if output_nii_path_str is not None:
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
         upload_dicom_seg(path_output, output_nii_path_str, )
-
-
 
     # upload_json()
 

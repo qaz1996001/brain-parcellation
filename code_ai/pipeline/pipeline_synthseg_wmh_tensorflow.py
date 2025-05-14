@@ -29,9 +29,8 @@ import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
-from code_ai import PYTHON3
+from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file
-from dotenv import load_dotenv
 load_dotenv()
 autotune = tf.data.experimental.AUTOTUNE
 

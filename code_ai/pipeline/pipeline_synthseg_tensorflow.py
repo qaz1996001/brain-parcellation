@@ -32,8 +32,7 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 
 from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
-from code_ai import PYTHON3
-from dotenv import load_dotenv
+from code_ai import PYTHON3, load_dotenv
 load_dotenv()
 
 
