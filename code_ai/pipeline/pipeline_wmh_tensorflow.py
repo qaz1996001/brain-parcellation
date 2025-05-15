@@ -357,7 +357,7 @@ if __name__ == '__main__':
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
     # 使用哪一顆gpu
-    gpu_n = os.getenv("GPU_N",0)
+    gpu_n = int(os.getenv("GPU_N", 0))
 
     T2FLAIR_file = Inputs[0]
     SynthSEG_WM_file = Inputs[1]

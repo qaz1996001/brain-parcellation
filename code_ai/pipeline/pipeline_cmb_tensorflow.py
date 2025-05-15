@@ -178,8 +178,7 @@ if __name__ == '__main__':
     path_log          = os.getenv("PATH_LOG")
     path_synthseg     = os.getenv("PATH_SYNTHSEG")
 
-    gpu_n = 0  # 使用哪一顆gpu
-
+    gpu_n = int(os.getenv("GPU_N", 0))
     swan_path_str = Inputs[0]
     t1_path_str = Inputs[1]
 
