@@ -7,7 +7,9 @@ import os
 import sys
 from pathlib import Path
 import fire
-from dotenv import load_dotenv
+from code_ai import load_dotenv
+from code_ai.scheduler.scheduler_add_task import add_raw_dicom_to_nii_inference
+
 load_dotenv()
 path_process = os.getenv("PATH_PROCESS")
 path_json = os.getenv("PATH_JSON")
@@ -25,7 +27,7 @@ sys.path.insert(1, str(project_root_path))  # 这个是为了方便命令行不�
 # 以上的sys.path代码需要放在最上面,先设置好pythonpath再导入funboost相关的模块
 # $$$$$$$$$$$$
 
-
+from funboost.timing_job import ApsJobAdder
 from funboost.core.cli.funboost_fire import BoosterFire, env_dict
 from funboost import BoostersManager
 from funboost.core.cli.discovery_boosters import BoosterDiscovery
@@ -50,6 +52,9 @@ if __name__ == '__main__':
                      booster_dirs=['code_ai/task'], max_depth=1, py_file_re_str=None).auto_discovery()
     # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
     fire.Fire(BoosterFire, )
+    aps_job_adder = ApsJobAdder(add_raw_dicom_to_nii_inference)
+    aps_job_adder.add_push_job(trigger='interval',seconds=10,)
+
     BoostersManager.multi_process_consume_all_queues(1)
 
 
