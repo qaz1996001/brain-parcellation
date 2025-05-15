@@ -5,6 +5,7 @@
 """
 import asyncio
 import glob
+import traceback
 
 import aiofiles
 import warnings
@@ -17,22 +18,29 @@ from pyorthanc import Orthanc,AsyncOrthanc
 from dotenv import load_dotenv
 load_dotenv()
 
-lock = asyncio.Semaphore(64)
-
-sem_limit = 128
+sem_limit = 64
 sem = asyncio.Semaphore(sem_limit)
 
 
-async def upload_dicom_file(client, file_path):
+async def upload_dicom_file(client:AsyncOrthanc, file_path):
     # Use the semaphore to limit concurrent operations
     async with sem:
         try:
             async with aiofiles.open(file_path, mode='rb') as f:
                 content = await f.read()
-                result = await client.post_instances(content)
+                result = await client.post(url = f"{client.url}/instances",
+                                           content=content,
+                                           data= None,
+                                           files=None,
+                                           json=None,
+                                           headers=None,
+                                           cookies=None,
+                                           timeout=180,)
+                # result = await client.post_instances(content)
                 return result
         except Exception as e:
             print(f"Error uploading {os.path.basename(file_path)}: {str(e)}")
+            traceback.print_exc()
             return {"file": file_path, "error": str(e)}
 
 
@@ -45,7 +53,8 @@ async def upload_batch(client, file_paths):
 async def main():
     parser = argparse.ArgumentParser(description="處理DICOM-SEG檔案至Orthanc")
     parser.add_argument('--Input', type=str, nargs='+',
-                        default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/10516407_20231215_MR_21210200091/Pred_WMH_A1.dcm',
+                        #default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/10516407_20231215_MR_21210200091/Pred_WMH_A1.dcm',
+                        default= ['/mnt/e/pipeline/sean/rename_dicom/10516407_20231215_MR_21210200091'],
                         help='DICOM-SEG檔案')
     args = parser.parse_args()
     # upload_dicom_seg()
@@ -71,7 +80,7 @@ async def main():
             successful_uploads = 0
             failed_uploads = 0
             # Process in batches to maintain better control
-            batch_size = 500  # Adjust based on system capabilities
+            batch_size = sem_limit  # Adjust based on system capabilities
             for i in range(0, total_files, batch_size):
                 batch = dcm_list[i:i + batch_size]
                 print(

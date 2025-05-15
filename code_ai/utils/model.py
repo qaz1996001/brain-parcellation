@@ -80,7 +80,7 @@ class FunboostConsumeResult(Base):
 
 
 class RawDicomToNiiInference(Base):
-    __tablename__ = 'raw_dicom_to_inference'
+    __tablename__ = 'raw_dicom_to_nii_inference'
     _id               :Mapped[str] = Column(String,default=gen_id, primary_key=True)
     name              :Mapped[str] = Column(String)
     sub_dir           :Mapped[Optional[str]] = Column(String,nullable=True)

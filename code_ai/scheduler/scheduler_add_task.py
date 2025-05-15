@@ -20,7 +20,8 @@ logger_add_raw_dicom_to_nii_inference = (nb_log.LogManager('add_raw_dicom_to_nii
                        qps=1,))
 def add_raw_dicom_to_nii_inference():
     from code_ai import load_dotenv
-    from code_ai.task.task_dicom2nii import dicom_to_nii
+    from code_ai.task.task_dicom2nii import dicom_to_niils
+
     from code_ai.task.task_pipeline import task_pipeline_inference
     from code_ai.task.schema.intput_params import Dicom2NiiParams
     load_dotenv()
