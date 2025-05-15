@@ -88,12 +88,11 @@ def pipeline_synthseg(ID :str,
             # print(keras.__version__)
             # print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-            tf.config.experimental.set_visible_devices(devices=gpus[gpu_n], device_type='GPU')
-            # print(gpus, cpus)
-            tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
+            for gpu in gpus:
+                tf.config.experimental.set_visible_devices(devices=gpu, device_type='GPU')
+                tf.config.experimental.set_memory_growth(gpu, True)
 
-            gpu_line = 'export CUDA_VISIBLE_DEVICES={} && {} {} -i {} --output {} --all False'.format(
-                gpu_n,
+            gpu_line = '{} {} -i {} --output {} --all False --DWI TRUE '.format(
                 PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main.py'),
                 file_path_str,
