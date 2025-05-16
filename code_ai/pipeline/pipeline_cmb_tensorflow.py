@@ -33,7 +33,8 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg, pipeline_parser
+from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg, pipeline_parser, upload_json
+
 load_dotenv()
 
 def get_study_id(file_name:str) -> Optional[str]:
@@ -200,5 +201,5 @@ if __name__ == '__main__':
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
         upload_dicom_seg(path_output, output_nii_path_str, )
 
-    # upload_json()
+    upload_json(ID, path_output)
 
