@@ -67,22 +67,35 @@ pipelines = {
     InferenceEnum.Aneurysm: PipelineConfig('pipeline_synthseg5class_tensorflow.py', 'Aneurysm'),
     }
 
+
 def dicom_seg_multi_file(ID:str,
                          InputsDicomDir:str,
                          nii_path_str:str,
                          path_output:str):
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/create_dicomseg_multi_file_claude.py '
+               '{} code_ai/pipeline/create_dicomseg_multi_file_json_claude.py '
                '--ID {} '
-               '--InputsDicom {} '
-               '--InputsNifti {} '
-               '--OutputDicomSegFolder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+               '--InputsDicomDir {} '
+               '--Inputs {} '
+               '--Output_folder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                                    PYTHON3,
                                                    ID,
                                                    InputsDicomDir,
                                                    nii_path_str,
                                                    path_output)
                )
+    # cmd_str = ('export PYTHONPATH={} && '
+    #            '{} code_ai/pipeline/create_dicomseg_multi_file_claude.py '
+    #            '--ID {} '
+    #            '--InputsDicom {} '
+    #            '--InputsNifti {} '
+    #            '--OutputDicomSegFolder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+    #                                                PYTHON3,
+    #                                                ID,
+    #                                                InputsDicomDir,
+    #                                                nii_path_str,
+    #                                                path_output)
+    #            )
 
     process = subprocess.Popen(args=cmd_str, shell=True,
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),

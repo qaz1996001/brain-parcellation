@@ -9,21 +9,22 @@
 """
 
 import argparse
+import datetime
+import enum
 import os
 import pathlib
 from typing import Dict, List, Any, Union, Tuple, Optional
 
 import numpy as np
-import orjson
 import pydicom
 import nibabel as nib
 import SimpleITK as sitk
 import matplotlib.colors as mcolors
 import pydicom_seg
 from pydantic import BaseModel, PositiveInt, field_validator
-from pydicom import FileDataset,dcmread
+from pydicom import FileDataset
 from pydicom.dicomdir import DicomDir
-from skimage.measure import regionprops, regionprops_table
+from skimage.measure import regionprops_table
 
 from code_ai.pipeline import pipeline_parser
 
@@ -36,6 +37,25 @@ DCM_EXAMPLE = pydicom.dcmread(EXAMPLE_FILE)
 
 # // 目前 Orthanc 自動同步機制的 group 應為 44
 GROUP_ID = os.getenv("GROUP_ID",44)
+
+
+class SeriesTypeEnum(str,enum.Enum):
+    TOF_MRA     = '1'
+    Pitch       = '2'
+    Yaw         = '3'
+    T1BRAVO_AXI = '4'
+    T1FLAIR_AXI = '5'
+    T2FLAIR_AXI = '6'
+    SWAN        = '7'
+    DWI0        = '8'
+    DWI1000     = '9'
+    ADC         = '10'
+
+    @classmethod
+    def to_list(cls) -> List[Union[enum.Enum,'SeriesTypeEnum']]:
+        return list(map(lambda c: c, cls))
+
+
 
 
 class InstanceRequest(BaseModel):
@@ -62,7 +82,7 @@ class SortedRequest(BaseModel):
 class StudyRequest(BaseModel):
     group_id           :int = GROUP_ID
     # "2017-12-25"
-    study_date         :str
+    study_date         :datetime.date
     # M F
     gender             :str
     # 99 56
@@ -91,6 +111,17 @@ class StudyRequest(BaseModel):
             return value
         else:
             return str(value)
+
+    @field_validator('study_date', mode='before')
+    @classmethod
+    def parse_date(cls, value):
+        try:
+            if isinstance(value, str) and len(value) == 8:
+                return datetime.date(int(value[:4]), int(value[4:6]), int(value[6:8]))
+            else:
+                return datetime.datetime.now().date()
+        except:
+            return datetime.datetime.now().date()
 
     @field_validator('age', mode='before')
     @classmethod
@@ -130,6 +161,19 @@ class MaskInstanceRequest(BaseModel):
     main_seg_slice      :int = 1
     is_main_seg         :int = 0
 
+
+    @field_validator('series_type', mode='before')
+    @classmethod
+    def extract_series_type(cls, value):
+        if value is None:
+            return '1'
+        if isinstance(value, str):
+            series_type_enum_list: List[SeriesTypeEnum] = SeriesTypeEnum.to_list()
+            for series_type_enum in series_type_enum_list:
+                if value == series_type_enum.name:
+                    return series_type_enum.value
+        return value
+
     @field_validator('diameter', mode='before')
     @classmethod
     def extract_diameter_number(cls, value):
@@ -138,7 +182,7 @@ class MaskInstanceRequest(BaseModel):
         if isinstance(value, np.ndarray):
             return str(value.mean().item())
         # 如果是從DICOM獲取的值
-        if isinstance(value, (float,int)):
+        if isinstance(value, (float, int)):
             return str(value)
         return value
 
@@ -542,6 +586,7 @@ def main():
     at_team_request :AITeamRequest = process_prediction_mask(new_nifti_array, str(path_dcms), series, series_folder)
     platform_json_path = series_folder.joinpath(path_nii.name.replace('.nii.gz', '_platform_json.json'))
     print('platform_json_path',platform_json_path)
+    at_team_request.mask.instances = sorted(at_team_request.mask.instances, key=lambda instance: instance.mask_index)
     with open(platform_json_path, 'w') as f:
         f.write(at_team_request.model_dump_json())
     print("Processing complete!")
