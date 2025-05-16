@@ -133,8 +133,14 @@ def pipeline_wmh(ID,
     os.makedirs(path_output_dir, exist_ok=True)
     try:
         path_nii = os.path.join(path_processID, 'nii')
-        if not os.path.isdir(path_nii):  # 如果資料夾不存在就建立
-            os.mkdir(path_nii)  # 製作nii資料夾
+        os.makedirs(path_nii, exist_ok=True)
+
+        path_test_img = os.path.join(path_processID, 'test_case')
+        os.makedirs(path_nii, exist_ok=True)
+
+        path_tsnpy = os.path.join(path_test_img, 'npy')
+        os.makedirs(path_tsnpy, exist_ok=True)
+
 
         # 將影像複製過去
         # print('ADC_file:', ADC_file, ' copy:', os.path.join(path_nii, ID + '_ADC.nii.gz'))
@@ -143,14 +149,10 @@ def pipeline_wmh(ID,
         shutil.copy(SynthSEG_file, os.path.join(path_nii, ID + '_SynthSEG.nii.gz'))
 
         # 把T2FLAIR_nor進行正規化
-        path_test_img = os.path.join(path_processID, 'test_case')
-        if not os.path.isdir(path_test_img):  # 如果資料夾不存在就建立
-            os.mkdir(path_test_img)  # 製作nii資料夾
+
         T2FLAIR_nor(path_processID, path_test_img, ID)
 
         time.sleep(1)  # 做前暫停1秒
-
-        path_tsnpy = os.path.join(path_test_img, 'npy')
 
         # 最後回去確認test_img的數據是否存在，存在則結束
         test_npy_t2flair = os.path.join(path_tsnpy, ID + '_T2FLAIR.npy')

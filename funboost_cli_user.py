@@ -6,18 +6,18 @@ funboost现在 新增 命令行启动消费 发布  和清空消息
 import os
 import sys
 from pathlib import Path
-import fire
 from code_ai import load_dotenv
-from code_ai.scheduler.scheduler_add_task import add_raw_dicom_to_nii_inference
-
 load_dotenv()
 path_process = os.getenv("PATH_PROCESS")
 path_json = os.getenv("PATH_JSON")
 path_log = os.getenv("PATH_LOG")
 # 建置資料夾
+os.makedirs(path_process, exist_ok=True)  # 如果資料夾不存在就建立，
 os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
 os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
-os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+
+from code_ai.scheduler.scheduler_add_task import add_raw_dicom_to_nii_inference
+
 
 project_root_path = Path(__file__).absolute().parent
 print(f'project_root_path is : {project_root_path}  ,请确认是否正确')
@@ -26,7 +26,7 @@ sys.path.insert(1, str(project_root_path))  # 这个是为了方便命令行不�
 # $$$$$$$$$$$$
 # 以上的sys.path代码需要放在最上面,先设置好pythonpath再导入funboost相关的模块
 # $$$$$$$$$$$$
-
+import fire
 from funboost.timing_job import ApsJobAdder
 from funboost.core.cli.funboost_fire import BoosterFire, env_dict
 from funboost import BoostersManager

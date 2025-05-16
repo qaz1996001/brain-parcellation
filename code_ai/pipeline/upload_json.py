@@ -8,7 +8,7 @@ import aiohttp
 import httpx
 import orjson
 import asyncio
-
+import pydicom
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 import argparse
@@ -69,4 +69,10 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # asyncio.run(main())
+    parser = argparse.ArgumentParser(description="處理 AI predict 檔案至 web server")
+    parser.add_argument('--Input', type=str, nargs='+',
+                        default=' ',
+                        help='json檔案')
+    args = parser.parse_args()
+

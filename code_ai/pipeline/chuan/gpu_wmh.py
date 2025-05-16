@@ -123,14 +123,10 @@ def model_predict_wmh(path_code, path_process, model_wmh_file, case_name, path_l
         if gpumRate < 0.999 :
             #plt.ion()    # 開啟互動模式，畫圖都是一閃就過
             #一些記憶體的配置
-            autotune = tf.data.experimental.AUTOTUNE
-            #print(keras.__version__)
-            #print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-            cpus = tf.config.experimental.list_physical_devices(device_type='CPU')
-            tf.config.experimental.set_visible_devices(devices=gpus[gpu_n], device_type='GPU')
-            #print(gpus, cpus)
-            tf.config.experimental.set_memory_growth(gpus[0],True)
+            for gpu in gpus:
+                tf.config.experimental.set_visible_devices(devices=gpu, device_type='GPU')
+                tf.config.experimental.set_memory_growth(gpu, True)
 
             #%%
             #底下正式開始predict任務
@@ -143,12 +139,9 @@ def model_predict_wmh(path_code, path_process, model_wmh_file, case_name, path_l
             path_predict = os.path.join(path_process, 'predict_map')
             path_npy = os.path.join(path_test_img, 'npy')
 
-            if not os.path.isdir(path_test_img):
-                os.mkdir(path_test_img) 
-            if not os.path.isdir(path_predict):
-                os.mkdir(path_predict) 
-            if not os.path.isdir(path_npy):
-                os.mkdir(path_npy) 
+            os.makedirs(path_test_img, exist_ok=True)
+            os.makedirs(path_predict, exist_ok=True)
+            os.makedirs(path_npy, exist_ok=True)
 
             # #但以下跑SynthSEG，為了避免gpu out of memory，還是以.sh來執行好惹
             # gpu_line = 'bash ' + os.path.join(path_code, 'SynthSEG_wmh.sh ') + case_name

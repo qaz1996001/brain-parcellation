@@ -272,7 +272,8 @@ def process_dir(func_params: Dict[str, any]):
 
         dicom_2_nii_file_result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
         dicom_2_nii_file_result.set_timeout(3600)
-        dicom_2_nii_file_result.get()
+        data= dicom_2_nii_file_result.get()
+        return data
     return dicom_study_folder_path
 
 

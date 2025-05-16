@@ -88,7 +88,7 @@ def pipeline_synthseg(ID :str,
                 tf.config.experimental.set_visible_devices(devices=gpu, device_type='GPU')
                 tf.config.experimental.set_memory_growth(gpu, True)
 
-            gpu_line = '{} {} -i {} --output {} --all False --DWI TRUE '.format(
+            gpu_line = '{} {} -i {} --output {} --all False --WMH TRUE '.format(
                 PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main.py'),
                 file_path_str,

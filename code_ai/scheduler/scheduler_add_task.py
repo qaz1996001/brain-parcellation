@@ -73,7 +73,7 @@ def add_raw_dicom_to_nii_inference():
     for async_result in result_list:
         async_result.set_timeout(3600)
     result_list = [async_result.result for async_result in result_list]
-    logger_add_raw_dicom_to_nii_inference.debug('result_list')
+    logger_add_raw_dicom_to_nii_inference.debug(f'result_list {result_list}')
     if len(result_list) > 0:
         output_nifti_path_list = list(map(lambda x:output_nifti_path.joinpath(os.path.basename(x)),
                                           result_list))
@@ -104,6 +104,38 @@ def add_raw_dicom_to_nii_inference():
                                                        created_time=created_time_str
                                                        ))
                     session.commit()
+    else:
+        if output_nifti_path.exists():
+            output_nifti_path_list = sorted(output_nifti_path.iterdir())
+            logger_add_raw_dicom_to_nii_inference.debug(f'output_nifti_path_list {output_nifti_path_list}')
+            for nifti_study_path in output_nifti_path_list:
+                dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
+                nifti_study_path_str = str(nifti_study_path)
+                dicom_study_path_str = str(dicom_study_path)
+                #  檢查重複
+                with session:
+                    result = session.query(RawDicomToNiiInference).filter(
+                        RawDicomToNiiInference.sub_dir == None,
+                        RawDicomToNiiInference.output_dicom_path == dicom_study_path_str,
+                        RawDicomToNiiInference.output_nifti_path == nifti_study_path_str,
+                    ).one_or_none()
+                #   沒有重複
+                if result is None:
+                    # 發任務
+                    task_pipeline_result = task_pipeline_inference.push({'nifti_study_path': str(nifti_study_path_str),
+                                                                         'dicom_study_path': str(dicom_study_path_str),
+                                                                         })
+                    with session:
+                        created_time_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        session.add(RawDicomToNiiInference(
+                            name='task_pipeline_inference_queue',
+                            sub_dir=None,
+                            output_dicom_path=dicom_study_path_str,
+                            output_nifti_path=nifti_study_path_str,
+                            created_time=created_time_str
+                        ))
+                        session.commit()
+
 
 
 

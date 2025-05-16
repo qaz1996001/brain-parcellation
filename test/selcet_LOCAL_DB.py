@@ -22,7 +22,11 @@ def main():
 
         result = cursor.fetchall()  # Use fetchall() since there might be multiple tables
         print('result:', result)
-        cursor.execute('''DELETE FROM raw_dicom_to_nii_inference where name='task_pipeline_inference_queue';''')
+
+        cursor.execute('''SELECT * FROM funboost_consume_results where queue_name ='task_pipeline_inference_queue';''')
+
+        result = cursor.fetchall()  # Use fetchall() since there might be multiple tables
+        print('result:', result)
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':

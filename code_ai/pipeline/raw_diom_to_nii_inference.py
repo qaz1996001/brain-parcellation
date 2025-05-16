@@ -271,64 +271,52 @@ if __name__ == '__main__':
         input_dicom_list = sorted(input_dicom.iterdir())
         input_dicom_list = list(filter(lambda x: x.is_dir(),input_dicom_list))
         if len(input_dicom_list) == 0:
+            input_dicom_list = [Dicom2NiiParams(sub_dir=input_dicom,
+                                                output_dicom_path=output_dicom_path,
+                                                output_nifti_path=output_nifti_path, )]
+        for input_dicom_path in input_dicom_list:
             task_params = Dicom2NiiParams(
-                sub_dir=input_dicom,
+                sub_dir=input_dicom_path,
                 output_dicom_path=output_dicom_path,
-                output_nifti_path=output_nifti_path, )
+                output_nifti_path=output_nifti_path,)
             task = dicom_to_nii.push(task_params.get_str_dict())
             result_list.append(task)
-        else:
-            for input_dicom_path in input_dicom_list:
-                task_params = Dicom2NiiParams(
-                    sub_dir=input_dicom_path,
-                    output_dicom_path=output_dicom_path,
-                    output_nifti_path=output_nifti_path,)
-                task = dicom_to_nii.push(task_params.get_str_dict())
-                result_list.append(task)
     elif all((args.input_dicom, args.output_dicom)):
         input_dicom = pathlib.Path(args.input_dicom)
         output_dicom_path = pathlib.Path(args.output_dicom)
 
         input_dicom_list = sorted(input_dicom.iterdir())
         input_dicom_list = list(filter(lambda x: x.is_dir(), input_dicom_list))
-
         if len(input_dicom_list) == 0:
+            input_dicom_list = [Dicom2NiiParams(sub_dir=input_dicom,
+                                                output_dicom_path=output_dicom_path,
+                                                output_nifti_path=None, )]
+        for input_dicom_path in input_dicom_list:
             task_params = Dicom2NiiParams(
                 sub_dir=input_dicom_path,
                 output_dicom_path=output_dicom_path,
                 output_nifti_path=None, )
             task = dicom_to_nii.push(task_params.get_str_dict())
             result_list.append(task)
-        else:
-            for input_dicom_path in input_dicom_list:
-                task_params = Dicom2NiiParams(
-                    sub_dir=input_dicom_path,
-                    output_dicom_path=output_dicom_path,
-                    output_nifti_path=None, )
-                task = dicom_to_nii.push(task_params.get_str_dict())
-                result_list.append(task)
     elif all((args.output_dicom, args.output_nifti)):
         output_dicom_path = pathlib.Path(args.output_dicom)
         output_nifti_path = pathlib.Path(args.output_nifti)
 
         input_dicom_list = sorted(output_dicom_path.iterdir())
         input_dicom_list = list(filter(lambda x: x.is_dir(), input_dicom_list))
-
         if len(input_dicom_list) == 0:
+            input_dicom_list = [Dicom2NiiParams(sub_dir=None,
+                                                output_dicom_path=output_dicom_path,
+                                                output_nifti_path=output_nifti_path, )]
+
+
+        for input_dicom_path in input_dicom_list:
             task_params = Dicom2NiiParams(
                 sub_dir=None,
-                output_dicom_path=output_dicom_path,
-                output_nifti_path=output_nifti_path, )
+                output_dicom_path=input_dicom_path,
+                output_nifti_path=output_nifti_path,)
             task = dicom_to_nii.push(task_params.get_str_dict())
             result_list.append(task)
-        else:
-            for input_dicom_path in input_dicom_list:
-                task_params = Dicom2NiiParams(
-                    sub_dir=None,
-                    output_dicom_path=input_dicom_path,
-                    output_nifti_path=output_nifti_path,)
-                task = dicom_to_nii.push(task_params.get_str_dict())
-                result_list.append(task)
     else:
         raise ValueError(f'input_dicom {args.input_dicom} or {args.output_dicom}')
     for async_result in result_list:

@@ -28,6 +28,16 @@ def main():
     for instance in instances:
         client.delete_instances_id(instance.id_)
 
+    instances = find_instances(
+        client,
+        query={'Modality': 'SEG',
+               'SeriesDescription': 'Pred_*',
+               },
+    )
+    print('instances:', instances)
+    for instance in instances:
+        client.delete_instances_id(instance.id_)
+
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
