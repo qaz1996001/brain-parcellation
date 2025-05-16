@@ -25,6 +25,8 @@ from pydicom import FileDataset,dcmread
 from pydicom.dicomdir import DicomDir
 from skimage.measure import regionprops, regionprops_table
 
+from code_ai.pipeline import pipeline_parser
+
 # 載入範例文件只需執行一次，改為在函數外
 # EXAMPLE_FILE = 'SEG_20230210_160056_635_S3.dcm'
 
@@ -459,7 +461,8 @@ def process_prediction_mask(
         return
     else:
         pred_data_unique = pred_data_unique[1:]
-    for i in pred_data_unique:
+    pred_data_unique_len = len(pred_data_unique)
+    for index, i in enumerate(pred_data_unique):
     # for i in range(pred_data_max):
         # 創建單一區域的遮罩
         mask = np.zeros_like(pred_data)
@@ -485,7 +488,8 @@ def process_prediction_mask(
             dcm_seg_filename = f'{series_name}_{label_dict[1]["SegmentLabel"]}.dcm'
             dcm_seg_path = output_folder.joinpath(dcm_seg_filename)
             dcm_seg.save_as(dcm_seg_path)
-            print(f"Saved: {dcm_seg_path}")
+            print(f" " * 100,end='\r')
+            print(f"{index+1}/{pred_data_unique_len} Saved: {dcm_seg_path}",end='\r')
             temp_mask_request = make_mask_json(source_images=source_images,
                                                sorted_dcms=sorted_dcms,
                                                dcm_seg_path=dcm_seg_path)
@@ -500,47 +504,22 @@ def process_prediction_mask(
                                 instances = mask_instances_list)
     at_team_request.mask = mask_request
     at_team_request.study.aneurysm_lession = pred_data_unique.shape[0]
-
+    print()
     return at_team_request
 
 
 def main():
     """主函數"""
-    parser = argparse.ArgumentParser(description="處理NIFTI檔案並創建DICOM-SEG檔案")
-    parser.add_argument('--ID', type=str, default='10516407_20231215_MR_21210200091',
-                        help='目前執行的case的patient_id or study id')
-    # parser.add_argument('--InputsDicom', type=str,
-    #                     default='/mnt/e/rename_dicom_202505051/10516407_20231215_MR_21210200091/SWAN',
-    #                     help='用於輸出結果的資料夾')
-    # parser.add_argument('--InputsNifti', type=str,
-    #                     default='/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/Pred_CMB.nii.gz',
-    #                     help='用於輸入的檔案')
+    parser = pipeline_parser()
     # parser.add_argument('--OutputDicomSegFolder', type=str,
-    #                     default='/mnt/e/dicom_seg_202505051/',
+    #                     default='/mnt/e/rename_nifti_20250509/',
     #                     help='用於輸出結果的資料夾')
-    parser.add_argument('--InputsDicom', type=str,
-                        default='/mnt/e/rename_dicom_20250509/10089413_20210201_MR_21002010079/SWAN',
-                        help='用於輸出結果的資料夾')
-    parser.add_argument('--InputsNifti', type=str,
-                        default='/mnt/e/rename_nifti_20250509/10089413_20210201_MR_21002010079/Pred_CMB.nii.gz',
-                        help='用於輸入的檔案')
-    parser.add_argument('--OutputDicomSegFolder', type=str,
-                        default='/mnt/e/rename_nifti_20250509/',
-                        # default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
-                        help='用於輸出結果的資料夾')
-
 
     args = parser.parse_args()
     ID = args.ID
-    path_dcms = pathlib.Path(args.InputsDicom)
-    path_nii = pathlib.Path(args.InputsNifti)
-    path_dcmseg = pathlib.Path(args.OutputDicomSegFolder)
-
-    # 創建輸出目錄
-    if path_dcmseg.is_dir():
-        path_dcmseg.mkdir(parents=True, exist_ok=True)
-    else:
-        path_dcmseg.parent.mkdir(parents=True, exist_ok=True)
+    path_dcms = pathlib.Path(args.InputsDicomDir)
+    path_nii = pathlib.Path(args.Inputs[0])
+    path_dcmseg = pathlib.Path(args.Output_folder)
 
     # 取得系列名稱
     series = path_nii.name.split('.')[0]
@@ -554,10 +533,15 @@ def main():
 
     # 創建輸出子目錄
     series_folder = path_dcmseg.joinpath(f'{ID}')
-    series_folder.mkdir(exist_ok=True, parents=True)
+    if series_folder.is_dir():
+        series_folder.mkdir(exist_ok=True, parents=True)
+    else:
+        series_folder.parent.mkdir(parents=True, exist_ok=True)
+
     # 處理預測遮罩
     at_team_request :AITeamRequest = process_prediction_mask(new_nifti_array, str(path_dcms), series, series_folder)
     platform_json_path = series_folder.joinpath(path_nii.name.replace('.nii.gz', '_platform_json.json'))
+    print('platform_json_path',platform_json_path)
     with open(platform_json_path, 'w') as f:
         f.write(at_team_request.model_dump_json())
     print("Processing complete!")
