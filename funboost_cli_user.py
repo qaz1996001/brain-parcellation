@@ -53,8 +53,15 @@ if __name__ == '__main__':
     # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
     fire.Fire(BoosterFire, )
     aps_job_adder = ApsJobAdder(add_raw_dicom_to_nii_inference)
-    aps_job_adder.add_push_job(trigger='interval',seconds=180,)
 
+    # 先立即执行一次
+    aps_job_adder.add_push_job(trigger='date')
+
+    # 然后设置 cron 任务每 5 分钟执行一次
+    aps_job_adder.add_push_job(
+        trigger='cron',
+        minute='*/5'  # 每 5 分钟执行一次
+    )
     BoostersManager.multi_process_consume_all_queues(1)
 
 
