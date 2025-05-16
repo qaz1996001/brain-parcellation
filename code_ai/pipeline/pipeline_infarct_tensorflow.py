@@ -7,7 +7,8 @@ Created on Tue Sep 22 13:18:23 2020
 """
 import warnings
 
-from code_ai.pipeline import pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
+from code_ai.pipeline import pipeline_parser, dicom_seg_multi_file, upload_dicom_seg, upload_json
+from code_ai.utils_inference import InferenceEnum
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 
@@ -718,5 +719,4 @@ if __name__ == '__main__':
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, Pred_Infarct_synthseg, path_output)
         upload_dicom_seg(path_output, Pred_Infarct_synthseg, )
     # upload json
-    if json_path_name2 is not None:
-        pass
+    upload_json(ID, InferenceEnum.Infarct)

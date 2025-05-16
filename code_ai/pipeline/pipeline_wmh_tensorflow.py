@@ -8,6 +8,8 @@ Created on Tue Sep 22 13:18:23 2020
 """
 import warnings
 
+from code_ai.utils_inference import InferenceEnum
+
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 import numpy as np
@@ -22,7 +24,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from collections import OrderedDict
 import numba as nb
 from code_ai.pipeline.chuan.nii_transforms import nii_img_replace
-from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg
+from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg, upload_json
 from code_ai.pipeline.chuan.util import T2FLAIR_nor
 from code_ai.pipeline.chuan.gpu_wmh import model_predict_wmh
 from code_ai import load_dotenv
@@ -387,3 +389,5 @@ if __name__ == '__main__':
         upload_dicom_seg(path_output, Pred_WMH_synthseg, )
     if SynthSEG_WM_file is not None:
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,SynthSEG_WM_file, path_output)
+
+    upload_json(ID, InferenceEnum.WMH)

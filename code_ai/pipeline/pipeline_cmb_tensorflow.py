@@ -21,6 +21,8 @@ import warnings
 
 from gevent.tests.test__server import _file
 
+from code_ai.utils_inference import InferenceEnum
+
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 from typing import Optional
@@ -201,5 +203,5 @@ if __name__ == '__main__':
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
         upload_dicom_seg(path_output, output_nii_path_str, )
 
-    upload_json(ID, path_output)
+    upload_json(ID, InferenceEnum.CMB)
 
