@@ -3,6 +3,7 @@
 """
 @author: sean Ho
 """
+import traceback
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -37,6 +38,7 @@ async def upload_dicom_file(client, file_path):
                 return result
         except Exception as e:
             print(f"Error uploading {os.path.basename(file_path)}: {str(e)}")
+            traceback.print_exc()
             return {"file": file_path, "error": str(e)}
 
 
@@ -65,9 +67,8 @@ async def main():
             client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL)
             result = pyorthanc.upload(client, input_path)
             print('result', result)
-
         if os.path.isdir(input_path):
-            client = AsyncOrthanc(UPLOAD_DATA_DICOM_SEG_URL)
+            client = AsyncOrthanc(UPLOAD_DATA_DICOM_SEG_URL,timeout=300)
             dcm_list = glob.glob('{}/**/*.dcm'.format(input_path),recursive=True)
             print('dcm_list',len(dcm_list))
             total_files = len(dcm_list)

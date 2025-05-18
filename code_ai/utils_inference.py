@@ -198,8 +198,9 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
         case InferenceEnum.Aneurysm:
             output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Prob_Aneurysm.nii.gz"))
-            output_files.append(os.path.join(base_output_path, f"Pred_Vessel.nii.gz"))
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.json"))
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel16.nii.gz"))
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
                 output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")

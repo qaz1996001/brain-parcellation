@@ -29,8 +29,6 @@ EXAMPLE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
                             'resource', 'SEG_20230210_160056_635_S3.dcm')
 DCM_EXAMPLE = pydicom.dcmread(EXAMPLE_FILE)
 
-MODEL_NAME = 'CMB_AI'
-
 
 def compute_orientation(init_axcodes, final_axcodes):
     """
