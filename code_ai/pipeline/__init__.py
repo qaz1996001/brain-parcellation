@@ -65,7 +65,7 @@ pipelines = {
     InferenceEnum.WMH_PVS: PipelineConfig('pipeline_synthseg_wmh_tensorflow.py', 'WMH_PVS'),
     InferenceEnum.WMH: PipelineConfig('pipeline_wmh_tensorflow.py', 'WMH'),
     InferenceEnum.Infarct: PipelineConfig('pipeline_infarct_tensorflow.py', 'Infarct'),
-    InferenceEnum.Aneurysm: PipelineConfig('pipeline_synthseg5class_tensorflow.py', 'Aneurysm'),
+    InferenceEnum.Aneurysm: PipelineConfig('pipeline_aneurysm_tensorflow.py', 'Aneurysm'),
     }
 
 
@@ -129,7 +129,7 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
     return stdout, stderr
 
 
-def upload_json(ID:str,mode:InferenceEnum):
+def upload_json(ID: str, mode: InferenceEnum) -> object:
     path_process = os.getenv("PATH_PROCESS")
     cmd_json_path_path = os.path.join(path_process, 'Deep_cmd_tools','{}_cmd.json'.format(ID))
     if os.path.exists(cmd_json_path_path):
@@ -140,10 +140,8 @@ def upload_json(ID:str,mode:InferenceEnum):
             file_list = cmd_data['output_list']
             nii_file_list = list(filter(lambda x: str(x).endswith('nii.gz'), file_list))
             platform_json_list = list(map(lambda x: str(x).replace('.nii.gz','_platform_json.json'), nii_file_list))
-            print('platform_json_list',platform_json_list)
 
             platform_json_list = list(filter(lambda x: os.path.exists(x), platform_json_list))
-            print('platform_json_list',platform_json_list)
             for platform_json in platform_json_list:
                 cmd_str = ('export PYTHONPATH={} && '
                            '{} code_ai/pipeline/upload_json.py '
