@@ -117,11 +117,6 @@ def process_dicom_to_nii_task(session: Session, input_dicom_path: pathlib.Path,
             output_dicom_path=str(task_params.output_dicom_path),
             output_nifti_path=str(task_params.output_nifti_path)
         )
-
-        # 設置超時並等待結果
-        task.set_timeout(3600)  # 1小時超時
-        result = task.result
-        logger.debug(f"DICOM轉NII任務完成: {result}")
         return result
     except Exception as e:
         logger.error(f"處理DICOM轉NII任務出錯: {str(e)}")
@@ -703,22 +698,28 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
         logger.info(f"發現 {len(input_dicom_list)} 個DICOM目錄待處理")
 
         # 處理所有DICOM到NII的轉換任務
-        processed_results = []
+        processed_tasks = []
         for input_dicom_path in input_dicom_list:
             try:
-                result = process_dicom_to_nii_task(
+                task = process_dicom_to_nii_task(
                     session, input_dicom_path, output_dicom_path, output_nifti_path
                 )
-                if result:
-                    processed_results.append(result)
+                if task:
+                    processed_tasks.append(task)
             except Exception as e:
                 logger.error(f"處理DICOM目錄出錯 {input_dicom_path}: {str(e)}")
-
+        for task in processed_tasks:
+            task.set_timeout(600)  # 1小時超時
+        # 設置超時並等待結果
+        processed_results = []
+        for task in processed_tasks:
+            result = task.result
+            processed_results.append(result)
+            logger.debug(f"DICOM轉NII任務完成: {result}")
         logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
 
         # 處理NII推理任務
         inference_count = 0
-
         # 首先處理新轉換的NII文件
         if processed_results:
             for result_path in processed_results:
