@@ -1,10 +1,8 @@
 import os
-
 import nibabel as nib
 import nibabel.processing
 import SimpleITK as sitk
 import pathlib
-
 import numpy as np
 
 

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import nibabel as nib
 import pathlib
-from utils_inference import InferenceEnum
+from .inference import InferenceEnum
 
 
 class VolumeProcessor:
