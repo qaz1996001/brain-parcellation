@@ -4,7 +4,7 @@ import pathlib
 import time
 import subprocess
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Tuple
 
 import nb_log
 
@@ -117,7 +117,7 @@ def process_dicom_to_nii_task(session: Session, input_dicom_path: pathlib.Path,
             output_dicom_path=str(task_params.output_dicom_path),
             output_nifti_path=str(task_params.output_nifti_path)
         )
-        return result
+        return task
     except Exception as e:
         logger.error(f"處理DICOM轉NII任務出錯: {str(e)}")
         return None
@@ -282,10 +282,6 @@ def is_task_waiting_in_queue(session: Session, nifti_path: str, dicom_path: str)
         # 2. 檢查RabbitMQ隊列中是否有對應的任務
         try:
             from code_ai.task.task_pipeline import task_pipeline_inference
-
-            # 獲取RabbitMQ連接參數
-            broker_info = task_pipeline_inference._funboost_broker_queue.consumer_queue.queue_info
-
             # 使用pika連接RabbitMQ並檢查隊列
             import pika
             import json
@@ -697,8 +693,9 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
 
         logger.info(f"發現 {len(input_dicom_list)} 個DICOM目錄待處理")
 
-        # 處理所有DICOM到NII的轉換任務
+        # 處理所有DICOM到NII的轉換任務 - 批次處理版本
         processed_tasks = []
+        # 先收集所有需要處理的任務
         for input_dicom_path in input_dicom_list:
             try:
                 task = process_dicom_to_nii_task(
@@ -708,26 +705,45 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
                     processed_tasks.append(task)
             except Exception as e:
                 logger.error(f"處理DICOM目錄出錯 {input_dicom_path}: {str(e)}")
-        for task in processed_tasks:
-            task.set_timeout(600)  # 1小時超時
-        # 設置超時並等待結果
-        processed_results = []
-        for task in processed_tasks:
-            result = task.result
-            processed_results.append(result)
-            logger.debug(f"DICOM轉NII任務完成: {result}")
-        logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
 
-        # 處理NII推理任務
-        inference_count = 0
+        # 為所有任務設置超時
+        for task in processed_tasks:
+            task.set_timeout(600)  # 10分鐘超時
+
+        # 批次等待所有任務完成
+        logger.info(f"已提交 {len(processed_tasks)} 個DICOM到NII轉換任務，等待所有任務完成...")
+        processed_results = []
+        if processed_tasks:
+            for task in processed_tasks:
+                result = task.result
+                processed_results.append(result)
+                logger.debug(f"DICOM轉NII任務完成: {result}")
+            logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
+        else:
+            logger.info("沒有新的DICOM到NII轉換任務需要處理")
+
+        # 處理NII推理任務 - 批次處理版本
+        inference_tasks = []
+
         # 首先處理新轉換的NII文件
         if processed_results:
             for result_path in processed_results:
                 nifti_study_path = output_nifti_path.joinpath(os.path.basename(result_path))
                 dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
 
-                if process_nii_for_inference(session, nifti_study_path, dicom_study_path):
-                    inference_count += 1
+                # 檢查任務是否重複
+                nifti_path_str = str(nifti_study_path)
+                dicom_path_str = str(dicom_study_path)
+
+                filter_args = {
+                    "sub_dir": None,
+                    "output_dicom_path": dicom_path_str,
+                    "output_nifti_path": nifti_path_str
+                }
+
+                if not is_task_exists(session, **filter_args):
+                    # 收集推理任務但暫不發送
+                    inference_tasks.append((nifti_study_path, dicom_study_path))
 
         # 然後檢查現有的NII目錄中是否有未處理的文件
         elif output_nifti_path.exists():
@@ -740,11 +756,54 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
 
                 dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
 
-                if process_nii_for_inference(session, nifti_study_path, dicom_study_path):
-                    inference_count += 1
+                # 檢查任務是否重複
+                nifti_path_str = str(nifti_study_path)
+                dicom_path_str = str(dicom_study_path)
+
+                filter_args = {
+                    "sub_dir": None,
+                    "output_dicom_path": dicom_path_str,
+                    "output_nifti_path": nifti_path_str
+                }
+
+                if not is_task_exists(session, **filter_args):
+                    # 收集推理任務但暫不發送
+                    inference_tasks.append((nifti_study_path, dicom_study_path))
+
+        # 批次提交所有推理任務
+        logger.info(f"準備批次提交 {len(inference_tasks)} 個NII推理任務")
+        inference_count = 0
+        from code_ai.task.task_pipeline import task_pipeline_inference
+
+        for nifti_path, dicom_path in inference_tasks:
+            try:
+                nifti_path_str = str(nifti_path)
+                dicom_path_str = str(dicom_path)
+
+                logger.info(f"提交NII推理任務: {nifti_path}")
+                task_data = {
+                    'nifti_study_path': nifti_path_str,
+                    'dicom_study_path': dicom_path_str,
+                }
+                task_pipeline_inference.push(task_data)
+
+                # 添加任務記錄
+                add_task_record(
+                    session=session,
+                    name='task_pipeline_inference_queue',
+                    sub_dir=None,
+                    output_dicom_path=dicom_path_str,
+                    output_nifti_path=nifti_path_str
+                )
+                inference_count += 1
+            except Exception as e:
+                logger.error(f"提交NII推理任務出錯: {str(e)}")
+
+        # 任務已全部提交，等待處理完成（這裡不需要等待結果，因為推理任務是異步的）
+        logger.info(f"已批次提交 {inference_count} 個NII推理任務")
 
         elapsed_time = time.time() - start_time
-        logger.info(f"完成 {inference_count} 個NII推理任務，總耗時: {elapsed_time:.2f}秒")
+        logger.info(f"完成 {inference_count} 個NII推理任務提交，總耗時: {elapsed_time:.2f}秒")
 
         return {
             "status": "success",
