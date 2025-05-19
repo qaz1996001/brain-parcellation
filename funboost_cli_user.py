@@ -16,7 +16,7 @@ os.makedirs(path_process, exist_ok=True)  # 如果資料夾不存在就建立，
 os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
 os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
 
-from code_ai.scheduler.scheduler_add_task import add_raw_dicom_to_nii_inference
+from code_ai.scheduler.scheduler_check_add_task import add_raw_dicom_to_nii_inference
 
 
 project_root_path = Path(__file__).absolute().parent
