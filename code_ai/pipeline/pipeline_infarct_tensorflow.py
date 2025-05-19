@@ -8,7 +8,7 @@ Created on Tue Sep 22 13:18:23 2020
 import warnings
 
 from code_ai.pipeline import pipeline_parser, dicom_seg_multi_file, upload_dicom_seg, upload_json
-from code_ai.utils_inference import InferenceEnum
+from code_ai.utils.inference import InferenceEnum
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 

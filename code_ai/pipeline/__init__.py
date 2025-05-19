@@ -2,14 +2,13 @@ import argparse
 import json
 import os
 import pathlib
-import re
 import subprocess
 from typing import Optional
 
 from code_ai import PYTHON3
-from code_ai.utils_inference import InferenceEnum, Task
-
-study_id_pattern = re.compile('.*(_[0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*', re.IGNORECASE)
+from code_ai.utils import study_id_pattern
+from code_ai.utils.inference import InferenceEnum, Task
+# study_id_pattern = re.compile('.*(_[0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*', re.IGNORECASE)
 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resource', 'models')
 

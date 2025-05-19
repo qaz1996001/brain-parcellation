@@ -362,7 +362,9 @@ from code_ai.utils_parcellation import CMBProcess, DWIProcess, run_wmh, run_with
 from code_ai.utils_synthseg import SynthSeg, TemplateProcessor
 import gc
 
-from code_ai.utils_resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
+from code_ai.utils.resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
+
+# from code_ai.utils_resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
 
 
 def str_to_bool(v):

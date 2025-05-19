@@ -356,7 +356,9 @@ import traceback
 import argparse
 from code_ai.utils_synthseg import SynthSeg
 import gc
-from code_ai.utils_resample import resampleSynthSEG2original_z_index, resample_one
+from code_ai.utils.resample import resampleSynthSEG2original_z_index, resample_one
+
+# from code_ai.utils_resample import resampleSynthSEG2original_z_index, resample_one
 
 def str_to_bool(v):
     if isinstance(v, bool):
