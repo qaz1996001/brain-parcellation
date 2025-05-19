@@ -214,7 +214,8 @@ def get_diameter(mask_np,source_image,) -> float:
 def make_mask_json(source_images:List[Union[FileDataset, DicomDir]],
                    sorted_dcms  :List[Union[str, pathlib.Path]],
                    dcm_seg_path:Union[str,pathlib.Path],
-                   group_id:int = GROUP_ID, ) ->  MaskRequest:
+                   mask_index :int ,
+                   group_id:int = GROUP_ID,) ->  MaskRequest:
     with open(dcm_seg_path, 'rb') as f:
         dcm_seg = pydicom.read_file(f)
     # Referenced Series
@@ -233,7 +234,6 @@ def make_mask_json(source_images:List[Union[FileDataset, DicomDir]],
 
             filtered_items  = next(filter(lambda x: x[1].get((0x0008, 0x0018)).value == sop_instance_uid ,
                                           enumerate(source_images)))
-            mask_index   = filtered_items[0]
             mask_name    = dcm_seg.get((0x0008, 0x103E)).value
             diameter     = get_diameter(mask_np[index], source_images[filtered_items[0]])
             type         = "saccular"
@@ -259,11 +259,13 @@ def make_mask_json(source_images:List[Union[FileDataset, DicomDir]],
                 series_instance_uid = series_instance_uid,
                 main_seg_slice= main_seg_slice))
             mask_dict_list.append(instance_dict)
+            break
         if index == 0:
             study_instance_uid = dcm_seg.get((0x0020, 0x000D)).value
             mask_dict.update(dict(study_instance_uid=study_instance_uid,
                                   group_id=group_id,
                                   instances=mask_dict_list))
+        break
 
     mask_dict.update(dict(instances=mask_dict_list))
     return MaskRequest.model_validate(mask_dict)
@@ -536,7 +538,9 @@ def process_prediction_mask(
             print(f"{index+1}/{pred_data_unique_len} Saved: {dcm_seg_path}",end='\r')
             temp_mask_request = make_mask_json(source_images=source_images,
                                                sorted_dcms=sorted_dcms,
-                                               dcm_seg_path=dcm_seg_path)
+                                               dcm_seg_path=dcm_seg_path,
+                                               mask_index= int(i),
+                                               )
             mask_request_list.append(temp_mask_request)
             # break
     first_mask_request = mask_request_list[0]
