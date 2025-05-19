@@ -10,8 +10,8 @@ from code_ai import PYTHON3
 from code_ai.task import resample_one, resampleSynthSEG2original_z_index, save_original_seg_by_argmin_z_index
 
 from code_ai.task.schema import intput_params
-from code_ai.task.task_params import BoosterParamsMyAI
-from code_ai.utils_inference import replace_suffix
+from code_ai.task.params import BoosterParamsMyAI
+from code_ai.utils.inference import replace_suffix
 from code_ai.utils_synthseg import TemplateProcessor
 
 

@@ -6,8 +6,9 @@ from typing import Dict
 from funboost import Booster
 from funboost.core.serialization import Serialization
 
-from code_ai.task.task_params import BoosterParamsMyAI
-from code_ai.utils_inference import build_inference_cmd
+from code_ai.task.params import BoosterParamsMyAI
+# from code_ai.utils_inference import build_inference_cmd
+from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 

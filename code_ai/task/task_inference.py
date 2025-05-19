@@ -1,8 +1,6 @@
 from typing import Dict
 from funboost import BrokerEnum, ConcurrentModeEnum, Booster
 from code_ai.task.schema import intput_params
-from code_ai.utils_inference import Analysis, check_study_mapping_inference, generate_output_files, Task, \
-    InferenceEnum
 from code_ai.task.task_infarct import inference_infarct
 from code_ai.task.task_CMB import inference_cmb
 from code_ai.task.workflow import ResampleHandler
@@ -11,6 +9,8 @@ from code_ai.task.workflow import ProcessSynthSegHandler
 from code_ai.task.workflow import SaveFileTaskHandler
 from code_ai.task.workflow import PostProcessSynthSegHandler
 from code_ai.task.workflow import ResampleToOriginalHandler
+from code_ai.utils.inference import Analysis, check_study_mapping_inference, generate_output_files, Task, \
+    InferenceEnum
 
 
 @Booster('call_handler_inference_queue',

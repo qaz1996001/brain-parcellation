@@ -1,6 +1,5 @@
 from __future__ import annotations
 import pathlib
-from code_ai.utils_inference import replace_suffix
 from abc import ABC, abstractmethod
 from typing import Any, Optional, List, Union, Sequence, Dict
 
@@ -9,7 +8,7 @@ from typing import Any, Optional, List, Union, Sequence, Dict
 from code_ai.task.task_synthseg import resample_task, synthseg_task,process_synthseg_task,save_file_tasks,post_process_synthseg_task,resample_to_original_task
 from code_ai.task.schema.intput_params import SaveFileTaskParams
 
-from code_ai.utils_inference import InferenceEnum
+from code_ai.utils.inference import InferenceEnum, replace_suffix
 
 
 # -----------------------------------------------------------------------------

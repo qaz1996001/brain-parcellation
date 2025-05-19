@@ -23,7 +23,7 @@ from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
 from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
-from code_ai.task.task_params import BoosterParamsMyRABBITMQ
+from code_ai.task.params import BoosterParamsMyRABBITMQ
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 def get_output_study(dicom_ds):
