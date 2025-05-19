@@ -1,98 +1,13 @@
 import argparse
-import enum
 import os
 import pathlib
-import re
 from typing import List, Dict, Optional, Tuple, Union
-
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, Field
-from code_ai.dicom2nii.convert.config import T1SeriesRenameEnum, MRSeriesRenameEnum, T2SeriesRenameEnum
 
-
-
-
-
-class InferenceCmdItem(BaseModel):
-    study_id : str
-    name: str
-    cmd_str: str
-    input_list: List[str]
-    output_list: List[str]
-    input_dicom_dir: str
-
-
-class InferenceCmd(BaseModel):
-    cmd_items : List[InferenceCmdItem]
-
-
-
-class Task(BaseModel):
-    input_path_list: List[str] = Field(..., alias="intput_path_list")
-    output_path: str
-    output_path_list: List[str]
-    # result: Result
-
-
-class Analysis(BaseModel):
-    study_id: str
-    Area: Optional[Task] = None
-    DWI: Optional[Task] = None
-    WMH_PVS: Optional[Task] = None
-    CMB: Optional[Task] = None
-    AneurysmSynthSeg: Optional[Task] = None
-    Infarct: Optional[Task] = None
-    WMH: Optional[Task] = None
-    Aneurysm: Optional[Task] = None
-
-
-class InferenceEnum(str, enum.Enum):
-    SynthSeg = 'SynthSeg'
-    Area = 'Area'
-
-    CMB = 'CMB'
-
-    DWI = 'DWI'
-    Infarct = 'Infarct'
-
-    WMH = 'WMH'
-    WMH_PVS = 'WMH_PVS'
-    # Lacune
-    Aneurysm = 'Aneurysm'
-
-
-MODEL_MAPPING_SERIES_DICT = {
-    InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
-                         [T1SeriesRenameEnum.T1BRAVO_SAG, ],
-                         [T1SeriesRenameEnum.T1BRAVO_COR, ],
-                         [T1SeriesRenameEnum.T1FLAIR_AXI, ],
-                         [T1SeriesRenameEnum.T1FLAIR_SAG, ],
-                         [T1SeriesRenameEnum.T1FLAIR_COR, ], ],
-    InferenceEnum.DWI: [
-        #[MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1BRAVO_AXI,],
-        # [MRSeriesRenameEnum.DWI0, T1SeriesRenameEnum.T1FLAIR_AXI,],
-        [MRSeriesRenameEnum.DWI0]
-    ],
-    InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
-
-    #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
-    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
-                        [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
-                        ],
-    # InferenceEnum.CMBSynthSeg
-
-    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0, MRSeriesRenameEnum.DWI1000, MRSeriesRenameEnum.ADC, ]
-                            # MRSeriesRenameEnum.synthseg_DWI0_original_DWI],
-                            ],
-    InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
-                         ]],
-
-    InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
-                              ]]
-}
-
-study_id_pattern = re.compile('^[0-9]{8}_[0-9]{8}_(MR|CT|CR|PR).*$', re.IGNORECASE)
+from code_ai.utils import replace_suffix,study_id_pattern
+from .schema import MODEL_MAPPING_SERIES_DICT,InferenceCmd,InferenceCmdItem,InferenceEnum
+from .schema import Analysis,Task
 
 
 def get_file_list(input_path: pathlib.Path, suffixes: str, filter_name=None) -> List[pathlib.Path]:
@@ -116,10 +31,6 @@ def prepare_output_file_list(file_list: List[pathlib.Path],
     #         replace_suffix(x.name, suffix)) for x in file_list]
 
 
-def replace_suffix(filename: str, new_suffix: str, pattern=r'\.nii\.gz$|\.nii$'):
-    return re.sub(pattern, new_suffix, filename)
-
-
 def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[str, str]]:
     file_list = sorted(study_path.iterdir())
 
@@ -140,14 +51,6 @@ def check_study_mapping_inference(study_path: pathlib.Path) -> Dict[str, Dict[st
                     break
         return {study_path.name: model_mapping_dict}
 
-
-def check_study_id(intput_path: pathlib.Path) -> bool:
-    global study_id_pattern
-    if intput_path.is_dir():
-        result = study_id_pattern.match(intput_path.name)
-        if result is not None:
-            return True
-    return False
 
 
 def generate_output_files(input_paths: List[str], task_name: str, base_output_path: str) -> List[str]:
