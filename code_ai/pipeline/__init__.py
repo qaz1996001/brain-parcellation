@@ -8,7 +8,14 @@ from typing import Optional
 from code_ai import PYTHON3
 from code_ai.utils import study_id_pattern
 from code_ai.utils.inference import InferenceEnum, Task
-# study_id_pattern = re.compile('.*(_[0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*', re.IGNORECASE)
+
+
+def get_study_id(file_name: str) -> Optional[str]:
+    result = study_id_pattern.match(file_name)
+    if result is not None:
+        return result.groups()[0]
+    return ""
+
 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resource', 'models')
 
@@ -20,7 +27,7 @@ def pipeline_parser():
 
     parser.add_argument('--Inputs', type=str, nargs='+',
                         default=['/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/SWAN.nii.gz',
-                                 '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz' ],
+                                 '/mnt/e/rename_nifti_202505051/10516407_20231215_MR_21210200091/T1BRAVO_AXI.nii.gz'],
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
                         help='用於輸出結果的資料夾')
@@ -32,13 +39,13 @@ def pipeline_parser():
 
 class PipelineConfig:
     base_path = pathlib.Path(__file__).parent.parent.parent.absolute()
-    python3   = os.getenv("PYTHON3")
+    python3 = os.getenv("PYTHON3")
 
     def __init__(self, script_name, data_key):
         self.script_name = script_name
         self.data_key = data_key
 
-    def generate_cmd(self, study_id: str,task:Task,input_dicom_dir:Optional[str] =None):
+    def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
         input_path_list = [str(x) for x in task.input_path_list]
         output_path = os.path.dirname(task.output_path)
         if input_dicom_dir is None:
@@ -73,16 +80,16 @@ def dicom_seg_multi_file(ID:str,
                          nii_path_str:str,
                          path_output:str):
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/create_dicomseg_multi_file_json_claude.py '
+               '{} code_ai/pipeline/dicomseg/create_dicomseg_multi_file_json_claude.py '
                '--ID {} '
                '--InputsDicomDir {} '
                '--Inputs {} '
                '--Output_folder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
-                                                   PYTHON3,
-                                                   ID,
-                                                   InputsDicomDir,
-                                                   nii_path_str,
-                                                   path_output)
+                                            PYTHON3,
+                                            ID,
+                                            InputsDicomDir,
+                                            nii_path_str,
+                                            path_output)
                )
     # cmd_str = ('export PYTHONPATH={} && '
     #            '{} code_ai/pipeline/create_dicomseg_multi_file_claude.py '
@@ -106,9 +113,8 @@ def dicom_seg_multi_file(ID:str,
 
 
 def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
-    input_dicom_seg_folder_path  = pathlib.Path(input_dicom_seg_folder)
+    input_dicom_seg_folder_path = pathlib.Path(input_dicom_seg_folder)
     input_nifti_path = pathlib.Path(input_nifti)
-
     dicom_seg_base_name = input_nifti_path.name.split('.')[0]
     file_list = sorted(input_dicom_seg_folder_path.rglob(dicom_seg_base_name + '*.dcm'))
     file_str_list = list(map(lambda x: str(x), file_list))
@@ -130,15 +136,15 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
 
 def upload_json(ID: str, mode: InferenceEnum) -> object:
     path_process = os.getenv("PATH_PROCESS")
-    cmd_json_path_path = os.path.join(path_process, 'Deep_cmd_tools','{}_cmd.json'.format(ID))
+    cmd_json_path_path = os.path.join(path_process, 'Deep_cmd_tools', '{}_cmd.json'.format(ID))
     if os.path.exists(cmd_json_path_path):
-        with open(cmd_json_path_path,'r') as f:
+        with open(cmd_json_path_path, 'r') as f:
             data_json = json.load(f)
-        cmd_data = next(filter(lambda x:x['study_id']==ID and x['name']==mode,data_json))
+        cmd_data = next(filter(lambda x: x['study_id'] == ID and x['name'] == mode, data_json))
         if cmd_data is not None:
             file_list = cmd_data['output_list']
             nii_file_list = list(filter(lambda x: str(x).endswith('nii.gz'), file_list))
-            platform_json_list = list(map(lambda x: str(x).replace('.nii.gz','_platform_json.json'), nii_file_list))
+            platform_json_list = list(map(lambda x: str(x).replace('.nii.gz', '_platform_json.json'), nii_file_list))
 
             platform_json_list = list(filter(lambda x: os.path.exists(x), platform_json_list))
             for platform_json in platform_json_list:
@@ -155,8 +161,8 @@ def upload_json(ID: str, mode: InferenceEnum) -> object:
                                            # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 stdout, stderr = process.communicate()
-                print(stdout,stderr)
+                print(stdout, stderr)
         else:
-            raise ValueError('No found {} for {}'.format(mode,ID))
+            raise ValueError('No found {} for {}'.format(mode, ID))
     else:
         raise FileNotFoundError(cmd_json_path_path)
