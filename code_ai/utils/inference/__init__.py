@@ -5,9 +5,10 @@ from typing import List, Dict, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
-from code_ai.utils import replace_suffix,study_id_pattern
-from .schema import MODEL_MAPPING_SERIES_DICT,InferenceCmd,InferenceCmdItem,InferenceEnum
+from code_ai.utils import replace_suffix
+from .schema import InferenceCmd,InferenceCmdItem,InferenceEnum # MODEL_MAPPING_SERIES_DICT,
 from .schema import Analysis,Task
+from .config import MODEL_MAPPING_SERIES_DICT
 
 
 def get_file_list(input_path: pathlib.Path, suffixes: str, filter_name=None) -> List[pathlib.Path]:
