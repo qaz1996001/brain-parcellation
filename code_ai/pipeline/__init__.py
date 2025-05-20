@@ -119,7 +119,7 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
     file_list = sorted(input_dicom_seg_folder_path.rglob(dicom_seg_base_name + '*.dcm'))
     file_str_list = list(map(lambda x: str(x), file_list))
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/upload_dicom_seg.py '
+               '{} code_ai/pipeline/upload/orthanc_dicom.py '
                '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                     PYTHON3,
                                     ' '.join(file_str_list)
@@ -149,7 +149,7 @@ def upload_json(ID: str, mode: InferenceEnum) -> object:
             platform_json_list = list(filter(lambda x: os.path.exists(x), platform_json_list))
             for platform_json in platform_json_list:
                 cmd_str = ('export PYTHONPATH={} && '
-                           '{} code_ai/pipeline/upload_json.py '
+                           '{} code_ai/pipeline/upload/platform_json.py '
                            '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                                 PYTHON3,
                                                 platform_json
