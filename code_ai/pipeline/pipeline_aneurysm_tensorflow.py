@@ -276,6 +276,8 @@ if __name__ == '__main__':
                                                  sort_json_path = sort_json_path)
 
     upload_json(ID,InferenceEnum.Aneurysm)
+    path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
+    path_dcm = os.path.join(path_processID, 'Dicom')
 
     upload_dicom_dir_tuple = (os.path.join(path_dcm, 'Dicom-Seg'),
                               os.path.join(path_dcm, 'MIP_Pitch'),
