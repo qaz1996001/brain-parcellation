@@ -31,7 +31,7 @@ from pydicom.dicomdir import DicomDir
 
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import DCM_EXAMPLE
-from code_ai.pipeline.dicomseg.schema import MaskRequest, MaskSeriseRequest, MaskInstanceRequest
+from code_ai.pipeline.dicomseg.schema import MaskRequest, MaskSeriesRequest, MaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema import StudyRequest, SortedRequest
 from code_ai.pipeline.dicomseg.schema import AITeamRequest, GROUP_ID
 
@@ -98,7 +98,7 @@ def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
                           dcm_seg: Union[FileDataset, DicomDir],
                           mask_index: int,
                           main_seg_slice: int,
-                          *args, **kwargs) -> MaskSeriseRequest:
+                          *args, **kwargs) -> MaskSeriesRequest:
     """
     Create a JSON representation of a mask series, which contains one or more mask instances.
 
@@ -111,7 +111,7 @@ def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
         *args, **kwargs: Additional parameters for mask instances
 
     Returns:
-        MaskSeriseRequest: Validated mask series data
+        MaskSeriesRequest: Validated mask series data
     """
     mask_series_dict = dict()
     mask_instance_list = []
@@ -137,7 +137,7 @@ def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
     mask_series_dict.update({'instances': mask_instance_list})
 
     # Validate and return the mask series request
-    return MaskSeriseRequest.model_validate(mask_series_dict)
+    return MaskSeriesRequest.model_validate(mask_series_dict)
 
 
 def make_mask_json(source_images: List[Union[FileDataset, DicomDir]],

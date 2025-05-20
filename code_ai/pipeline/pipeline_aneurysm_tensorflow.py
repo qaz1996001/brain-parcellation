@@ -13,56 +13,19 @@ import warnings
 from code_ai import PYTHON3
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
-from typing import Tuple,Optional
+from typing import Tuple, Optional, List
 import os
-import numpy as np
 import logging
 import shutil
 import time
-import json
 import tensorflow as tf
-from collections import OrderedDict
 import pynvml  # 导包
-from code_ai.pipeline import pipeline_parser, upload_json,InferenceEnum
+from code_ai.pipeline import pipeline_parser, upload_json, InferenceEnum
 from code_ai.pipeline.chuan.gpu_aneurysm import model_predict_aneurysm
 from code_ai.pipeline.chuan.util_aneurysm import reslice_nifti_pred_nobrain, create_MIP_pred, \
     make_aneurysm_vessel_location_16labels_pred, \
     calculate_aneurysm_long_axis_make_pred, make_table_row_patient_pred, make_table_add_location, \
     create_dicomseg_multi_file, make_pred_json
-
-# 會使用到的一些predict技巧
-def data_translate(img, nii):
-    img = np.swapaxes(img, 0, 1)
-    img = np.flip(img, 0)
-    img = np.flip(img, -1)
-    header = nii.header.copy()  # 抓出nii header 去算體積
-    pixdim = header['pixdim']  # 可以借此從nii的header抓出voxel size
-    if pixdim[0] > 0:
-        img = np.flip(img, 1)
-        # img = np.expand_dims(np.expand_dims(img, axis=0), axis=4)
-    return img
-
-
-def data_translate_back(img, nii):
-    header = nii.header.copy()  # 抓出nii header 去算體積
-    pixdim = header['pixdim']  # 可以借此從nii的header抓出voxel size
-    if pixdim[0] > 0:
-        img = np.flip(img, 1)
-    img = np.flip(img, -1)
-    img = np.flip(img, 0)
-    img = np.swapaxes(img, 1, 0)
-    # img = np.expand_dims(np.expand_dims(img, axis=0), axis=4)
-    return img
-
-
-# case_json(json_path_name)
-def case_json(json_file_path, ID):
-    json_dict = OrderedDict()
-    json_dict["PatientID"] = ID  # 使用的程式是哪一支python api
-
-    with open(json_file_path, 'w', encoding='utf8') as json_file:
-        json.dump(json_dict, json_file, sort_keys=False, indent=2, separators=(',', ': '),
-                  ensure_ascii=False)  # 讓json能中文顯示
 
 
 def pipeline_aneurysm(ID,
@@ -75,12 +38,7 @@ def pipeline_aneurysm(ID,
                       path_log='/mnt/e/pipeline/chuan/log/',
                       path_cuatom_model='/mnt/e/pipeline/code/model_weights',
                       gpu_n=0
-                      )->Tuple[(Optional[str|pathlib.Path],
-                                Optional[str|pathlib.Path],
-                                Optional[str|pathlib.Path],
-                                Optional[str|pathlib.Path],
-                                Optional[str|pathlib.Path],)]:
-
+                      ) -> Optional[tuple[str, str, str, str, str]]:
     logger = tf.get_logger()
     logger.setLevel(logging.ERROR)
 
@@ -174,7 +132,12 @@ def pipeline_aneurysm(ID,
             Series = ['MRA_BRAIN', 'MIP_Pitch', 'MIP_Yaw']
             group_id = 49
             excel_file = os.path.join(path_excel, 'Aneurysm_Pred_list.xlsx')
-            make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, path_json_out, [ID], Series,
+            make_pred_json(excel_file,
+                           path_dcm,
+                           path_nii,
+                           path_reslice,
+                           path_dicomseg,
+                           path_json_out, [ID], Series,
                            group_id)
 
             # 接下來上傳dicom到orthanc
@@ -190,11 +153,18 @@ def pipeline_aneurysm(ID,
             # 把json跟nii輸出到out資料夾
             path_output_dir = str(os.path.join(path_output, ID))
             os.makedirs(path_output_dir, exist_ok=True)
+            # output_tuple = (os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'),
+            #                 os.path.join(path_output_dir, 'Prob_Aneurysm.nii.gz'),
+            #                 os.path.join(path_output_dir, 'Pred_Aneurysm_vessel.nii.gz'),
+            #                 os.path.join(path_output_dir, 'Pred_Aneurysm_vessel16.nii.gz'),
+            #                 os.path.join(path_output_dir, 'Pred_Aneurysm.json'))
             output_tuple = (os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'),
-                            os.path.join(path_output_dir, 'Prob_Aneurysm.nii.gz'),
-                            os.path.join(path_output_dir, 'Pred_Aneurysm_vessel.nii.gz'),
-                            os.path.join(path_output_dir, 'Pred_Aneurysm_vessel16.nii.gz'),
-                            os.path.join(path_output_dir, 'Pred_Aneurysm.json'))
+                            os.path.join(path_json, ID + '_' + Series[0] + '.json'),
+                            os.path.join(path_json, ID + '_' + Series[1] + '.json'),
+                            os.path.join(path_json, ID + '_' + Series[2] + '.json'),
+                            os.path.join(path_json, ID + '_sort.json')
+                            )
+
             shutil.copy(os.path.join(path_processID, 'Pred.nii.gz'),
                         os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'))
             shutil.copy(os.path.join(path_processID, 'Prob.nii.gz'),
@@ -218,10 +188,6 @@ def pipeline_aneurysm(ID,
             code_pass = 1
             msg = "Insufficient GPU Memory"
 
-            # #刪除資料夾
-            # if os.path.isdir(path_process):  #如果資料夾存在
-            #     shutil.rmtree(path_process) #清掉整個資料夾
-
     except:
         logging.error('!!! ' + str(ID) + ' gpu have error code.')
         logging.error("Catch an exception.", exc_info=True)
@@ -231,6 +197,32 @@ def pipeline_aneurysm(ID,
 
     print('end!!!')
     return None, None, None, None, None
+
+
+def call_aneurysm_old_json_mapping_platform_json(ID: str,
+                                                 input_nii: str,
+                                                 old_json_path: List[str],
+                                                 sort_json_path: str):
+    cmd_str = ('export PYTHONPATH={} && '
+               '{} code_ai/pipeline/dicomseg/aneurysm_old_json_mapping_platform_json.py '
+               '--ID {} '
+               '--input_nii {} '
+               '--old_json_path {} '
+               '--sort_json_path {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                             PYTHON3,
+                                             ID,
+                                             input_nii,
+                                             ' '.join(old_json_path),
+                                             sort_json_path, )
+               )
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    print('dicom_seg_multi_file', cmd_str)
+    return stdout, stderr
+
+
 
 
 if __name__ == '__main__':
@@ -265,27 +257,32 @@ if __name__ == '__main__':
     os.makedirs(path_output, exist_ok=True)
 
     # 直接當作function的輸入，因為可能會切換成nnUNet的版本，所以自訂化模型移到跟model一起，synthseg自己做，不用統一
-    Pred_Aneurysm_path, Prob_Aneurysm_path, \
-        Pred_Aneurysm_vessel_path, Pred_Aneurysm_vessel16_path, \
-        Pred_Aneurysm_json_path = pipeline_aneurysm(ID=ID,
-                                                    MRA_BRAIN_file=MRA_BRAIN_file,
-                                                    path_output=path_output,
-                                                    path_code=path_code,
-                                                    path_processModel=path_processModel,
-                                                    path_outdcm=path_DcmDir,
-                                                    path_json=path_json,
-                                                    path_log=path_log,
-                                                    path_cuatom_model=CUATOM_MODEL_ANEURYSM,
-                                                    gpu_n=gpu_n)
-    #
+    pred_aneurysm_path , mra_brain_json_path,  mip_pitch_json_path, \
+        mip_yaw_json_path,  sort_json_path =  pipeline_aneurysm(ID=ID,
+                                                                MRA_BRAIN_file=MRA_BRAIN_file,
+                                                                path_output=path_output,
+                                                                path_code=path_code,
+                                                                path_processModel=path_processModel,
+                                                                path_outdcm=path_DcmDir,
+                                                                path_json=path_json,
+                                                                path_log=path_log,
+                                                                path_cuatom_model=CUATOM_MODEL_ANEURYSM,
+                                                                gpu_n=gpu_n)
+    call_aneurysm_old_json_mapping_platform_json(ID=ID,
+                                                 input_nii=pred_aneurysm_path,
+                                                 old_json_path=[mra_brain_json_path,
+                                                                mip_pitch_json_path,
+                                                                mip_yaw_json_path],
+                                                 sort_json_path = sort_json_path)
 
-    path_dcm = os.path.join(path_processModel,ID,'Dicom')
+    upload_json(ID,InferenceEnum.Aneurysm)
+
     upload_dicom_dir_tuple = (os.path.join(path_dcm, 'Dicom-Seg'),
                               os.path.join(path_dcm, 'MIP_Pitch'),
                               os.path.join(path_dcm, 'MIP_Yaw'))
     for dicom_dir in upload_dicom_dir_tuple:
         cmd_str = ('export PYTHONPATH={} && '
-                   '{} code_ai/pipeline/upload_dicom_seg.py '
+                   '{} code_ai/pipeline/upload/orthanc_dicom.py '
                    '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                         PYTHON3,
                                         dicom_dir
@@ -296,4 +293,4 @@ if __name__ == '__main__':
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         print(cmd_str,stdout)
-    upload_json(ID,InferenceEnum.Aneurysm)
+    #

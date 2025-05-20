@@ -167,7 +167,7 @@ class MaskInstanceRequest(BaseModel):
         return '1.0'
 
 
-class MaskSeriseRequest(BaseModel):
+class MaskSeriesRequest(BaseModel):
     # dicom image uid
     series_instance_uid : str
     # 目前僅 Aneu 的 TOF_MRA:1 , Pitch: 2 , Yaw: 3 , 未來有其他 Series 再加
@@ -193,7 +193,7 @@ class MaskSeriseRequest(BaseModel):
 class MaskRequest(BaseModel):
     study_instance_uid : str
     group_id           : PositiveInt = GROUP_ID
-    series             : List[MaskSeriseRequest]
+    series             : List[MaskSeriesRequest]
 
 
 class AITeamRequest(BaseModel):
