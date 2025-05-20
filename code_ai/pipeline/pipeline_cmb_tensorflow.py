@@ -14,19 +14,16 @@ pynvml==12.0.0
 @author: sean Ho
 """
 import glob
+import json
 import pathlib
 import shutil
 import subprocess
 import warnings
+from code_ai.utils.inference import InferenceEnum
 
-from gevent.tests.test__server import _file
-
-from code_ai.utils_inference import InferenceEnum
-
-warnings.filterwarnings("ignore")  # 忽略警告输出
+# warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
-from typing import Optional
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
 import time
 import logging
 import pynvml  # 导包
@@ -35,16 +32,10 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import study_id_pattern, dicom_seg_multi_file, upload_dicom_seg, pipeline_parser, upload_json
+from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg, pipeline_parser, upload_json
+from code_ai.pipeline import get_study_id
 
 load_dotenv()
-
-def get_study_id(file_name:str) -> Optional[str]:
-    result = study_id_pattern.match(file_name)
-    if result is not None:
-        return result.groups()[0]
-    return ""
-
 
 
 def pipeline_cmb(ID :str,
@@ -97,12 +88,6 @@ def pipeline_cmb(ID :str,
             # print(gpus, cpus)
             tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
 
-            # 底下正式開始predict任務
-
-            # gpu_line = 'bash ' + os.path.join(path_code, 'SynthSEG_stroke.sh ') + case_name
-            # 以下做predict，為了避免gpu out of memory，還是以.sh來執行好惹
-            # python main.py -i './forler/Ax SWAN.nii.gz' --template './forler/Sag_FSPGR_BRAVO.nii.gz' --all False --CMB TRUE
-            # gpu_line = 'python ' + os.path.join(path_synthseg, 'main.py -i ') + path_nii + ' --all False --CMB TRUE'
             gpu_line = '{} {} -i {} --template {} --output {} --all False --CMB TRUE'.format(
                 PYTHON3,
                 os.path.join(os.path.dirname(__file__), 'main.py'),
@@ -110,7 +95,6 @@ def pipeline_cmb(ID :str,
                 t1_file,
                 path_processID)
 
-            print(gpu_line)
             os.system(gpu_line)
 
             temp_path_str = glob.glob('{}/synthseg_*SWAN_original_CMB*.nii.gz'.format(path_processID))[0]
@@ -119,7 +103,7 @@ def pipeline_cmb(ID :str,
             path_output_dir = os.path.join(path_output, ID)
             os.makedirs(path_output_dir, exist_ok=True)
             temp_path_basename = os.path.basename(temp_path_str)
-            temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+            temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '').replace('__','_')
             synthseg_temp_path_basename = os.path.join(path_output_dir, temp_path_basename)
             shutil.copy(temp_path_str,os.path.join(path_output_dir, temp_path_basename))
             output_nii_path_str = os.path.join(path_output_dir ,'Pred_CMB.nii.gz')
@@ -135,23 +119,10 @@ def pipeline_cmb(ID :str,
             return synthseg_temp_path_basename, output_nii_path_str,output_json_path_str
         else:
             logging.error('!!! ' + str(ID) + ' Insufficient GPU Memory.')
-            # 以json做輸出
-            code_pass = 1
-            msg = "Insufficient GPU Memory"
-
-            # #刪除資料夾
-            # if os.path.isdir(path_process):  #如果資料夾存在
-            #     shutil.rmtree(path_process) #清掉整個資料夾
 
     except:
         logging.error('!!! ' + str(ID) + ' gpu have error code.')
         logging.error("Catch an exception.", exc_info=True)
-        # 以json做輸出
-        code_pass = 1
-        msg = "have error code"
-        # 刪除資料夾
-        # if os.path.isdir(path_process):  #如果資料夾存在
-        #     shutil.rmtree(path_process) #清掉整個資料夾
 
     return None,None,None
 
@@ -193,8 +164,8 @@ if __name__ == '__main__':
 
     # 直接當作function的輸入
     cmb_path_str,output_nii_path_str,output_json_path_str = pipeline_cmb(ID, swan_path_str, t1_path_str, path_output,
-                                                            path_code, path_processModel,path_json,
-                                                            path_log, path_synthseg, gpu_n)
+                                                                         path_code, path_processModel,path_json,
+                                                                         path_log, path_synthseg, gpu_n)
     # dicom_seg
     if cmb_path_str is not None:
         stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,cmb_path_str,path_output )
@@ -203,5 +174,23 @@ if __name__ == '__main__':
         stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
         upload_dicom_seg(path_output, output_nii_path_str, )
 
+
+    platform_json_path = output_nii_path_str.replace('.nii.gz', '_platform_json.json')
+    with open(platform_json_path) as f:
+        platform_json = json.load(f)
+    with open(output_json_path_str) as f:
+        output_json = json.load(f)
+    for i , ser in enumerate(platform_json['mask']['series']):
+        try:
+            cmb_dict =next(filter(lambda x:ser['instances'][0]['mask_index'] == x['label#'],
+                                  output_json))
+            platform_json['mask']['series'][i]['instances'][0]['diameter'] = str(cmb_dict['pred_diameter'])
+            platform_json['mask']['series'][i]['instances'][0]['type']     = str(cmb_dict['class_name'])
+            platform_json['mask']['series'][i]['instances'][0]['location'] = str(cmb_dict['type_name'])
+
+        except StopIteration:
+            continue
+    with open(platform_json_path,mode='w') as f:
+        json.dump(platform_json,f)
     upload_json(ID, InferenceEnum.CMB)
 
