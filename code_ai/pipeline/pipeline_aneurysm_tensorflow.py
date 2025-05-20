@@ -159,10 +159,10 @@ def pipeline_aneurysm(ID,
             #                 os.path.join(path_output_dir, 'Pred_Aneurysm_vessel16.nii.gz'),
             #                 os.path.join(path_output_dir, 'Pred_Aneurysm.json'))
             output_tuple = (os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'),
-                            os.path.join(path_json, ID + '_' + Series[0] + '.json'),
-                            os.path.join(path_json, ID + '_' + Series[1] + '.json'),
-                            os.path.join(path_json, ID + '_' + Series[2] + '.json'),
-                            os.path.join(path_json, ID + '_sort.json')
+                            os.path.join(path_json_out, ID + '_' + Series[0] + '.json'),
+                            os.path.join(path_json_out, ID + '_' + Series[1] + '.json'),
+                            os.path.join(path_json_out, ID + '_' + Series[2] + '.json'),
+                            os.path.join(path_json_out, ID + '_sort.json')
                             )
 
             shutil.copy(os.path.join(path_processID, 'Pred.nii.gz'),
