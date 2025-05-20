@@ -17,18 +17,16 @@ import glob
 import json
 import pathlib
 import shutil
-import subprocess
 import warnings
 from code_ai.utils.inference import InferenceEnum
 
-# warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
 import logging
 import pynvml  # 导包
 import tensorflow as tf
-
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline.cmb import CMBServiceTF
@@ -157,9 +155,9 @@ if __name__ == '__main__':
     t1_path_str = Inputs[1]
 
     # 建置資料夾
-    os.makedirs(path_processModel,exist_ok=True) # 如果資料夾不存在就建立，製作nii資料夾
-    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_processModel,exist_ok=True)  # 如果資料夾不存在就建立，製作nii資料夾
+    os.makedirs(path_json, exist_ok=True)         # 如果資料夾不存在就建立，
+    os.makedirs(path_log, exist_ok=True)          # 如果資料夾不存在就建立，
     os.makedirs(path_output,exist_ok=True)
 
     # 直接當作function的輸入
@@ -182,7 +180,7 @@ if __name__ == '__main__':
         output_json = json.load(f)
     for i , ser in enumerate(platform_json['mask']['series']):
         try:
-            cmb_dict =next(filter(lambda x:ser['instances'][0]['mask_index'] == x['label#'],
+            cmb_dict = next(filter(lambda x:ser['instances'][0]['mask_index'] == x['label#'],
                                   output_json))
             platform_json['mask']['series'][i]['instances'][0]['diameter'] = str(cmb_dict['pred_diameter'])
             platform_json['mask']['series'][i]['instances'][0]['type']     = str(cmb_dict['class_name'])

@@ -120,7 +120,7 @@ def pipeline_wmh(ID,
     FORMAT = '%(asctime)s %(levelname)s %(message)s'  # 日期時間, 格式為 YYYY-MM-DD HH:mm:SS,ms，日誌的等級名稱，訊息
     logging.basicConfig(level=logging.INFO, filename=log_file, filemode='a', format=FORMAT)
 
-    logging.info('!!! Pre_Infarct call.')
+    logging.info('!!! Pred WMH call.')
 
     path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
     if not os.path.isdir(path_processID):  # 如果資料夾不存在就建立
