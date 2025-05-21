@@ -103,7 +103,7 @@ class StudyRequest(BaseModel):
             if isinstance(value, str) and len(value) == 8:
                 return datetime.date(int(value[:4]), int(value[4:6]), int(value[6:8]))
             else:
-                return datetime.datetime.now().date()
+                return datetime.datetime.strptime(value,'%Y-%m-%d').date()
         except:
             return datetime.datetime.now().date()
 
