@@ -6,52 +6,39 @@ Created on Wed Mar 31 16:59:21 2021
 
 @author: chuan
 """
-
-#from logging.config import _RootLoggerConfiguration
-import os
 import time
 import numpy as np
 import pydicom
 from pydicom.uid import JPEGLSLossless
 
-import glob
 import shutil
 import nibabel as nib
 import nibabel.processing
-import matplotlib
-import matplotlib.pyplot as plt
-import sys
-import logging
 import cv2
 import pandas as pd
-import pydicom_seg
 import SimpleITK as sitk
 import matplotlib.colors as mcolors
-#要安裝pillow 去開啟
-from skimage import measure,color,morphology
+
 from scipy.ndimage import rotate
 from skimage.transform import resize
-from skimage.measure import label, regionprops, regionprops_table
-from scipy import ndimage
+
 from collections import Counter
 import pydicom_seg
 import json
 from collections import OrderedDict
 from scipy import ndimage
-from upload_orthanc import upload_data
+from .upload_orthanc import upload_data
 import requests
 
 import tensorflow as tf
-import tensorflow.keras.backend as K
-#print("Tensorflow version:", tf.__version__)
+
 autotune = tf.data.experimental.AUTOTUNE
-#s.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 import torch
 from torchvision.transforms.functional import rotate as rotate_torch
 from torchvision.transforms import InterpolationMode
 
-from create_dicomseg_multi_file_json_claude import load_and_sort_dicom_files, make_study_json, MaskRequest
+from .create_dicomseg_multi_file_json_claude import load_and_sort_dicom_files, make_study_json, MaskRequest
 
 
 #會使用到的一些predict技巧
