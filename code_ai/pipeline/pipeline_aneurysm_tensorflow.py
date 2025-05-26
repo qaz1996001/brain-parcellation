@@ -22,7 +22,7 @@ import tensorflow as tf
 import pynvml  # 导包
 from code_ai.pipeline import pipeline_parser, upload_json, InferenceEnum
 from code_ai.pipeline.chuan.gpu_aneurysm import model_predict_aneurysm
-from code_ai.pipeline.chuan.util_aneurysm import reslice_nifti_pred_nobrain, create_MIP_pred, \
+from code_ai.pipeline.chuan.util_aneurysm1 import reslice_nifti_pred_nobrain, create_MIP_pred, \
     make_aneurysm_vessel_location_16labels_pred, \
     calculate_aneurysm_long_axis_make_pred, make_table_row_patient_pred, make_table_add_location, \
     create_dicomseg_multi_file, make_pred_json
@@ -84,7 +84,29 @@ def pipeline_aneurysm(ID,
             shutil.copy(MRA_BRAIN_file, os.path.join(path_processID, 'MRA_BRAIN.nii.gz'))
 
             # 因為松諭會用排程，所以這邊改成call function不管gpu了
-            model_predict_aneurysm(path_cuatom_model, path_processID, ID, path_log, gpu_n)
+            # model_predict_aneurysm(path_cuatom_model, path_processID, ID, path_log, gpu_n)
+            # 定義要傳入的參數，建立指令
+
+            cmd_str = ('export PYTHONPATH={} && '
+                       '{} code_ai/pipeline/chuan/gpu_aneurysm.py '
+                       '--path_code {} '
+                       '--path_process {} '
+                       '--case {} '
+                       '--path_log {} '
+                       '--gpu_n {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                                PYTHON3,
+                                                CUATOM_MODEL_ANEURYSM,
+                                                path_processID,
+                                                ID,
+                                                path_log,
+                                                str(gpu_n))
+                       )
+            print('cmd',cmd_str)
+            process = subprocess.Popen(args=cmd_str, shell=True,
+                                       # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()
+            print('gpu_aneurysm.py',stdout, stderr)
 
             # 接下來做mip影像
             path_dcm = os.path.join(path_processID, 'Dicom')
@@ -203,12 +225,14 @@ def call_aneurysm_old_json_mapping_platform_json(ID: str,
                                                  input_nii: str,
                                                  old_json_path: List[str],
                                                  sort_json_path: str):
-    cmd_str = ('export PYTHONPATH={} && '
+    GROUP_ID_ANEURYSM = os.getenv("GROUP_ID_ANEURYSM", 50)
+    cmd_str = ('export PYTHONPATH={} && export GROUP_ID_ANEURYSM={} && '
                '{} code_ai/pipeline/dicomseg/aneurysm_old_json_mapping_platform_json.py '
                '--ID {} '
                '--input_nii {} '
                '--old_json_path {} '
                '--sort_json_path {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                             GROUP_ID_ANEURYSM,
                                              PYTHON3,
                                              ID,
                                              input_nii,
@@ -268,31 +292,35 @@ if __name__ == '__main__':
                                                                 path_log=path_log,
                                                                 path_cuatom_model=CUATOM_MODEL_ANEURYSM,
                                                                 gpu_n=gpu_n)
-    call_aneurysm_old_json_mapping_platform_json(ID=ID,
-                                                 input_nii=pred_aneurysm_path,
-                                                 old_json_path=[mra_brain_json_path,
-                                                                mip_pitch_json_path,
-                                                                mip_yaw_json_path],
-                                                 sort_json_path = sort_json_path)
-
-    upload_json(ID,InferenceEnum.Aneurysm)
-    path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
-    path_dcm = os.path.join(path_processID, 'Dicom')
-
-    upload_dicom_dir_tuple = (os.path.join(path_dcm, 'Dicom-Seg'),
-                              os.path.join(path_dcm, 'MIP_Pitch'),
-                              os.path.join(path_dcm, 'MIP_Yaw'))
-    for dicom_dir in upload_dicom_dir_tuple:
-        cmd_str = ('export PYTHONPATH={} && '
-                   '{} code_ai/pipeline/upload/orthanc_dicom.py '
-                   '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
-                                        PYTHON3,
-                                        dicom_dir
-                                        )
-               )
-        process = subprocess.Popen(args=cmd_str, shell=True,
-                                   # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = process.communicate()
-        print(cmd_str,stdout)
+    # call_aneurysm_old_json_mapping_platform_json(ID=ID,
+    #                                              input_nii=pred_aneurysm_path,
+    #                                              old_json_path=[mra_brain_json_path,
+    #                                                             mip_pitch_json_path,
+    #                                                             mip_yaw_json_path],
+    #                                              sort_json_path = sort_json_path)
     #
+    # upload_json(ID,InferenceEnum.Aneurysm)
+    # path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
+    # path_dcm = os.path.join(path_processID, 'Dicom')
+    #
+    # upload_dicom_dir_tuple = (os.path.join(path_dcm, 'Dicom-Seg'),
+    #                           os.path.join(path_dcm, 'MIP_Pitch'),
+    #                           os.path.join(path_dcm, 'MIP_Yaw'))
+    # for dicom_dir in upload_dicom_dir_tuple:
+    #     cmd_str = ('export PYTHONPATH={} && '
+    #                '{} code_ai/pipeline/upload/orthanc_dicom.py '
+    #                '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+    #                                     PYTHON3,
+    #                                     dicom_dir
+    #                                     )
+    #            )
+    #     process = subprocess.Popen(args=cmd_str, shell=True,
+    #                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+    #                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    #     stdout, stderr = process.communicate()
+    #     print(cmd_str,stdout)
+
+
+
+
+

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Tue Sep 22 13:18:23 2020
 
@@ -18,19 +16,18 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import time
+
 import numpy as np
 import pandas as pd
-
 import nibabel as nib
 import tensorflow as tf
-
 from scipy import signal
 from scipy import ndimage as ndi
 from skimage.morphology import disk, ball, binary_dilation, remove_small_objects, binary_erosion, \
     binary_opening, skeletonize
-from skimage.filters import threshold_otsu
+from skimage.filters import  threshold_otsu
 from skimage.measure import label, regionprops_table
-from skimage.segmentation import  expand_labels
+from skimage.segmentation import expand_labels
 from skimage.segmentation import watershed
 from scipy.ndimage import binary_fill_holes
 from brainextractor import BrainExtractor
@@ -39,21 +36,7 @@ import logging
 import json
 import pynvml  # 导包
 from collections import OrderedDict
-
 autotune = tf.data.experimental.AUTOTUNE
-gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-for gpu in gpus:
-    tf.config.experimental.set_visible_devices(devices=gpu, device_type='GPU')
-    tf.config.experimental.set_memory_growth(gpu, True)
-
-
-# histogram
-def get_histogram_xy(arr, mask=None):
-    if mask is None:
-        mask = np.ones_like(arr, dtype=bool)
-    hist, bin_edges = np.histogram(arr[mask].ravel(), bins=100)
-    bins_mean = [0.5 * (bin_edges[i] + bin_edges[i + 1]) for i in range(100)]
-    return [bins_mean, hist]
 
 
 # keep largest (cpu)
@@ -1051,19 +1034,19 @@ def model_predict_aneurysm(path_code, path_process, case_name, path_log, gpu_n):
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
+    # model_predict_aneurysm(path_code, path_processID, ID, path_log, gpu_n)
     parser = argparse.ArgumentParser()
-    parser.add_argument('--case', type=str, help='目前執行的case的study_uid')
+    parser.add_argument('--path_code', type=str, help='目前執行的code')
+    parser.add_argument('--path_process', type=str, help='目前執行的資料夾')
+    parser.add_argument('--case', type=str, help='目前執行的case的ID')
+    parser.add_argument('--path_log', type=str, help='log資料夾')
+    parser.add_argument('--gpu_n', type=int, help='第幾顆gpu')
     args = parser.parse_args()
 
+    path_code = str(args.path_code)
+    path_process = str(args.path_process)
     case_name = str(args.case)
-
-    # 下面設定各個路徑
-    path_code = '/data/pipeline/chuan/code/'
-    path_process = os.path.join('/data/pipeline/chuan/process/Deep_Aneurysm', case_name)  # 前處理dicom路徑(test case)
-    # path_dcm = os.path.join(path_process, 'dicom')
-    path_json = '/data/pipeline/chuan/json/'  # 存放json的路徑，回傳執行結果
-    # json_path_name = os.path.join(path_json, 'gpu_stroke.json')
-    path_log = '/data/pipeline/chuan/log/'  # log資料夾
-    gpu_n = 0  # 使用哪一顆gpu
+    path_log = str(args.path_log)
+    gpu_n = args.gpu_n
 
     model_predict_aneurysm(path_code, path_process, case_name, path_log, gpu_n)

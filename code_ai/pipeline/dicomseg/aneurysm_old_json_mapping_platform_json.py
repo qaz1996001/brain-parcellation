@@ -10,14 +10,14 @@ import pathlib
 import traceback
 from typing import Optional, List, Union
 
-from code_ai.pipeline.dicomseg.schema import InstanceRequest, GROUP_ID
-from code_ai.pipeline.dicomseg.schema import MaskSeriesRequest,MaskRequest
+from code_ai import load_dotenv
+from code_ai.pipeline.dicomseg.schema import MaskRequest
 from code_ai.pipeline.dicomseg.schema import SortedRequest,StudyRequest,AITeamRequest
-from code_ai.pipeline.dicomseg.schema import SeriesRequest,SeriesTypeEnum
+from code_ai.pipeline.dicomseg.schema import SeriesRequest
 from code_ai.pipeline import get_study_id
 
 
-def load_mask_json(old_json_path: str, group_id:int = GROUP_ID) -> Optional[MaskRequest]:
+def load_mask_json(old_json_path: str, group_id:int) -> Optional[MaskRequest]:
     with open(old_json_path) as f:
         data_dict = json.load(f)
     try:
@@ -60,7 +60,7 @@ def load_mask_json(old_json_path: str, group_id:int = GROUP_ID) -> Optional[Mask
 
 
 
-def load_study_json(old_json_path: str, group_id:int = GROUP_ID) -> Optional[StudyRequest]:
+def load_study_json(old_json_path: str, group_id:int) -> Optional[StudyRequest]:
     with open(old_json_path) as f:
         data_dict = json.load(f)
     try:
@@ -128,14 +128,16 @@ def main():
     path_nii           = pathlib.Path(args.input_nii)
     path_json_list     = list(map(lambda x:pathlib.Path(x), args.old_json_path))
     path_sort_json     = pathlib.Path(args.sort_json_path)
-
+    GROUP_ID           = os.getenv("GROUP_ID_ANEURYSM",50)
     platform_json_path = path_nii.parent.joinpath(path_nii.name.replace('.nii.gz',
                                                                         '_platform_json.json'))
-    sort_request  = load_sort_dicom_json(path_sort_json)
-    study_request, series_instance_uid = load_study_json(path_json_list[0])
+    sort_request  = load_sort_dicom_json(sort_json_path = path_sort_json)
+    study_request, series_instance_uid = load_study_json(old_json_path=path_json_list[0],
+                                                         group_id=GROUP_ID)
     new_mask_list :List[Optional[MaskRequest]] = []
     for path_json in path_json_list:
-        mask_json   = load_mask_json(old_json_path=path_json)
+        mask_json   = load_mask_json(old_json_path=path_json,
+                                     group_id=GROUP_ID)
         print(mask_json)
         new_mask_list.append(mask_json)
 
@@ -152,4 +154,5 @@ def main():
 
 
 if __name__ == '__main__':
+    load_dotenv()
     main()

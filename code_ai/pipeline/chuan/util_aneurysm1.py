@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Created on Wed Mar 31 16:59:21 2021
 
@@ -8,31 +7,37 @@ Created on Wed Mar 31 16:59:21 2021
 """
 import os
 import time
-import numpy as np
-import pydicom
-from pydicom.uid import JPEGLSLossless
 import shutil
-import nibabel as nib
-import nibabel.processing
+import json
 import cv2
 import pandas as pd
+import nibabel as nib
+import numpy as np
+import pydicom
+import pydicom_seg
+import nibabel.processing
+import requests
 import SimpleITK as sitk
 import matplotlib.colors as mcolors
-# 要安裝pillow 去開啟
-from scipy.ndimage import rotate
-from skimage.transform import resize
-from collections import Counter
-import pydicom_seg
-import json
-from collections import OrderedDict
-from scipy import ndimage
-from .upload_orthanc import upload_data
-import requests
-import tensorflow as tf
+import warnings
+import httpx
+import orjson
 
+from collections import Counter
+from collections import OrderedDict
+from scipy.ndimage import rotate
+from scipy import ndimage
+from skimage.transform import resize
+from pydicom.uid import JPEGLSLossless
+
+import tensorflow as tf
+autotune = tf.data.experimental.AUTOTUNE
 import torch
 from torchvision.transforms.functional import rotate as rotate_torch
 from torchvision.transforms import InterpolationMode
+from .upload_orthanc import upload_data
+from code_ai.pipeline.dicomseg.create_dicomseg_multi_file_json_claude import load_and_sort_dicom_files, make_study_json, MaskRequest
+warnings.filterwarnings("ignore")  # 忽略警告输出
 
 
 # 會使用到的一些predict技巧
@@ -115,12 +120,12 @@ def reslice_nifti_pred_nobrain(path_nii, path_reslice):
 def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
     # gpu_available = tf.config.list_physical_devices('GPU')
     # print(gpu_available)
-    # # set GPU
-    # # gpu_num = 0
+    # set GPU
+    # gpu_num = 0
     # tf.config.experimental.set_visible_devices(devices=gpu_available[gpu_num], device_type='GPU')
-    #
+
     # for gpu in gpu_available:
-    #     tf.config.experimental.set_memory_growth(gpu, True)
+    #    tf.config.experimental.set_memory_growth(gpu, True)
 
     def img_to_MIPdicom(dcm, img, tag, series, SE, angle, count):
         y_i, x_i = img.shape
@@ -214,8 +219,10 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
             device = f'cuda:{gpu}'
         else:
             device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
         if isinstance(X, np.ndarray):
             # Make a copy of the array to avoid negative strides issue
+            X = np.copy(X)
             X = np.copy(X)
             X = torch.from_numpy(X).float()
 
@@ -258,10 +265,9 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
         # processed_images = rotator.process_images(translated_vessel_img, angle, angle_one, y_i, x_i)
 
         def __init__(self):
-            pass
             # __init__：初始化類並設置裝置（如果GPU可用則為'cuda:0'，否則為'cpu'）。
             # self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-            # self.device =  'cpu'
+            return
 
         def rotation_3d(self, X, axis, theta, expand=True, fill=0.0, label=False):
             """
@@ -280,9 +286,10 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
             """
             if isinstance(X, np.ndarray):
                 X = np.copy(X)
-                X = torch.from_numpy(X).to(torch.float32)
+                X = torch.from_numpy(X).float()
 
             X = X.to(self.device)
+
             if axis == 0:
                 interpolation_mode = InterpolationMode.NEAREST if label else InterpolationMode.BILINEAR
                 X = rotate_torch(X, interpolation=interpolation_mode, angle=theta, expand=expand, fill=fill)
@@ -317,10 +324,13 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
                 self.device = f'cuda:{gpu}'
             else:
                 self.device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
             img_list = []
+
             # 這邊補0的大小要跟axial view一樣
 
             angle_list = np.arange(0, angle, angle_step)
+
             for i in angle_list:
                 if axis == 0:
                     output1 = self.rotation_3d(translated_img, 0, -float(i), expand=True, label=label)  # 水平
@@ -357,6 +367,7 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
             # mip_img = torch.flip(mip_img, dims=[0])
             # mip_img = mip_img.permute(1, 2, 0)
             mip_img_np = mip_img.cpu().numpy()
+
             return mip_img_np
 
     # 以下開始製作MIP跟label
@@ -369,7 +380,6 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
     start = time.time()
     path_dcms = os.path.join(path_dcm, 'MRA_BRAIN')
     # 先讀影像
-
     img_nii = nib.load(os.path.join(path_nii, 'MRA_BRAIN.nii.gz'))  # ADC要讀因為會取ADC值判斷
     img = np.array(img_nii.dataobj)  # 讀出label的array矩陣      #256*256*22
     pred_nii = nib.load(os.path.join(path_nii, 'Pred.nii.gz'))  # ADC要讀因為會取ADC值判斷
@@ -385,6 +395,7 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
     vessel_tf = tf.convert_to_tensor(vessel, dtype=tf.bool)
     dilated_tf_npfunc = tf.numpy_function(dilation3d, [vessel_tf], tf.int32)
     vessel_di = dilated_tf_npfunc.numpy()
+
     # 使用mask，brain mask要補齊vessel mask的部分，不然血管像被切掉
     vessel_img = (img * vessel_di).copy()
 
@@ -395,6 +406,7 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
     vessel = vessel[:, :, vessel_z_list[0]:vessel_z_list[-1]]
     pred = pred[:, :, vessel_z_list[0]:vessel_z_list[-1]]
     y_i, x_i, z_i = img.shape
+
     # 讀取第一張dicom，剩下的資訊用這張來改
     reader = sitk.ImageSeriesReader()
     dcms_tofmra = reader.GetGDCMSeriesFileNames(path_dcms)
@@ -432,14 +444,12 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
         createrMIP = createMIP()
         # 假設已定義了translated_vessel_img、angle、angle_one、y_i和x_i。 y_i和x_i是轉出目標影像的大小，以背景補0為主
         # 呼叫process_images方法來處理圖像
-
         MIP_images = createrMIP.process_images(translated_vessel_img, angle, angle_step, y_i, x_i, axis=axis,
                                                label=False, gpu=gpu_num).astype('int16')
         print('Time taken for {} sec\n'.format(time.time() - start_img), ' MIP_images is OK!!!, Next...')
+
         # 血管確認是否有阻擋是改成前後一起看，所以可以當作MIP後確認重疊比例，所以可以label也做mip、vessel也做mip
         # MIP血管還是要做，因為要產生血管的mask
-
-
         MIP_vessels = createrMIP.process_images(translated_vessel, angle, angle_step, y_i, x_i, axis=axis, label=True,
                                                 gpu=gpu_num).astype('int16')
         # print('Time taken for {} sec\n'.format(time.time()-start), 'MIP_images.shape:', MIP_images.shape)
@@ -453,9 +463,7 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
 
         for i in angle_list:
             # 結果還是要做出血管個別旋轉的圖
-
             if axis == 0:
-
                 rotated_vessel = rotation_3d(translated_vessel, axis, -float(i), expand=True, label=True,
                                              gpu=gpu_num).cpu().numpy().copy()  # rotated_vessel大小會一直變動
             elif axis == 1:
@@ -494,7 +502,7 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
                 pred_mip_s = pred_mip.copy()
                 vessel_mip_front = createMIP_single(rotated_vessel[:, :, :index_front])
                 extra_pred = np.zeros((y_i, x_i))
-
+                # print('extra_pred:', extra_pred.shape)
                 y_r, x_r = pred_mip.shape
                 pred_mip[vessel_mip_front > 0] = 0
 
@@ -546,8 +554,8 @@ def create_MIP_pred(path_dcm, path_nii, path_png, gpu_num):
         y_displacement = int(250 * percentage_x)
         x_displacement = int(110 * percentage_x)
 
-        pitch_resize = resize(png_landmark, (
-        int((png_landmark.shape[0] * percentage_x) / 3), int((png_landmark.shape[1] * percentage_x) / 3)), order=0,
+        pitch_resize = resize(png_landmark, (int((png_landmark.shape[0] * percentage_x) / 3),
+                                             int((png_landmark.shape[1] * percentage_x) / 3)), order=0,
                               mode='symmetric', cval=0, clip=False, preserve_range=False, anti_aliasing=None,
                               anti_aliasing_sigma=None)
         fig_pitch[y_displacement:pitch_resize.shape[0] + y_displacement,
@@ -1009,6 +1017,39 @@ def make_table_add_location(path_nii, path_excel):
             df.to_excel(os.path.join(path_excel, excel_file), index=False)
 
 
+def compute_orientation(init_axcodes, final_axcodes):
+    """
+    A thin wrapper around ``nib.orientations.ornt_transform``
+
+    :param init_axcodes: Initial orientation codes
+    :param final_axcodes: Target orientation codes
+    :return: orientations array, start_ornt, end_ornt
+    """
+    ornt_init = nib.orientations.axcodes2ornt(init_axcodes)
+    ornt_fin = nib.orientations.axcodes2ornt(final_axcodes)
+
+    ornt_transf = nib.orientations.ornt_transform(ornt_init, ornt_fin)
+
+    return ornt_transf, ornt_init, ornt_fin
+
+
+def do_reorientation(data_array, init_axcodes, final_axcodes):
+    """
+    source: https://niftynet.readthedocs.io/en/dev/_modules/niftynet/io/misc_io.html#do_reorientation
+    Performs the reorientation (changing order of axes)
+
+    :param data_array: 3D Array to reorient
+    :param init_axcodes: Initial orientation
+    :param final_axcodes: Target orientation
+    :return data_reoriented: New data array in its reoriented form
+    """
+    ornt_transf, ornt_init, ornt_fin = compute_orientation(init_axcodes, final_axcodes)
+    if np.array_equal(ornt_init, ornt_fin):
+        return data_array
+
+    return nib.orientations.apply_orientation(data_array, ornt_transf)
+
+
 def create_dicomseg_multi_file(path_code, path_img_dcm, path_nii, path_nii_resample, path_dcmseg, ID):
     example_file = os.path.join(path_code, 'example', 'SEG_20230210_160056_635_S3.dcm')
     # 針對5類設計影像顏色
@@ -1126,10 +1167,11 @@ def create_dicomseg_multi_file(path_code, path_img_dcm, path_nii, path_nii_resam
             # 將原本label的shape轉換成 z,y,x，把影像重新存入
             # mask = np.flip(mask, 0)
             # mask = np.flip(mask, -1) #製作dicom-seg時標註要腳到頭
-            segmentation_data = mask.transpose(2, 0, 1).astype(np.uint8)
-            segmentation_data = np.swapaxes(segmentation_data, 1, 2)
-            segmentation_data = np.flip(segmentation_data, 1)  # y軸
-            segmentation_data = np.flip(segmentation_data, 2)
+            segmentation_data = mask.astype(np.uint8)
+            # segmentation_data = mask.transpose(2, 0, 1).astype(np.uint8)
+            # segmentation_data = np.swapaxes(segmentation_data,1,2)
+            # segmentation_data = np.flip(segmentation_data, 1) #y軸
+            # segmentation_data = np.flip(segmentation_data, 2)
             # segmentation_data = np.flip(segmentation_data, 0)
             # print('segmentation_data.shape:', segmentation_data.shape)
 
@@ -1178,6 +1220,8 @@ def create_dicomseg_multi_file(path_code, path_img_dcm, path_nii, path_nii_resam
                 Vessel = np.array(Vessel_nii.dataobj)  # 讀出label的array矩陣      #256*256*22
                 # Pred = data_translate(Pred, Pred_nii)
                 # Vessel = data_translate(Vessel, Vessel_nii)
+                pred_nii_obj_axcodes = tuple(nib.aff2axcodes(Pred_nii.affine))
+                Pred = do_reorientation(Pred, pred_nii_obj_axcodes, ('S', 'P', 'L'))
 
             else:
                 Pred_nii = nib.load(os.path.join(path_nii_resample, series + '_pred.nii.gz'))
@@ -1186,8 +1230,10 @@ def create_dicomseg_multi_file(path_code, path_img_dcm, path_nii, path_nii_resam
                 Vessel = np.array(Vessel_nii.dataobj)  # 讀出label的array矩陣      #256*256*22
                 # Pred = data_translate(Pred, Pred_nii)
                 # Vessel = data_translate(Vessel, Vessel_nii)
+                pred_nii_obj_axcodes = tuple(nib.aff2axcodes(Pred_nii.affine))
+                Pred = do_reorientation(Pred, pred_nii_obj_axcodes, ('S', 'P', 'L'))
 
-            # vessel的dicom seg可以直接做
+                # vessel的dicom seg可以直接做
             # dcm_seg = make_dicomseg(Vessel.astype('uint8'), path_dcms, dcm_example, model_name, labels_vessel)
             # dcm_seg.save_as(os.path.join(path_dcmseg, ID + '_' + series + '_' + labels_vessel[1]['SegmentLabel'] + '.dcm')) #
 
@@ -1203,6 +1249,8 @@ def create_dicomseg_multi_file(path_code, path_img_dcm, path_nii, path_nii_resam
                 dcm_seg = make_dicomseg(new_Pred.astype('uint8'), path_dcms, dcm_example, model_name, labels_ane)
                 dcm_seg.save_as(
                     os.path.join(path_dcmseg, ID + '_' + series + '_' + labels_ane[1]['SegmentLabel'] + '.dcm'))  #
+
+    return print('Dicom-SEG ok!!!')
 
 
 def compress_dicom_into_jpeglossless(path_dcm_in, path_dcm_out):
@@ -1238,26 +1286,11 @@ def compress_dicom_into_jpeglossless(path_dcm_in, path_dcm_out):
 
 
 # 建立json，如果有讀取excel，就會有xnat_link
-def case_json(json_file_path, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender, StudyDescription,
-              StudyUID, SeriesNumber, AneurysmNumber, resolution_x, resolution_y, SeriesUID, XNATlink, group_id,
-              Instances):
+def case_json(json_file_path, study_dict, sorted_dict, mask_dict):
     json_dict = OrderedDict()
-    json_dict["PatientID"] = PatientID
-    json_dict["StudyDate"] = str(StudyDate[:4]) + '-' + str(StudyDate[4:6]) + '-' + str(StudyDate[6:])
-    json_dict["AccessionNumber"] = AccessionNumber
-    json_dict["PatientName"] = PatientName
-    json_dict["Age"] = Age
-    json_dict["Gender"] = Gender
-    json_dict["StudyDescription"] = StudyDescription
-    json_dict["StudyInstanceUID"] = StudyUID
-    json_dict["SeriesNumber"] = SeriesNumber  # 只要axial view那一組就好，(0020,0011) Series Number [13]
-    json_dict["Aneurysm_Number"] = AneurysmNumber
-    json_dict["resolution_x"] = resolution_x
-    json_dict["resolution_y"] = resolution_y
-    json_dict["SeriesInstanceUID"] = SeriesUID
-    json_dict["XNAT_Link"] = XNATlink
-    json_dict["group_id"] = group_id
-    json_dict["Instances"] = Instances  # 使用的程式是哪一支python api
+    json_dict["study"] = study_dict
+    json_dict["sorted"] = sorted_dict
+    json_dict["mask"] = mask_dict
 
     with open(json_file_path, 'w', encoding='utf8') as json_file:
         json.dump(json_dict, json_file, sort_keys=False, indent=2, separators=(',', ': '), ensure_ascii=False,
@@ -1307,13 +1340,16 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
     AneurysmNums = list(df['Aneurysm_Number'])
 
     PAs = [x + '_' + y + '_MR_' + z for x, y, z in zip(PIDs, Sdates, ANs)]
-    # Xlinks = list(df['XNAT_Link'])
-
-    # tags = ['TOF_MRA', 'MIP_Pitch', 'MIP_Yaw']
-    # file_endings = ['_TOF_MRA.nii.gz', '_MIP_Pitch.nii.gz', '_MIP_Yaw.nii.gz']
 
     for idx, ID in enumerate(IDs):
-        print([idx], ID, ' Start...')
+        print([idx], ID, ' mask json start...')
+
+        study_index = PAs.index(ID)
+        try:
+            AneurysmNumber = int(df['Aneurysm_Number'][study_index])
+        except:
+            AneurysmNumber = 0
+
         if os.path.isfile(os.path.join(path_nii, 'Pred.nii.gz')):
             # 先一致讀出標註檔跟影像檔
             sort_data = []
@@ -1349,51 +1385,13 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                     sort_slices = sort_slices[::-1]
                     New_dcms = [y['file'] for y in sort_slices]
 
-                    sort_instances = sorted(sort_instances, key=lambda i: i['projection'])
-                    sort_instances = sort_instances[::-1]
+                    sorted_dcms, image, first_dcm, source_images = load_and_sort_dicom_files(
+                        os.path.join(path_dcm, series))
+                    ai_team_request = make_study_json(source_images)
+                    ai_team_request.study.aneurysm_lession = str(AneurysmNumber)
+                    ai_team_request.study.group_id = str(group_id)
 
-                    # 先讀其中一張獲得dcm資訊。 PatientID	StudyDate	AccessionNumber	PatientName	Age	Gender	StudyDescription 這些目前也要額外獲取
-                    dcm_one = pydicom.dcmread(os.path.join(path_dcm, series, New_dcms[0]))
-                    StudyInstanceUID = dcm_one[
-                        0x20, 0x000d].value  # (0020,000D)	Study Instance UID	1.2.840.113820.7000.6.1.421886315240703023
-                    SeriesInstanceUID = dcm_one[
-                        0x20, 0x000e].value  # (0020,000E)	Series Instance UID	1.2.840.113619.2.353.6945.3202356.19330.1436225121.581
-                    PatientID = str(dcm_one[0x10, 0x0020].value).rjust(8, '0')  # (0010,0020) Patient ID [00008514]
-                    StudyDate = str(dcm_one[0x08, 0x0020].value).rjust(8, '0')  # (0008,0020) Study Date [20220226]
-                    AccessionNumber = str(dcm_one[0x08, 0x0050].value)  # (0008,0050) Accession Number [21101280067]
-                    PatientName = str(dcm_one[0x10, 0x0010].value)  # (0010,0010) Patient's Name [HE^YU]
-                    age = str(dcm_one[0x10, 0x1010].value)  # (0010,1010) Patient's Age [082Y]
-                    SeriesNumber = dcm_one[0x20, 0x0011].value  # (0020,0011) Series Number [13]
-
-                    if len(age) == 4:
-                        Age = int(age[:-1])
-                    else:
-                        Age = int(age)
-
-                    Gender = dcm_one[0x10, 0x0040].value  # (0010,0040) Patient's Sex [F]
-                    StudyDescription = dcm_one[
-                        0x08, 0x1030].value  # (0008,1030) Study Description [Brain MRI , Stroke (-C)]
-                    # 先找ID跟excel符合的
-                    # Xlink = Xlinks[PAs.index(ID)]
-                    Xlink = ''
-
-                    study_index = PAs.index(ID)
-                    # withAI = df['with_AI'][study_index]
-                    withAI = 1  # 先這樣寫
-                    if withAI == 1:
-                        AneurysmNumber = int(df['Aneurysm_Number'][study_index])
-                        AneurysmNumber_json = AneurysmNumber
-                    else:
-                        AneurysmNumber = -1
-                        AneurysmNumber_json = ''
-
-                    # 弄出json表
-                    study_dict = {}
-                    study_dict["study_instance_uid"] = StudyInstanceUID
-                    study_dict["series_instance_uid"] = SeriesInstanceUID
-                    study_dict["instances"] = sort_instances
-                    sort_data.append(study_dict)
-
+                    # 接下來只要自行額外製作mask的dict即可將3個dict合併製成json
                     # 跟有沒有Predict結果的內容我就放這裡拉~~
                     if os.path.isfile(os.path.join(path_nii, 'Pred.nii.gz')) and AneurysmNumber > 0:
                         pred_nii = nib.load(os.path.join(path_nii, 'Pred.nii.gz'))  # 這邊預設不同影像也是同標註
@@ -1412,11 +1410,21 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                                 New_dcms]  # (0008,0018) SOP Instance UID [1.2.840.113619.2.353.6945.3202356.14286.1484267644.90]
 
                         # 這邊要先取得標註的哪張是isMainSeg，採用單點最大機率，建立list紀錄單顆資訊
-                        Instances = []  # 做出json要保留的資訊，因為dicom-seg關係，不要一張一張作，變成一顆一顆做
+                        seg_dict = {}
+                        seg_dict["series_instance_uid"] = ai_team_request.sorted.series[0].series_instance_uid
+                        seg_dict["series_type"] = series
+                        """
+                        if series == 'MIP_Pitch':
+                            seg_dict["series_type"] = '2'
+                        elif series == 'MIP_Yaw':
+                            seg_dict["series_type"] = '3'
+                        """
+
                         # for每一顆去做，做label那一run，沒有機率可以控制，所以MainSEGSlice用中間張
                         # 以下做是pred的那幾筆資料
                         print('AneurysmNumber:', AneurysmNumber)
 
+                        Instances = []  # 做出json要保留的資訊，因為dicom-seg關係，不要一張一張作，變成一顆一顆做
                         # 接下來做pred的部分
                         for o in range(AneurysmNumber):
                             # 先找isMainSeg張，這邊處理pred
@@ -1424,10 +1432,6 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                             have_labels = np.where(np.sum(pred_one, axis=(0, 1)) > 0)[0]
                             # 以下加載Diameter, Type, Loc, SubLoc, MaxProb，找出excel對應顆
                             study_index = PAs.index(ID)
-                            # rgb = mcolors.to_rgb(colorbar1[int(m)])
-                            rgb = mcolors.to_rgb("red")
-                            color_name = "red"
-
                             try:
                                 SubLocation = str(int(df[str(o + 1) + '_SubLocation'][study_index]))
                             except:
@@ -1442,27 +1446,21 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
 
                             # SOP就是關鍵張 #type為假設帶定 囊狀,
                             segment_attribute = {
-                                "SOPInstanceUid": SOPs[int(np.median(have_labels))],
-                                "maskIndex": int(o + 1),
-                                "maskName": 'A' + str(int(o + 1)),
-                                "maskColorName": color_name,
-                                "maskColorRGB": [int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)],
-                                "maskColorHex": '#{:02X}{:02X}{:02X}'.format(int(rgb[0] * 255), int(rgb[1] * 255),
-                                                                             int(rgb[2] * 255)),
-                                "isMainSeg": True,
-                                "MainSegSlice": int(np.median(have_labels) + 1),
-                                "Diameter": round(df[str(o + 1) + '_size'][study_index], 1),
-                                "Type": 'saccular',
-                                "Location": df[str(o + 1) + '_Location'][study_index],
-                                "SubLocation": SubLocation,
-                                "Prob_max": round(df[str(o + 1) + '_Prob_max'][study_index], 2),
-                                "is_ai": True,
-                                "Select": True,
-                                "maskArray": '',
-                                "DICOM-SEG_SeriesInstanceUid": dcm_seg[0x20, 0x000e].value,
-                                "DICOM-SEG_SOPInstanceUid": dcm_seg[0x08, 0x0018].value
+                                "mask_index": str(int(o + 1)),
+                                "mask_name": 'A' + str(int(o + 1)),
+                                "diameter": str(round(df[str(o + 1) + '_size'][study_index], 1)),
+                                "type": 'saccular',
+                                "location": str(df[str(o + 1) + '_Location'][study_index]),
+                                "sub_location": SubLocation,
+                                "checked": "1",
+                                "prob_max": str(round(df[str(o + 1) + '_Prob_max'][study_index], 2)),
+                                "is_ai": "1",
+                                "seg_series_instance_uid": dcm_seg[0x20, 0x000e].value,
+                                "seg_sop_instance_uid": dcm_seg[0x08, 0x0018].value,
+                                "dicom_sop_instance_uid": SOPs[int(np.median(have_labels))],
+                                "main_seg_slice": int(np.median(have_labels) + 1),
+                                "is_main_seg": "1"
                             }
-
                             Instances.append(segment_attribute)
 
                         # 血管先不做
@@ -1495,20 +1493,13 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                         Instances.append(segment_attribute)
                         """
 
-                        # 把json存出來 #case_json(json_file_path, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender, StudyDescription, StudyUID, AneurysmNumber, SeriesUID, XNATlink, Instances)
-                        json_file = os.path.join(path_json, ID + '_' + series + '.json')
-                        case_json(json_file, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender,
-                                  StudyDescription, StudyInstanceUID, SeriesNumber, AneurysmNumber_json, resolution_x,
-                                  resolution_y, SeriesInstanceUID, Xlink, group_id, Instances)
-
-                    else:
-                        # AneurysmNumber = -1 #失敗，所以沒有任何標註檔
-                        json_file = os.path.join(path_json, ID + '_' + series + '.json')
-                        Instances = ''
-                        case_json(json_file, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender,
-                                  StudyDescription, StudyInstanceUID, SeriesNumber, AneurysmNumber_json, resolution_x,
-                                  resolution_y, SeriesInstanceUID, Xlink, group_id, Instances)
-
+                        seg_dict["instances"] = Instances
+                        # 最後把dict合併，初始化MaskRequest
+                        ai_team_request.mask = MaskRequest(
+                            study_instance_uid=ai_team_request.study.study_instance_uid,
+                            group_id=str(group_id),
+                            series=[seg_dict]
+                        )
                 else:
                     # 是 MIP_Pitch or MIP_Yaw
                     pred_nii = nib.load(os.path.join(path_reslice, series + '_pred.nii.gz'))  # 這邊預設不同影像也是同標註
@@ -1541,32 +1532,12 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                     sort_slices = sort_slices[::-1]
                     New_dcms = [y['file'] for y in sort_slices]
 
-                    sort_instances = sorted(sort_instances, key=lambda i: i['projection'])
-                    sort_instances = sort_instances[::-1]
+                    sorted_dcms, image, first_dcm, source_images = load_and_sort_dicom_files(
+                        os.path.join(path_dcm, series))
+                    ai_team_request_mip = make_study_json(source_images)
 
-                    # 先讀其中一張獲得dcm資訊
-                    dcm_one = pydicom.dcmread(os.path.join(path_dcm, series, New_dcms[0]))
-                    StudyInstanceUID = dcm_one[
-                        0x20, 0x000d].value  # (0020,000D)	Study Instance UID	1.2.840.113820.7000.6.1.421886315240703023
-                    SeriesInstanceUID = dcm_one[
-                        0x20, 0x000e].value  # (0020,000E)	Series Instance UID	1.2.840.113619.2.353.6945.3202356.19330.1436225121.581
-
-                    study_index = PAs.index(ID)
-                    # withAI = df['with_AI'][study_index]
-                    withAI = 1
-                    if withAI == 1:
-                        AneurysmNumber = int(df['Aneurysm_Number'][study_index])
-                        AneurysmNumber_json = AneurysmNumber
-                    else:
-                        AneurysmNumber = -1
-                        AneurysmNumber_json = ''
-
-                    # 弄出json表
-                    study_dict = {}
-                    study_dict["study_instance_uid"] = StudyInstanceUID
-                    study_dict["series_instance_uid"] = SeriesInstanceUID
-                    study_dict["instances"] = sort_instances
-                    sort_data.append(study_dict)
+                    # 取出mip中的sorted，加入at_team_request中
+                    ai_team_request.sorted.series.append(ai_team_request_mip.sorted.series[0])
 
                     # 跟有沒有Predict結果的內容我就放這裡拉~~
                     if os.path.isfile(os.path.join(path_reslice, series + '_pred.nii.gz')) and AneurysmNumber > 0:
@@ -1580,6 +1551,14 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                                 New_dcms]  # (0008,0018) SOP Instance UID [1.2.840.113619.2.353.6945.3202356.14286.1484267644.90]
 
                         # 這邊要先取得標註的哪張是isMainSeg，採用單點最大機率，建立list紀錄單顆資訊
+                        seg_dict = {}
+                        seg_dict["series_instance_uid"] = ai_team_request_mip.sorted.series[0].series_instance_uid
+                        if series == 'MIP_Pitch':
+                            seg_dict["series_type"] = '2'
+                        elif series == 'MIP_Yaw':
+                            seg_dict["series_type"] = '3'
+
+                        # 這邊要先取得標註的哪張是isMainSeg，採用單點最大機率，建立list紀錄單顆資訊
                         Instances = []  # 做出json要保留的資訊，因為dicom-seg關係，不要一張一張作，變成一顆一顆做
                         # for每一顆去做，做label那一run，沒有機率可以控制，所以MainSEGSlice用中間張
 
@@ -1589,9 +1568,6 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
                             have_labels = np.where(np.sum(pred_one, axis=(0, 1)) > 0)[0]
                             # 以下加載Diameter, Type, Loc, SubLoc, MaxProb，找出excel對應顆
                             study_index = PAs.index(ID)
-                            # rgb = mcolors.to_rgb(colorbar1[int(m)])
-                            rgb = mcolors.to_rgb("red")
-                            color_name = "red"
 
                             try:
                                 SubLocation = str(int(df[str(o + 1) + '_SubLocation'][study_index]))
@@ -1607,27 +1583,21 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
 
                             # SOP就是關鍵張 #type為假設帶定 囊狀,
                             segment_attribute = {
-                                "SOPInstanceUid": SOPs[int(np.median(have_labels))],
-                                "maskIndex": int(o + 1),
-                                "maskName": 'A' + str(int(o + 1)),
-                                "maskColorName": color_name,
-                                "maskColorRGB": [int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255)],
-                                "maskColorHex": '#{:02X}{:02X}{:02X}'.format(int(rgb[0] * 255), int(rgb[1] * 255),
-                                                                             int(rgb[2] * 255)),
-                                "isMainSeg": True,
-                                "MainSegSlice": int(np.median(have_labels) + 1),
-                                "Diameter": round(df[str(o + 1) + '_size'][study_index], 1),
-                                "Type": 'saccular',
-                                "Location": df[str(o + 1) + '_Location'][study_index],
-                                "SubLocation": SubLocation,
-                                "Prob_max": round(df[str(o + 1) + '_Prob_max'][study_index], 2),
-                                "is_ai": True,
-                                "Select": True,
-                                "maskArray": '',
-                                "DICOM-SEG_SeriesInstanceUid": dcm_seg[0x20, 0x000e].value,
-                                "DICOM-SEG_SOPInstanceUid": dcm_seg[0x08, 0x0018].value
+                                "mask_index": str(int(o + 1)),
+                                "mask_name": 'A' + str(int(o + 1)),
+                                "diameter": str(round(df[str(o + 1) + '_size'][study_index], 1)),
+                                "type": 'saccular',
+                                "location": str(df[str(o + 1) + '_Location'][study_index]),
+                                "sub_location": SubLocation,
+                                "checked": "1",
+                                "prob_max": str(round(df[str(o + 1) + '_Prob_max'][study_index], 2)),
+                                "is_ai": "1",
+                                "seg_series_instance_uid": dcm_seg[0x20, 0x000e].value,
+                                "seg_sop_instance_uid": dcm_seg[0x08, 0x0018].value,
+                                "dicom_sop_instance_uid": SOPs[int(np.median(have_labels))],
+                                "main_seg_slice": int(np.median(have_labels) + 1),
+                                "is_main_seg": "1"
                             }
-
                             Instances.append(segment_attribute)
 
                         """               
@@ -1658,26 +1628,23 @@ def make_pred_json(excel_file, path_dcm, path_nii, path_reslice, path_dicomseg, 
 
                         Instances.append(segment_attribute)
                         """
-
-                        # 把json存出來
-                        json_file = os.path.join(path_json, ID + '_' + series + '.json')
-                        case_json(json_file, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender,
-                                  StudyDescription, StudyInstanceUID, SeriesNumber, AneurysmNumber_json, resolution_x,
-                                  resolution_y, SeriesInstanceUID, Xlink, group_id, Instances)
-
-                    else:
-                        AneurysmNumber = -1  # 失敗，所以沒有任何標註檔
-                        json_file = os.path.join(path_json, ID + '_' + series + '.json')
-                        Instances = ''
-                        case_json(json_file, PatientID, StudyDate, AccessionNumber, PatientName, Age, Gender,
-                                  StudyDescription, StudyInstanceUID, SeriesNumber, AneurysmNumber_json, resolution_x,
-                                  resolution_y, SeriesInstanceUID, Xlink, group_id, Instances)
+                        # 最後把dict合併
+                        seg_dict["instances"] = Instances
+                        # mask_dict["series"] = seg_dict
+                        ai_team_request.mask.series.append(seg_dict)
 
         # 最後存出sort_json，一定會有且一定成功
-        sort_json_file = os.path.join(path_json, ID + '_sort.json')
-        sort_json(sort_json_file, sort_data)
+        platform_json_file = os.path.join(path_json, ID + '_platform_json.json')
+        # ai_team_request.model_validate()
+        mask_request = MaskRequest.model_validate(ai_team_request.mask)
+        # print('mask_request:', mask_request)
 
-    return print('OK!!!')
+        with open(platform_json_file, 'w') as f:
+            f.write(ai_team_request.model_dump_json())
+
+        # 驗證為 MaskRequest 格式
+
+    return print("Processing complete!")
 
 
 def orthanc_zip_upload(path_dicom, path_zip, Series):
@@ -1764,3 +1731,20 @@ def upload_json(path_json):
 
 
 
+def upload_json_aiteam(json_file):
+    UPLOAD_DATA_JSON_URL = 'http://localhost:84/api/ai_team/create_or_update'
+    client = httpx.Client()
+    if isinstance(json_file, str):
+        with open(json_file, 'rb') as f:
+            data = orjson.loads(f.read())
+        with client:
+            response = client.post(UPLOAD_DATA_JSON_URL, json=data)
+            print(f"Uploaded single file: Status {response.status_code}")
+
+    if isinstance(json_file, list):
+        input_list = json_file
+        with client:
+            for inputs in input_list:
+                with open(inputs, 'rb') as f:
+                    data = orjson.loads(f.read())
+                response = client.post(UPLOAD_DATA_JSON_URL, json=data)

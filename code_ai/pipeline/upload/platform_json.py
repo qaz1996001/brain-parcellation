@@ -23,10 +23,13 @@ def main():
     args = parser.parse_args()
 
     UPLOAD_DATA_JSON_URL = os.getenv("UPLOAD_DATA_JSON_URL")
+
+
     client = httpx.Client()
     if isinstance(args.Inputs, str):
         with open(args.Inputs, 'rb') as f:
             data = orjson.loads(f.read())
+        print('platform_json GROUP_ID', data['study']['group_id'])
         with client:
             response = client.post(UPLOAD_DATA_JSON_URL, json=data)
             print(f"Uploaded single file: Status {response.status_code}")
@@ -37,6 +40,7 @@ def main():
             for inputs in input_list:
                 with open(inputs, 'rb') as f:
                     data = orjson.loads(f.read())
+                print('platform_json GROUP_ID', data['study']['group_id'])
                 response = client.post(UPLOAD_DATA_JSON_URL, json=data)
 
 
