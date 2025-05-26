@@ -103,11 +103,11 @@ def pipeline_synthseg(ID :str,
                 if not os.path.exists(original_file_path_str):
                     continue
                 temp_path_basename = os.path.basename(original_file_path_str)
-                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '').replace('__', '_')
                 shutil.copy(original_file_path_str, os.path.join(path_output_dir, temp_path_basename))
             if len(WMH_PVS_original_file_path_list)> 0:
                 temp_path_basename = os.path.basename(WMH_PVS_original_file_path_list[0])
-                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '')
+                temp_path_basename = temp_path_basename.replace(get_study_id(temp_path_basename), '').replace('__', '_')
                 return os.path.join(path_output_dir, temp_path_basename)
         else:
             logging.error('!!! ' + str(ID) + ' Insufficient GPU Memory.')
