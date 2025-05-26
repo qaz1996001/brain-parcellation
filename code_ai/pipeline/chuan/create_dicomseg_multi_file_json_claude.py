@@ -1,9 +1,6 @@
-import argparse
-import datetime
-import enum
 import os
 import pathlib
-from typing import Dict, List, Any, Union, Tuple, Optional
+from typing import Dict, List, Any, Union, Optional
 
 import numpy as np
 import pydicom
@@ -11,23 +8,19 @@ import nibabel as nib
 import SimpleITK as sitk
 import matplotlib.colors as mcolors
 import pydicom_seg
-from pydantic import BaseModel, PositiveInt, field_validator
 from pydicom import FileDataset
 from pydicom.dicomdir import DicomDir
 from skimage.measure import regionprops_table
 
 from code_ai.pipeline.dicomseg.schema import AITeamRequest
-from code_ai.pipeline.dicomseg.schema import MaskRequest,MaskSeriesRequest,MaskInstanceRequest
-from code_ai.pipeline.dicomseg.schema import SeriesTypeEnum,StudyRequest,SortedRequest,SeriesRequest
-
-
+from code_ai.pipeline.dicomseg.schema import MaskRequest
 # 載入範例文件只需執行一次，改為在函數外
 # EXAMPLE_FILE = 'SEG_20230210_160056_635_S3.dcm'
 
 EXAMPLE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             'resource', 'SEG_20230210_160056_635_S3.dcm')
 DCM_EXAMPLE = pydicom.dcmread(EXAMPLE_FILE)
-
+GROUP_ID    = 44
 
 
 def get_diameter(mask_np,source_image,) -> float:
@@ -44,7 +37,7 @@ def make_mask_json(source_images:List[Union[FileDataset, DicomDir]],
                    sorted_dcms  :List[Union[str, pathlib.Path]],
                    dcm_seg_path:Union[str,pathlib.Path],
                    mask_index :int ,
-                   group_id:str = GROUP_ID,) ->  MaskRequest:
+                   group_id:str ,) ->  MaskRequest:
     with open(dcm_seg_path, 'rb') as f:
         dcm_seg = pydicom.read_file(f)
     # Referenced Series
@@ -383,47 +376,3 @@ def process_prediction_mask(
     at_team_request.study.aneurysm_lession = pred_data_unique.shape[0]
     print()
     return at_team_request
-
-
-def main():
-    """主函數"""
-    parser = pipeline_parser()
-    # parser.add_argument('--OutputDicomSegFolder', type=str,
-    #                     default='/mnt/e/rename_nifti_20250509/',
-    #                     help='用於輸出結果的資料夾')
-
-    args = parser.parse_args()
-    ID = args.ID
-    path_dcms = pathlib.Path(args.InputsDicomDir)
-    path_nii = pathlib.Path(args.Inputs[0])
-    path_dcmseg = pathlib.Path(args.Output_folder)
-
-    # 取得系列名稱
-    series = path_nii.name.split('.')[0]
-
-    # 載入預測數據
-    pred_nii = nib.load(path_nii)
-    pred_data = np.array(pred_nii.dataobj)
-
-    pred_nii_obj_axcodes = tuple(nib.aff2axcodes(pred_nii.affine))
-    new_nifti_array = do_reorientation(pred_data, pred_nii_obj_axcodes, ('S', 'P', 'L'))
-
-    # 創建輸出子目錄
-    series_folder = path_dcmseg.joinpath(f'{ID}')
-    if series_folder.is_dir():
-        series_folder.mkdir(exist_ok=True, parents=True)
-    else:
-        series_folder.parent.mkdir(parents=True, exist_ok=True)
-
-    # 處理預測遮罩
-    at_team_request :AITeamRequest = process_prediction_mask(new_nifti_array, str(path_dcms), series, series_folder)
-    platform_json_path = series_folder.joinpath(path_nii.name.replace('.nii.gz', '_platform_json.json'))
-    print('platform_json_path',platform_json_path)
-    at_team_request.mask.instances = sorted(at_team_request.mask.instances, key=lambda instance: instance.mask_index)
-    with open(platform_json_path, 'w') as f:
-        f.write(at_team_request.model_dump_json())
-    print("Processing complete!")
-
-
-if __name__ == '__main__':
-    main()
