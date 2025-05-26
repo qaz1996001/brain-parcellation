@@ -91,18 +91,6 @@ def dicom_seg_multi_file(ID:str,
                                             nii_path_str,
                                             path_output)
                )
-    # cmd_str = ('export PYTHONPATH={} && '
-    #            '{} code_ai/pipeline/create_dicomseg_multi_file_claude.py '
-    #            '--ID {} '
-    #            '--InputsDicom {} '
-    #            '--InputsNifti {} '
-    #            '--OutputDicomSegFolder {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
-    #                                                PYTHON3,
-    #                                                ID,
-    #                                                InputsDicomDir,
-    #                                                nii_path_str,
-    #                                                path_output)
-    #            )
 
     process = subprocess.Popen(args=cmd_str, shell=True,
                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),

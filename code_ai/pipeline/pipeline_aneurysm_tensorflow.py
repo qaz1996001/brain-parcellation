@@ -20,12 +20,11 @@ import shutil
 import time
 import tensorflow as tf
 import pynvml  # 导包
-from code_ai.pipeline import pipeline_parser, upload_json, InferenceEnum
-from code_ai.pipeline.chuan.gpu_aneurysm import model_predict_aneurysm
+from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.chuan.util_aneurysm1 import reslice_nifti_pred_nobrain, create_MIP_pred, \
     make_aneurysm_vessel_location_16labels_pred, \
     calculate_aneurysm_long_axis_make_pred, make_table_row_patient_pred, make_table_add_location, \
-    create_dicomseg_multi_file, make_pred_json
+    create_dicomseg_multi_file, make_pred_json, orthanc_zip_upload, upload_json
 
 
 def pipeline_aneurysm(ID,
@@ -163,23 +162,19 @@ def pipeline_aneurysm(ID,
                            group_id)
 
             # 接下來上傳dicom到orthanc
-            # path_zip = os.path.join(path_processID, 'Dicom_zip')
-            # os.makedirs(path_zip, exist_ok=True)
+            path_zip = os.path.join(path_processID, 'Dicom_zip')
+            os.makedirs(path_zip, exist_ok=True)
 
-            # Series = ['MRA_BRAIN', 'MIP_Pitch', 'MIP_Yaw', 'Dicom-Seg']
-            # orthanc_zip_upload(path_dcm, path_zip, Series)
+            Series = ['MRA_BRAIN', 'MIP_Pitch', 'MIP_Yaw', 'Dicom-Seg']
+            orthanc_zip_upload(path_dcm, path_zip, Series)
 
             # 接下來，上傳json
-            # upload_json(path_json_out)
+            upload_json(path_json_out)
 
             # 把json跟nii輸出到out資料夾
             path_output_dir = str(os.path.join(path_output, ID))
             os.makedirs(path_output_dir, exist_ok=True)
-            # output_tuple = (os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'),
-            #                 os.path.join(path_output_dir, 'Prob_Aneurysm.nii.gz'),
-            #                 os.path.join(path_output_dir, 'Pred_Aneurysm_vessel.nii.gz'),
-            #                 os.path.join(path_output_dir, 'Pred_Aneurysm_vessel16.nii.gz'),
-            #                 os.path.join(path_output_dir, 'Pred_Aneurysm.json'))
+
             output_tuple = (os.path.join(path_output_dir, 'Pred_Aneurysm.nii.gz'),
                             os.path.join(path_json_out, ID + '_' + Series[0] + '.json'),
                             os.path.join(path_json_out, ID + '_' + Series[1] + '.json'),
@@ -195,12 +190,9 @@ def pipeline_aneurysm(ID,
                         os.path.join(path_output_dir, 'Pred_Aneurysm_vessel.nii.gz'))
             shutil.copy(os.path.join(path_processID, 'Vessel_16.nii.gz'),
                         os.path.join(path_output_dir, 'Pred_Aneurysm_vessel16.nii.gz'))
-            shutil.copy(os.path.join(path_json_out, ID + '_MRA_BRAIN.json'),
-                        os.path.join(path_output_dir, 'Pred_Aneurysm.json'))
+            shutil.copy(os.path.join(path_json_out, ID + '_platform_json.json'),
+                        os.path.join(path_output_dir, 'Pred_Aneurysm_platform_json.json'))
 
-            # 刪除資料夾
-            # if os.path.isdir(path_process):  #如果資料夾存在
-            #     shutil.rmtree(path_process) #清掉整個資料夾
 
             logging.info('!!! ' + ID + ' post_aneurysm finish.')
             return output_tuple
@@ -292,35 +284,6 @@ if __name__ == '__main__':
                                                                 path_log=path_log,
                                                                 path_cuatom_model=CUATOM_MODEL_ANEURYSM,
                                                                 gpu_n=gpu_n)
-    # call_aneurysm_old_json_mapping_platform_json(ID=ID,
-    #                                              input_nii=pred_aneurysm_path,
-    #                                              old_json_path=[mra_brain_json_path,
-    #                                                             mip_pitch_json_path,
-    #                                                             mip_yaw_json_path],
-    #                                              sort_json_path = sort_json_path)
-    #
-    # upload_json(ID,InferenceEnum.Aneurysm)
-    # path_processID = os.path.join(path_processModel, ID)  # 前處理dicom路徑(test case)
-    # path_dcm = os.path.join(path_processID, 'Dicom')
-    #
-    # upload_dicom_dir_tuple = (os.path.join(path_dcm, 'Dicom-Seg'),
-    #                           os.path.join(path_dcm, 'MIP_Pitch'),
-    #                           os.path.join(path_dcm, 'MIP_Yaw'))
-    # for dicom_dir in upload_dicom_dir_tuple:
-    #     cmd_str = ('export PYTHONPATH={} && '
-    #                '{} code_ai/pipeline/upload/orthanc_dicom.py '
-    #                '--Input {} '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
-    #                                     PYTHON3,
-    #                                     dicom_dir
-    #                                     )
-    #            )
-    #     process = subprocess.Popen(args=cmd_str, shell=True,
-    #                                # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
-    #                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    #     stdout, stderr = process.communicate()
-    #     print(cmd_str,stdout)
-
-
 
 
 
