@@ -60,6 +60,17 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
     """
     output_files = []
     match task_name:
+        case InferenceEnum.Aneurysm:
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.nii.gz"))
+            output_files.append(os.path.join(base_output_path, f"Prob_Aneurysm.nii.gz"))
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel.nii.gz"))
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.json"))
+            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel16.nii.gz"))
+            for input_path in input_paths:
+                base_name = os.path.basename(input_path).split('.')[0]
+                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")
+                output_files.append(output_file)
+
         case InferenceEnum.WMH_PVS:
             for input_path in input_paths:
                 base_name = os.path.basename(input_path).split('.')[0]
@@ -99,16 +110,7 @@ def generate_output_files(input_paths: List[str], task_name: str, base_output_pa
             output_files.append(os.path.join(base_output_path, f"Pred_WMH.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_WMH_synthseg.nii.gz"))
             output_files.append(os.path.join(base_output_path, f"Pred_WMH.json"))
-        case InferenceEnum.Aneurysm:
-            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.nii.gz"))
-            output_files.append(os.path.join(base_output_path, f"Prob_Aneurysm.nii.gz"))
-            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel.nii.gz"))
-            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm.json"))
-            output_files.append(os.path.join(base_output_path, f"Pred_Aneurysm_Vessel16.nii.gz"))
-            for input_path in input_paths:
-                base_name = os.path.basename(input_path).split('.')[0]
-                output_file = os.path.join(base_output_path, f"synthseg_{base_name}_original_synthseg33.nii.gz")
-                output_files.append(output_file)
+
         case _:
             pass
     return output_files
