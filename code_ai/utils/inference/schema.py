@@ -42,14 +42,14 @@ class Task(BaseModel):
 
 class Analysis(BaseModel):
     study_id: str
-    Area: Optional[Task] = None
+    Aneurysm: Optional[Task] = None
+    CMB: Optional[Task] = None
     DWI: Optional[Task] = None
     WMH_PVS: Optional[Task] = None
-    CMB: Optional[Task] = None
-    AneurysmSynthSeg: Optional[Task] = None
+    Area: Optional[Task] = None
     Infarct: Optional[Task] = None
     WMH: Optional[Task] = None
-    Aneurysm: Optional[Task] = None
+    AneurysmSynthSeg: Optional[Task] = None
 
 
 MODEL_MAPPING_SERIES_DICT = {
