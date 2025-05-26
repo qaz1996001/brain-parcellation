@@ -54,6 +54,8 @@ class Analysis(BaseModel):
 
 
 MODEL_MAPPING_SERIES_DICT = {
+InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
+                              ]],
     InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
                          [T1SeriesRenameEnum.T1BRAVO_SAG, ],
                          [T1SeriesRenameEnum.T1BRAVO_COR, ],
@@ -77,6 +79,5 @@ MODEL_MAPPING_SERIES_DICT = {
     InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
                          ]],
 
-    InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
-                              ]]
+
 }
