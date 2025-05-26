@@ -18,6 +18,7 @@ class InferenceCmd(BaseModel):
 
 
 class InferenceEnum(str, enum.Enum):
+    Aneurysm = 'Aneurysm'
     SynthSeg = 'SynthSeg'
     Area = 'Area'
 
@@ -29,7 +30,7 @@ class InferenceEnum(str, enum.Enum):
     WMH = 'WMH'
     WMH_PVS = 'WMH_PVS'
     # Lacune
-    Aneurysm = 'Aneurysm'
+
 
 
 
