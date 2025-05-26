@@ -1,5 +1,19 @@
 # 輸出文件模板格式
 output_formats:
+  Aneurysm:
+    - template: "Pred_Aneurysm.nii.gz"
+      apply_to: "once"
+    - template: "Prob_Aneurysm.nii.gz"
+      apply_to: "once"
+    - template: "Pred_Aneurysm_Vessel.nii.gz"
+      apply_to: "once"
+    - template: "Pred_Aneurysm.json"
+      apply_to: "once"
+    - template: "Pred_Aneurysm_Vessel16.nii.gz"
+      apply_to: "once"
+    - template: "synthseg_{base_name}_original_synthseg33.nii.gz"
+      apply_to: "each_input"
+
   WMH_PVS:
     - template: "synthseg_{base_name}_original_{task_name}.nii.gz"
       apply_to: "each_input"
@@ -41,22 +55,13 @@ output_formats:
     - template: "Pred_WMH.json"
       apply_to: "once"
 
-  Aneurysm:
-    - template: "Pred_Aneurysm.nii.gz"
-      apply_to: "once"
-    - template: "Prob_Aneurysm.nii.gz"
-      apply_to: "once"
-    - template: "Pred_Aneurysm_Vessel.nii.gz"
-      apply_to: "once"
-    - template: "Pred_Aneurysm.json"
-      apply_to: "once"
-    - template: "Pred_Aneurysm_Vessel16.nii.gz"
-      apply_to: "once"
-    - template: "synthseg_{base_name}_original_synthseg33.nii.gz"
-      apply_to: "each_input"
+
 
 # 模型映射系列字典
 model_mapping_series:
+  Aneurysm:
+    - ["MRSeriesRenameEnum.MRA_BRAIN"]
+
   Area:
     - ["T1SeriesRenameEnum.T1BRAVO_AXI"]
     - ["T1SeriesRenameEnum.T1BRAVO_SAG"]
@@ -65,24 +70,22 @@ model_mapping_series:
     - ["T1SeriesRenameEnum.T1FLAIR_SAG"]
     - ["T1SeriesRenameEnum.T1FLAIR_COR"]
 
+  CMB:
+    - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"]
+    - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1FLAIR_AXI"]
+
   DWI:
     - ["MRSeriesRenameEnum.DWI0"]
 
   WMH_PVS:
     - ["T2SeriesRenameEnum.T2FLAIR_AXI"]
 
-  CMB:
-    - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"]
-    - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1FLAIR_AXI"]
 
   Infarct:
     - ["MRSeriesRenameEnum.DWI0", "MRSeriesRenameEnum.DWI1000", "MRSeriesRenameEnum.ADC"]
 
   WMH:
     - ["T2SeriesRenameEnum.T2FLAIR_AXI"]
-
-  Aneurysm:
-    - ["MRSeriesRenameEnum.MRA_BRAIN"]
 
 
 # 輸入後處理配置
