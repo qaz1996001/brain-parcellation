@@ -14,12 +14,11 @@ from skimage.measure import regionprops_table
 
 from code_ai.pipeline.dicomseg.schema import AITeamRequest
 from code_ai.pipeline.dicomseg.schema import MaskRequest
+from code_ai.pipeline.dicomseg import EXAMPLE_FILE,DCM_EXAMPLE
 # 載入範例文件只需執行一次，改為在函數外
 # EXAMPLE_FILE = 'SEG_20230210_160056_635_S3.dcm'
 
-EXAMPLE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            'resource', 'SEG_20230210_160056_635_S3.dcm')
-DCM_EXAMPLE = pydicom.dcmread(EXAMPLE_FILE)
+
 GROUP_ID    = 44
 
 
