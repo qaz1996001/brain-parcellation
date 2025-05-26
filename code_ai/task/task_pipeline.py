@@ -5,9 +5,13 @@ import subprocess
 from typing import Dict
 from funboost import Booster
 from funboost.core.serialization import Serialization
+import nb_log
+# 設置日誌記錄器
+logger = nb_log.LogManager('task_pipeline_inference_queue').get_logger_and_add_handlers(
+    log_filename='task_pipeline_inference_queue.log'
+)
 
 from code_ai.task.params import BoosterParamsMyAI
-# from code_ai.utils_inference import build_inference_cmd
 from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
@@ -42,6 +46,7 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         result_list.append((inference_item.cmd_str,stdout.decode(), stderr.decode()))
-
+        logger.info(stderr.decode())
+        logger.warn(stderr.decode())
     result = Serialization.to_json_str(result_list)
     return result
