@@ -33,7 +33,7 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
 
     nifti_study_path = func_params['nifti_study_path']
     dicom_study_path = func_params['dicom_study_path']
-    inference_item_cmd = build_ppinference_cmd(pathlib.Path(nifti_study_path),
+    inference_item_cmd = build_inference_cmd(pathlib.Path(nifti_study_path),
                                              pathlib.Path(dicom_study_path))
     cmd_output_path = os.path.join(path_cmd_tools, f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json')
     with open(cmd_output_path, 'w') as f:
