@@ -3,10 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.database import get_db
-from app.schemas import BackupJobCreate, BackupJobResponse, BackupJobUpdate
-from app.crud import backup_job_crud, bucket_crud
-from app.tasks import TaskScheduler
+from backend.app.database import get_db
+from backend.app.schemas import BackupJobCreate, BackupJobResponse, BackupJobUpdate
+from backend.app.crud import backup_job_crud, bucket_crud
+from backend.app.tasks import TaskScheduler
 
 # Get reference to the task scheduler
 # In a real implementation, you'd need to access the actual instance from main.py

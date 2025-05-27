@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import ObjectVersion
-from app.schemas import ObjectVersionCreate
+from backend.app.models import ObjectVersion
+from backend.app.schemas import ObjectVersionCreate
 from .base import CRUDBase
 
 

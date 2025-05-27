@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime, timedelta
 
-from app.models import ObjectRetention
-from app.schemas import ObjectRetentionCreate, ObjectRetentionUpdate
+from backend.app.models import ObjectRetention
+from backend.app.schemas import ObjectRetentionCreate, ObjectRetentionUpdate
 from .base import CRUDBase
 
 

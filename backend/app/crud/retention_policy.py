@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import RetentionPolicy
-from app.schemas import RetentionPolicyCreate, RetentionPolicyUpdate
+from backend.app.models import RetentionPolicy
+from backend.app.schemas import RetentionPolicyCreate, RetentionPolicyUpdate
 from .base import CRUDBase
 
 

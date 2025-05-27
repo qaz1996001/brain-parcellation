@@ -143,17 +143,26 @@ class ImageOrientationProcessingStrategy(SeriesProcessingStrategy):
             image_orientation = image_orientation.astype(int)
             image_orientation_abs = np.abs(image_orientation)
             index_sort = np.argsort(image_orientation_abs)
-
+            return_image_orientation = NullEnum.NULL
             # Determine the plane view based on the sorted indices
             if ((index_sort[-1] == 0) and (index_sort[-2] == 5)) or ((index_sort[-1] == 5) and (index_sort[-2] == 0)):
-                return ImageOrientationEnum.COR
+                return_image_orientation =  ImageOrientationEnum.COR
             if ((index_sort[-1] == 1) and (index_sort[-2] == 5)) or ((index_sort[-1] == 5) and (index_sort[-2] == 1)):
-                return ImageOrientationEnum.SAG
+                return_image_orientation =  ImageOrientationEnum.SAG
             if ((index_sort[-1] == 0) and (index_sort[-2] == 4)) or ((index_sort[-1] == 4) and (index_sort[-2] == 0)):
-                return ImageOrientationEnum.AXI
+                return_image_orientation =  ImageOrientationEnum.AXI
+
+            image_type = dicom_ds.get((0x08, 0x08))
+            if image_type[2] == 'REFORMATTED':
+                if return_image_orientation == ImageOrientationEnum.AXI:
+                    return_image_orientation = ImageOrientationEnum.AXIr
+                elif return_image_orientation == ImageOrientationEnum.SAG:
+                    return_image_orientation = ImageOrientationEnum.SAGr
+                elif return_image_orientation == ImageOrientationEnum.COR:
+                    return_image_orientation = ImageOrientationEnum.CORr
 
             # Return NullEnum.NULL if no specific plane view is detected
-            return NullEnum.NULL
+            return return_image_orientation
 
 
 class ContrastProcessingStrategy(SeriesProcessingStrategy):

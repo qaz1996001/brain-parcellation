@@ -6,7 +6,7 @@ from typing import Generator
 
 # Database connection URL - you may need to adjust this for your environment
 # Format: postgresql://username:password@hostname/database_name
-SQLALCHEMY_DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/minio_backup"
+SQLALCHEMY_DATABASE_URL: str = "postgresql://postgres_n:postgres_p@localhost:15433/minio_backup"
 
 # Create SQLAlchemy engine with appropriate connection pool settings
 engine = create_engine(

@@ -9,9 +9,9 @@ from pathlib import Path
 import asyncio
 from sqlalchemy.orm import Session
 
-from app.minio_client import MinioClient
-from app.models import BackupJob, File, BackupObject, ObjectVersion
-from app.crud import (
+from backend.app.minio_client import MinioClient
+from backend.app.models import BackupJob, File, BackupObject, ObjectVersion
+from backend.app.crud import (
     file_crud, backup_object_crud, object_version_crud,
     backup_job_crud, tag_crud
 )

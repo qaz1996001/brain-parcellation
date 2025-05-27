@@ -63,6 +63,7 @@ model_mapping_series:
     - ["MRSeriesRenameEnum.MRA_BRAIN"]
 
   Area:
+    -
     - ["T1SeriesRenameEnum.T1BRAVO_AXI"]
     - ["T1SeriesRenameEnum.T1BRAVO_SAG"]
     - ["T1SeriesRenameEnum.T1BRAVO_COR"]

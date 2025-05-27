@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import Tag
-from app.schemas import TagCreate
+from backend.app.models import Tag
+from backend.app.schemas import TagCreate
 from .base import CRUDBase
 
 

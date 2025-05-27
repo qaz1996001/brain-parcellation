@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import File
-from app.schemas import FileCreate, FileUpdate
+from backend.app.models import File
+from backend.app.schemas import FileCreate, FileUpdate
 from .base import CRUDBase
 
 

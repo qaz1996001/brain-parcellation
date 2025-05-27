@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import BackupObject
-from app.schemas import BackupObjectCreate, BackupObjectUpdate
+from backend.app.models import BackupObject
+from backend.app.schemas import BackupObjectCreate, BackupObjectUpdate
 from .base import CRUDBase
 
 

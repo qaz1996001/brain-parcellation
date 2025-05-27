@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from app.database import get_db
-from app.schemas import ObjectRetentionCreate, ObjectRetentionResponse, ObjectRetentionUpdate
-from app.crud import object_retention_crud, backup_object_crud, retention_policy_crud
+from backend.app.database import get_db
+from backend.app.schemas import ObjectRetentionCreate, ObjectRetentionResponse, ObjectRetentionUpdate
+from backend.app.crud import object_retention_crud, backup_object_crud, retention_policy_crud
 
 router = APIRouter()
 

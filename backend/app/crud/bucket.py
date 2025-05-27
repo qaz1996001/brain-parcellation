@@ -2,8 +2,8 @@
 from sqlalchemy.orm import Session, selectinload
 from typing import Any, Dict, List, Optional, Union
 
-from app.models import Bucket, Base
-from app.schemas import BucketCreate, BucketUpdate
+from backend.app.models import Bucket, Base
+from backend.app.schemas import BucketCreate, BucketUpdate
 from .base import CRUDBase
 
 

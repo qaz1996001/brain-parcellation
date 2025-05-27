@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.database import get_db
-from app.schemas import BucketCreate, BucketResponse, BucketUpdate
-from app.crud import bucket_crud
+from backend.app.database import get_db
+from backend.app.schemas import BucketCreate, BucketResponse, BucketUpdate
+from backend.app.crud import bucket_crud
 
 router = APIRouter()
 

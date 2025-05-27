@@ -8,10 +8,10 @@ import time
 import os
 from threading import Lock
 
-from app.database import SessionLocal
-from app.crud.backup_job import backup_job_crud
-from app.minio_client import MinioClient
-from app.backup_implementation import BackupImplementation
+from backend.app.database import SessionLocal
+from backend.app.crud.backup_job import backup_job_crud
+from backend.app.minio_client import MinioClient
+from backend.app.backup_implementation import BackupImplementation
 
 # Configure logging
 logging.basicConfig(

@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.database import get_db
-from app.schemas import RetentionPolicyCreate, RetentionPolicyResponse, RetentionPolicyUpdate
-from app.crud import retention_policy_crud
+from backend.app.database import get_db
+from backend.app.schemas import RetentionPolicyCreate, RetentionPolicyResponse, RetentionPolicyUpdate
+from backend.app.crud import retention_policy_crud
 
 router = APIRouter()
 
