@@ -1,37 +1,12 @@
 # app/main.py
-# app/main.py
+import os
 import orjson
 import uvicorn
 from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import asyncio
-
 from code_ai import load_dotenv
-
-from backend.app.database import engine
-from backend.app.models import Base
 from backend.app.routers import series
-# from backend.app.routers import (
-#     bucket,
-#     backup_job,
-#     file,
-#     backup_object,
-#     object_version,
-#     tag,
-#     retention_policie,
-#     object_retention,
-#     backup_config,  # New import
-#     series
-# )
-
-# from backend.app.tasks import TaskScheduler
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
-
-# Initialize task scheduler
-# task_scheduler = TaskScheduler()
 
 
 @asynccontextmanager
@@ -66,30 +41,6 @@ app.add_middleware(
 )
 # Include routers
 app.include_router(series.router, prefix="/series", tags=["series"])
-# app.include_router(bucket.router, prefix="/buckets", tags=["buckets"])
-# app.include_router(backup_job.router, prefix="/backup-jobs", tags=["backup jobs"])
-# app.include_router(file.router, prefix="/files", tags=["files"])
-# app.include_router(backup_object.router, prefix="/backup-objects", tags=["backup objects"])
-# app.include_router(object_version.router, prefix="/object-versions", tags=["object versions"])
-# app.include_router(tag.router, prefix="/tags", tags=["tags"])
-# app.include_router(retention_policie.router, prefix="/retention-policies", tags=["retention policies"])
-# app.include_router(object_retention.router, prefix="/object-retentions", tags=["object retentions"])
-# app.include_router(backup_config.router, prefix="/backup-configs", tags=["backup configurations"])  # New router
-
-
-# # Task management endpoints
-# @app.get("/tasks/pending", response_model=list[int], tags=["tasks"])
-# def get_pending_tasks() -> list[int]:
-#     """Get a list of pending task IDs."""
-#     return task_scheduler.get_pending_jobs()
-#
-#
-# @app.post("/tasks/manual-check", tags=["tasks"])
-# async def run_manual_check() -> dict[str, str]:
-#     """Manually trigger a check for pending backup tasks."""
-#     await task_scheduler.check_pending_jobs()
-#     return {"message": "Manual check for pending tasks initiated"}
-
 
 @app.post("/upload_json", tags=["upload_json"])
 async def run_manual_check(request:Request) -> dict[str, str]:
@@ -101,6 +52,6 @@ async def run_manual_check(request:Request) -> dict[str, str]:
 
 if __name__ == "__main__":
     load_dotenv()
-    UPLOAD_DATA_JSON_PORT = os.getenv("UPLOAD_DATA_JSON_PORT")
+    UPLOAD_DATA_JSON_PORT = int(os.getenv("UPLOAD_DATA_JSON_PORT"))
     uvicorn.run("backend.app.main:app", host="0.0.0.0",
                 port=UPLOAD_DATA_JSON_PORT, reload=False)
