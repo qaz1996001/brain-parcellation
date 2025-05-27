@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
 
+from code_ai import load_dotenv
+
 from backend.app.database import engine
 from backend.app.models import Base
 from backend.app.routers import series
@@ -94,10 +96,11 @@ async def run_manual_check(request:Request) -> dict[str, str]:
     """Manually trigger a check for pending backup tasks."""
     json = await request.json()
     print('request.keys()',request.keys())
-    print(json)
     return {"message":orjson.dumps(json)}
 
 
-
 if __name__ == "__main__":
-    uvicorn.run("backend.app.main:app", host="0.0.0.0", port=8000, reload=True)
+    load_dotenv()
+    UPLOAD_DATA_JSON_PORT = os.getenv("UPLOAD_DATA_JSON_PORT")
+    uvicorn.run("backend.app.main:app", host="0.0.0.0",
+                port=UPLOAD_DATA_JSON_PORT, reload=False)
