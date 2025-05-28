@@ -24,7 +24,7 @@ services:
     volumes:
       - redis_server_volumes:/data
   db_server:
-    image: postgres
+    image: postgres:16.9-alpine3.21
     restart: always
     container_name: db_server
     volumes:
