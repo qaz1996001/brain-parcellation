@@ -17,13 +17,12 @@ import glob
 import re
 import shutil
 import warnings
-warnings.filterwarnings("ignore")  # 忽略警告输出
+# warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 from typing import Optional
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
-import argparse
 import logging
 import pynvml  # 导包
 import tensorflow as tf
@@ -134,6 +133,10 @@ def pipeline_synthseg(ID :str,
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
+    from code_ai.utils.gpu_env import setup_pip_tf_cuda_env
+    env_bool = setup_pip_tf_cuda_env()
+    print('os.environ',os.environ)
+    print('env_bool',env_bool)
     parser = pipeline_parser()
     args = parser.parse_args()
 
