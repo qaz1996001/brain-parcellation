@@ -25,8 +25,7 @@ def setup_pip_tf_cuda_env() -> bool:
         LD_LIBRARY_PATH = "{}".format(':'.join(map(lambda x: str(x), so_dir)))
         # print('LD_LIBRARY_PATH',LD_LIBRARY_PATH)
         os.environ['LD_LIBRARY_PATH'] = LD_LIBRARY_PATH
-        # XLA_FLAGS = "{}:{}".format(str(bc_file[0].parent.parent.parent), ':'.join(map(lambda x: str(x), so_dir)))
-        XLA_FLAGS = "{}".format(str(bc_file[0].parent.parent.parent),)
+        XLA_FLAGS = "{}".format(str(bc_file[0].parent.parent.parent))
         os.environ['XLA_FLAGS'] = "--xla_gpu_cuda_data_dir={}".format(XLA_FLAGS)
         return True
     except ImportError:
