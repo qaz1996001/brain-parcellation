@@ -331,6 +331,8 @@ def pipeline_wmh(ID,
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
     from code_ai.pipeline.chuan import CUATOM_MODEL_WMH
+    from code_ai.utils.gpu_env import setup_pip_tf_cuda_env
+    setup_pip_tf_cuda_env()
     # from code_ai.pipeline.chuan import gpu_n
     parser = argparse.ArgumentParser()
 
