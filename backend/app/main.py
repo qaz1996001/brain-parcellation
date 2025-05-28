@@ -1,12 +1,10 @@
 # app/main.py
 import os
-import orjson
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from backend.app import series
-
+from backend.app.routers import router
 from code_ai import load_dotenv
 
 
@@ -29,7 +27,8 @@ app = FastAPI(
     title="SHH AI API",
     description="API for SHH AI",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    # root_path="/api/v1"
 )
 
 # CORS middleware
@@ -41,15 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # Include routers
-app.include_router(series.router, prefix="/series", tags=["series"])
-
-
-@app.post("/upload_json", tags=["upload_json"])
-async def run_manual_check(request: Request) -> dict[str, str]:
-    """Manually trigger a check for pending backup tasks."""
-    json = await request.json()
-    print('request.keys()', request.keys())
-    return {"message": orjson.dumps(json)}
+app.include_router(router, prefix="/api/v1")
 
 
 if __name__ == "__main__":

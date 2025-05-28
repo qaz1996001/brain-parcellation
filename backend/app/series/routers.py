@@ -15,9 +15,10 @@ from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
 from backend.app.series.schemas import SeriesResponse
 from backend.app.series.schemas import series_special_sort,series_perfusion_sort,series_structure_sort,series_functional_sort
 from backend.app.series.deps import get_rename_dicom_manager,get_dicom_orientation
-
+from backend.app.series import urls
 
 router = APIRouter()
+
 
 @router.get("/", status_code=200)
 async def get_index() -> Response:
