@@ -1,30 +1,23 @@
-# app/routers/series/__main__.py
-import io
-import pathlib
-from typing import List,Optional
+# app/series/routers.py
 
-import pandas as pd
+import io
+from typing import List,Optional, TYPE_CHECKING
 from pydantic import FilePath
-from fastapi import APIRouter, Depends, Response,UploadFile,File
-from functools import lru_cache
+from fastapi import APIRouter, Depends, Response,UploadFile
 import pydicom
 
-from backend.app.schemas.series import SeriesResponse
-from backend.app.schemas.series import series_special_sort,series_perfusion_sort,series_structure_sort,series_functional_sort
+if TYPE_CHECKING:
+    import pathlib
+
 from code_ai.dicom2nii.convert import ConvertManager
 from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
+
+from backend.app.series.schemas import SeriesResponse
+from backend.app.series.schemas import series_special_sort,series_perfusion_sort,series_structure_sort,series_functional_sort
+from backend.app.series.deps import get_rename_dicom_manager,get_dicom_orientation
+
+
 router = APIRouter()
-
-
-@lru_cache
-def get_rename_dicom_manager() -> ConvertManager:
-    return ConvertManager(input_path='',output_path='')
-
-
-@lru_cache
-def get_dicom_orientation() -> ImageOrientationProcessingStrategy:
-    return ImageOrientationProcessingStrategy()
-
 
 @router.get("/", status_code=200)
 async def get_index() -> Response:

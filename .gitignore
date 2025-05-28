@@ -4,3 +4,4 @@
 /code_ai/resource/models/*
 /.venv/*
 /.env*
+/back/*
