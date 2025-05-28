@@ -1,4 +1,4 @@
-# app/schemas/file.py
+# app/series/schemas.py
 import re
 
 from pydantic import BaseModel

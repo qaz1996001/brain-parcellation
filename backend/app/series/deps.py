@@ -1,4 +1,4 @@
-# app/routers/series/__main__.py
+# app/series/deps.py
 from functools import lru_cache
 from code_ai.dicom2nii.convert import ConvertManager
 from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
