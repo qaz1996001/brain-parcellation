@@ -15,13 +15,13 @@ def main():
     with sqlite3.connect(database_path) as conn:
         cursor = conn.cursor()
         # Replace SHOW TABLES with the correct SQLite syntax
-        cursor.execute('''SELECT name FROM sqlite_master WHERE type='table';''')
-
-        result = cursor.fetchall()  # Use fetchall() since there might be multiple
-        cursor.execute('''SELECT * FROM raw_dicom_to_nii_inference;''')
-
-        result = cursor.fetchall()  # Use fetchall() since there might be multiple tables
-        print('result:', result)
+        # cursor.execute('''SELECT name FROM sqlite_master WHERE type='table';''')
+        #
+        # result = cursor.fetchall()  # Use fetchall() since there might be multiple
+        # cursor.execute('''SELECT * FROM raw_dicom_to_nii_inference;''')
+        #
+        # result = cursor.fetchall()  # Use fetchall() since there might be multiple tables
+        # print('result:', result)
 
         cursor.execute('''SELECT * FROM funboost_consume_results where queue_name ='task_pipeline_inference_queue';''')
 

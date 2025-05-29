@@ -13,7 +13,7 @@ load_dotenv()
 
 def del_synthseg_seg():
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL)
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL,timeout=300)
     # (0008,0060)	Modality	SEG
     # (0008,103E)	Series Description	Pred_WMH
     instances = find_instances(

@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import shutil
@@ -6,6 +7,7 @@ import pathlib
 import subprocess
 from typing import List, Dict
 
+import httpx
 from funboost import BrokerEnum, Booster
 from pydicom import dcmread
 
@@ -25,6 +27,8 @@ from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
 from code_ai.task.params import BoosterParamsMyRABBITMQ
 from code_ai.utils.database import save_result_status_to_sqlalchemy
+from backend.app.sync import urls as sync_urls
+
 
 def get_output_study(dicom_ds):
     if dicom_ds is None:
@@ -92,25 +96,26 @@ def rename_dicom_file(instance_path,
                     if series_enum is not NullEnum.NULL:
                         output_study = get_output_study(dicom_ds)
                         return series_enum.value, output_study
+    return None
 
 
 def copy_dicom_file(input_tuple, instance_path, output_path):
     if input_tuple is None or len(input_tuple[0]) == 0 or input_tuple[1] is None:
-        return
+        return None
     rename_series = input_tuple[0]
     output_study = input_tuple[1]
     output_study_series = output_path.joinpath(output_study, rename_series)
-    output_study_series.mkdir(exist_ok=True, parents=True)
-    os.makedirs(output_study_series, exist_ok=True)
     output_study_instance: pathlib.Path = output_study_series.joinpath(instance_path.name)
+    if output_study_instance.exists():
+        return json.dumps((str(instance_path), str(output_study_instance)))
+    output_study_series.mkdir(exist_ok=True, parents=True)
     if output_study_series.is_dir():
-        if output_study_instance.exists():
-            return output_study_instance
-        else:
-            with open(instance_path, mode='rb') as instance:
-                with open(output_study_instance, 'wb+') as output_instance:
-                    shutil.copyfileobj(instance, output_instance)
-            return output_study_instance
+        with open(instance_path, mode='rb') as instance:
+            with open(output_study_instance, 'wb+') as output_instance:
+                shutil.copyfileobj(instance, output_instance)
+        return json.dumps((str(instance_path), str(output_study_instance)))
+            # return output_study_instance
+    return None
 
 
 def file_processing(func_params: Dict[str, any]):
@@ -217,7 +222,7 @@ def process_instances(func_params: Dict[str, any]):
                                             instance,
                                             output_dicom_path)
     if copy_dicom_file_tuple:
-        return str(copy_dicom_file_tuple)
+        return copy_dicom_file_tuple
     return None
 
 
@@ -244,6 +249,7 @@ def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10,))
 def process_dir(func_params: Dict[str, any]):
+    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
                                                                strict=False)
     sub_dir = task_params.sub_dir
@@ -263,17 +269,32 @@ def process_dir(func_params: Dict[str, any]):
         async_result.set_timeout(3600)
 
     result_list = [async_result.result for async_result in async_result_list]
+    print('result_list',result_list)
+
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
 
-    if task_params.output_nifti_path is not None:
-        output_nifti_path = task_params.output_nifti_path
-        dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=dicom_study_folder_path,
-                                                                   output_nifti_path=output_nifti_path)
+    result_parent_set = set()
+    for result in result_list:
+        if result is not None:
+            result_dict = json.loads(result)
+            dir_result = (os.path.dirname(result_dict[0]),os.path.dirname(result_dict[1]))
+            if dir_result in result_parent_set:
+                continue
+            result_parent_set.add(dir_result)
+    print('result_parent_set',result_parent_set)
+    with httpx.Client(timeout=300) as clinet:
+        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SERIES_PROT_STUDY),
+                    json=json.dumps(sorted(result_parent_set)))
 
-        dicom_2_nii_file_result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
-        dicom_2_nii_file_result.set_timeout(3600)
-        data= dicom_2_nii_file_result.get()
-        return data
+    # if task_params.output_nifti_path is not None:
+    #     output_nifti_path = task_params.output_nifti_path
+    #     dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=dicom_study_folder_path,
+    #                                                                output_nifti_path=output_nifti_path)
+    #
+    #     dicom_2_nii_file_result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
+    #     dicom_2_nii_file_result.set_timeout(3600)
+    #     data= dicom_2_nii_file_result.get()
+    #     return data
     return dicom_study_folder_path
 
 

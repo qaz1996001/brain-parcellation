@@ -110,7 +110,8 @@ async def main():
     if len(mr_series) > 0:
         # 創建輸出目錄
         study_id = result[0].id_
-        output_directory = f"/mnt/e/raw_dicom/{study_id}"
+        #output_directory = f"/data/4TB1/raw_dicom/{study_id}"
+        output_directory = f"/data/4TB1/raw_dicom/{study_id}"
         os.makedirs(output_directory, exist_ok=True)  # 確保目錄存在
 
         # 選擇性：也可以單獨下載每個MR系列

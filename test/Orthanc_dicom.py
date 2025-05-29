@@ -11,7 +11,7 @@ import aiofiles
 import warnings
 import pyorthanc
 
-from code_ai.utils_inference import build_analysis, build_inference_cmd
+from code_ai.utils.inference import build_analysis, build_inference_cmd
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
