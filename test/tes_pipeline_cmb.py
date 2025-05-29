@@ -15,8 +15,7 @@ def test_pipeline_synthseg5class_tensorflow():
     output_study_nifti_path = task_params.output_study_nifti_path
     study_list = sorted(input_study_nifti_path.iterdir())
     for study_path in study_list:
-        # file_path_list = sorted(study_path.glob('T1BRAVO_AXI.nii.gz'))
-        # file_path_list = sorted(study_path.glob('ASLPROD_reala.nii.gz'))
+
         file_path_list = sorted(study_path.glob('T1FLAIR_AXI.nii.gz')) + sorted(study_path.glob('SWAN.nii.gz'))
         print(file_path_list)
         file_path_list = list(map(lambda x: str(x), file_path_list))
@@ -31,7 +30,3 @@ def test_pipeline_synthseg5class_tensorflow():
 
 if __name__ == '__main__':
     test_pipeline_synthseg5class_tensorflow()
-    # from funboost import AsyncResult
-    # result = AsyncResult(task_id='c3fa5495-8ee7-4690-a5c5-a214607696ab')
-    # print(result)
-    # export PYTHONPATH=$(pwd) && python code_ai/pipeline/dicom_to_nii.py --input_dicom /mnt/e/raw_dicom --output_dicom /mnt/e/rename_dicom_0328 --output_nifti /mnt/e/rename_nifti_0328
