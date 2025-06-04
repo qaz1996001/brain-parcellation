@@ -31,3 +31,8 @@ def setup_pip_tf_cuda_env() -> bool:
     except ImportError:
         pass
     return False
+
+
+# dir_path = pathlib.Path(r'/mnt/c/Users/avinhsu/Desktop/sean/yolo8/predict_by_project-3_4-23-8/label/')
+
+
