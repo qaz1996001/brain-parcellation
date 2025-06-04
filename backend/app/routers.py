@@ -10,7 +10,7 @@ from backend.app import series,sync
 
 router = APIRouter()
 router.include_router(series.router, prefix="/series", tags=["series"])
-router.include_router(sync.router, prefix="/sync", tags=["sync"])
+router.include_router(sync.router, tags=["sync"])
 
 
 
