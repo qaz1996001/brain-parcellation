@@ -1,6 +1,6 @@
 # app/sync/schemas.py
 import re
-from typing import List, Annotated, Dict
+from typing import List, Annotated, Dict, Any
 
 from datetime import datetime
 from typing import Optional
@@ -31,6 +31,15 @@ class DCOPEventRequest(BaseModel):
     study_id  : Optional[str]           = None
     params_data:Optional[Dict[str,str]] = None
     result_data:Optional[Dict[str,str]] = None
+
+
+class DCOPEventNIFTITOOLRequest(BaseModel):
+    ope_no     : str                    =  Field(...,min_length=7,max_length=7,pattern=r"^\d{3}\.\d{3}$",
+                                                 description="格式必須為 xxx.xxx，其中 x 為數字")
+    tool_id   : str                     = 'NIFTI_TOOL'
+    study_id  : Optional[str]           = None
+    params_data:Optional[Dict[str,Any]] = None
+    result_data:Optional[Dict[str,Any]] = None
 
 
 # class DCOPStatus(str, Enum):

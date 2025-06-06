@@ -5,7 +5,7 @@ from typing import Annotated, Tuple, List
 
 from fastapi import APIRouter, Depends, Response, BackgroundTasks
 
-from backend.app.sync.schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest
+from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from backend.app.sync import urls
 from .service import DCOPEventDicomService
 from .model import DCOPEventModel
@@ -94,7 +94,7 @@ async def post_study_uuid(request:OrthancIDRequest,
                                                  session=dcop_event_service.repository.session,)
 
         obj = await dcop_event_service.create(data=data)
-        background_tasks.add_task(dcop_event_service.get_series_info, ids,)
+        background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info, ids, )
         result_list.append(obj)
     background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete,result_list)
     return result_list
@@ -147,7 +147,21 @@ async def post_check_study_series_transfer_complete(
         Depends(alchemy.provide_service(DCOPEventDicomService))],
         background_tasks: BackgroundTasks) -> Response:
 
-    background_tasks.add_task(dcop_event_service.check_study_transfer_complete_task)
+    background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete)
     return Response("post_check_study_series_transfer_complete")
+
+
+
+@router.post(urls.SYNC_PROT_STUDY_NIFTI_TOOL,
+             status_code=200,
+             summary="study series NIFTI TOOL STUDY_CONVERSION -> SERIES_CONVERTING -> SERIES_CONVERSION_COMPLETE -> STUDY_CONVERSION_COMPLETE",
+             description="",
+             response_description="",)
+async def post_study_series_nifti_tool(data_list :List[DCOPEventNIFTITOOLRequest],
+                                       dcop_event_service: Annotated[DCOPEventDicomService,
+                                       Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                       background_tasks: BackgroundTasks) -> Response:
+    background_tasks.add_task(dcop_event_service.study_series_nifti_tool,data_list)
+    return Response("post_study_nifti_tool")
 
 

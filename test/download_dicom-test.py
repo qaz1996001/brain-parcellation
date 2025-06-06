@@ -85,57 +85,153 @@ async def download_dicom(id_, output_path):
         return False
 
 
+# async def main():
+#     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+#     client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL)
+#
+#     # (0008,0060)   Modality   SEG
+#     # (0008,103E)   Series Description Pred_WMH
+#     # AccessionNumber = '21002010079'
+#     # level = 'Study'
+#     # query = {'AccessionNumber': AccessionNumber,
+#     #         }
+#     # result: List[Union[Study, Resource]] = query_orthanc(client=client, level=level, query=query)
+#     # print('result', result)
+#
+#     # if len(result) == 0:
+#     #     print(f"No results found for AccessionNumber: {AccessionNumber}")
+#     #     return
+#
+#     # 篩選MR系列
+#     mr_series = list(filter(lambda x: x.modality=='MR', result[0].series))
+#     print(f"Found {len(mr_series)} MR series")
+#     print(mr_series)
+#
+#     if len(mr_series) > 0:
+#         # 創建輸出目錄
+#         study_id = result[0].id_
+#         #output_directory = f"/data/4TB1/raw_dicom/{study_id}"
+#         output_directory = f"/data/4TB1/raw_dicom/{study_id}"
+#         os.makedirs(output_directory, exist_ok=True)  # 確保目錄存在
+#
+#         # 選擇性：也可以單獨下載每個MR系列
+#         download_tasks = []
+#         for series in mr_series:
+#             series_id = series.id_
+#             series_output_path = os.path.join(output_directory, f"{series_id}")
+#             # 使用asyncio.create_task創建任務以並行下載
+#             if os.path.exists(series_output_path):
+#                 continue
+#             task = asyncio.create_task(
+#                 download_dicom(series_id, series_output_path)
+#             )
+#             download_tasks.append(task)
+#             # break
+#
+#         # 等待所有下載任務完成
+#         if download_tasks:
+#             print(f"Starting download of {len(download_tasks)} series...")
+#             await asyncio.gather(*download_tasks)
+#             print("All downloads completed!")
+#     else:
+#         print("No MR series found in the study")
+#         return
+
+
+# async def process_single_study(client, accession_number: str = None, study_id: str = None):
+#     """處理單個Study的MR系列下載"""
+#     try:
+#         # 根據提供的參數進行查詢
+#         if accession_number:
+#             level = 'Study'
+#             query = {'AccessionNumber': accession_number}
+#             print(f"Processing AccessionNumber: {accession_number}")
+#         elif study_id:
+#             level = 'Study'
+#             query = {'_ID':study_id}
+#             print(f"Processing StudyID: {study_id}")
+#         else:
+#             print("Error: No AccessionNumber or StudyID provided")
+#             return False
+#
+#         # 查詢Orthanc
+#         if study_id is not None:
+#             result: List[Union[Study, Resource]] = query_orthanc(client=client, level=level, query=query)
+#         else:
+#             result: List[Union[Study, Resource]] = query_orthanc(client=client, level=level, query=query)
+#         if len(result) == 0:
+#             print(f"No results found for query: {query}")
+#             return False
+#         print('result', result)
+#         # 篩選MR系列
+#         mr_series = list(filter(lambda x: x.modality == 'MR', result[0].series))
+#         print(f"Found {len(mr_series)} MR series")
+#         print('mr_series',mr_series)
+#         # if len(mr_series) > 0:
+#         #     # 創建輸出目錄
+#         #     study_id = result[0].id_
+#         #     output_directory = f"/mnt/e/raw_dicom/{study_id}"
+#         #     os.makedirs(output_directory, exist_ok=True)
+#         #
+#         #     # 準備下載任務
+#         #     download_tasks = []
+#         #     for series in mr_series:
+#         #         series_id = series.id_
+#         #         series_output_path = os.path.join(output_directory, f"{series_id}")
+#         #
+#         #         # 檢查是否已存在，跳過已下載的
+#         #         if os.path.exists(series_output_path):
+#         #             print(f"Series {series_id} already exists, skipping...")
+#         #             continue
+#         #
+#         #         # 創建下載任務
+#         #         task = asyncio.create_task(
+#         #             download_dicom(series_id, series_output_path)
+#         #         )
+#         #         download_tasks.append(task)
+#         #
+#         #     # 執行下載
+#         #     if download_tasks:
+#         #         print(f"Starting download of {len(download_tasks)} series for study {study_id}...")
+#         #         await asyncio.gather(*download_tasks)
+#         #         print(f"Study {study_id} download completed!")
+#         #         return True
+#         #     else:
+#         #         print(f"All series for study {study_id} already exist")
+#         #         return True
+#         # else:
+#         #     print(f"No MR series found in study {study_id}")
+#         #     return False
+#
+#     except Exception as e:
+#         print(f"Error processing study: {e}")
+#         return False
+
+
 async def main():
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL)
-
-    # (0008,0060)   Modality   SEG
-    # (0008,103E)   Series Description Pred_WMH
-    AccessionNumber = '21002010079'
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL,timeout=300)
+    download_tasks = []
     level = 'Study'
-    query = {'AccessionNumber': AccessionNumber,
-            }
-    result: List[Union[Study, Resource]] = query_orthanc(client=client, level=level, query=query)
-    print('result', result)
-
-    if len(result) == 0:
-        print(f"No results found for AccessionNumber: {AccessionNumber}")
-        return
-
-    # 篩選MR系列
-    mr_series = list(filter(lambda x: x.modality=='MR', result[0].series))
-    print(f"Found {len(mr_series)} MR series")
-    print(mr_series)
-
-    if len(mr_series) > 0:
-        # 創建輸出目錄
-        study_id = result[0].id_
-        #output_directory = f"/data/4TB1/raw_dicom/{study_id}"
-        output_directory = f"/data/4TB1/raw_dicom/{study_id}"
-        os.makedirs(output_directory, exist_ok=True)  # 確保目錄存在
-
-        # 選擇性：也可以單獨下載每個MR系列
-        download_tasks = []
+    query = {}
+    results: List[Union[Study, Resource]] = query_orthanc(client=client, level=level, query=query)
+    for result in results:
+        study_id = result.id_
+        mr_series = list(filter(lambda x: x.modality == 'MR', result.series))
+        output_directory = f"/mnt/e/raw_dicom/{study_id}"
+        os.makedirs(output_directory, exist_ok=True)
+        # 準備下載任務
         for series in mr_series:
             series_id = series.id_
             series_output_path = os.path.join(output_directory, f"{series_id}")
-            # 使用asyncio.create_task創建任務以並行下載
-            if os.path.exists(series_output_path):
-                continue
             task = asyncio.create_task(
-                download_dicom(series_id, series_output_path)
+                download_dicom(id_ = series_id, output_path = series_output_path)
             )
             download_tasks.append(task)
-            # break
 
-        # 等待所有下載任務完成
-        if download_tasks:
-            print(f"Starting download of {len(download_tasks)} series...")
-            await asyncio.gather(*download_tasks)
-            print("All downloads completed!")
-    else:
-        print("No MR series found in the study")
-        return
+    results = await asyncio.gather(*download_tasks, return_exceptions=True)
+    successful_count = sum(1 for result in results if result is True)
+    print(f"Batch processing completed! {successful_count}/{len(results)} studies processed successfully.")
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == '__main__':
