@@ -28,6 +28,7 @@ from code_ai.task.schema import intput_params
 from code_ai.task.params import BoosterParamsMyRABBITMQ
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 from backend.app.sync import urls as sync_urls
+from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
 
 
 def get_output_study(dicom_ds):
@@ -269,22 +270,37 @@ def process_dir(func_params: Dict[str, any]):
         async_result.set_timeout(3600)
 
     result_list = [async_result.result for async_result in async_result_list]
-    print('result_list',result_list)
 
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
 
     result_parent_set = set()
+    dcop_event_list = []
     for result in result_list:
         if result is not None:
             result_dict = json.loads(result)
+            # result_dict[0] instance_path result_dict[1] output_study_instance
+            # '/mnt/e/raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/7343d7a3-dbd8985b-83cb9baf-a6a82f09-b81c0a0f', '/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/ADC')
             dir_result = (os.path.dirname(result_dict[0]),os.path.dirname(result_dict[1]))
             if dir_result in result_parent_set:
                 continue
             result_parent_set.add(dir_result)
-    print('result_parent_set',result_parent_set)
+            series_uid = os.path.basename(os.path.dirname(result_dict[0]))
+            study_uid  = os.path.basename(os.path.dirname(os.path.dirname(result_dict[0])))
+            study_id   = os.path.basename(os.path.dirname(os.path.dirname(result_dict[1])))
+            dcop_event = DCOPEventRequest(study_uid   = study_uid,
+                                          series_uid  = series_uid,
+                                          ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+                                          study_id    = study_id,
+                                          tool_id     = 'DICOM_TOOL',
+                                          result_data = {f'raw_dicom_path':os.path.dirname(result_dict[0]),
+                                                         f'rename_dicom_path':os.path.dirname( result_dict[1]),}
+                                          )
+            dcop_event_list.append(dcop_event.model_dump())
+    dcop_event_list_json = json.dumps(dcop_event_list)
+    print('dcop_event_list',dcop_event_list_json)
     with httpx.Client(timeout=300) as clinet:
-        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SERIES_PROT_STUDY),
-                    json=json.dumps(sorted(result_parent_set)))
+        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+                    data=dcop_event_list_json)
 
     # if task_params.output_nifti_path is not None:
     #     output_nifti_path = task_params.output_nifti_path

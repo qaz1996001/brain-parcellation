@@ -11,7 +11,7 @@ logger = nb_log.LogManager('task_pipeline_inference_queue').get_logger_and_add_h
     log_filename='task_pipeline_inference_queue.log'
 )
 
-from code_ai.task.params import BoosterParamsMyAI
+from code_ai.task.params import BoosterParamsMyAI,BoosterParamsMyRABBITMQ
 from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
@@ -50,3 +50,21 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
         logger.warn(stderr.decode())
     result = Serialization.to_json_str(result_list)
     return result
+
+
+@Booster(BoosterParamsMyRABBITMQ(queue_name      ='task_subprocess_queue',
+                                 concurrent_num  = 3,
+                                 qps=1,
+                           ))
+def task_subprocess_inference(func_params  : Dict[str,any]):
+    path_process = os.getenv("PATH_PROCESS")
+    path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
+    os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
+    cmd_str = func_params['cmd_str']
+    process = subprocess.Popen(args=cmd_str, shell=True,
+                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+    logger.info(stdout.decode())
+    logger.warn(stderr.decode())
+    return stdout.decode()
