@@ -50,9 +50,17 @@ class Dicom2NiiParams(BaseJsonAbleModel):
     output_dicom_path : Optional[Path]
     output_nifti_path : Optional[Path]
 
+
 class Dicom2NiiFileParams(BaseJsonAbleModel):
+
     dicom_study_folder_path : Path
     output_nifti_path       : Path
+# *************************************************************************** #
+
+
+class Dicom2NiiSeriesParams(Dicom2NiiParams):
+    study_uid  : Optional[str]
+    series_uid : Optional[str]
 
 
 class ProcessInstancesParams(BaseJsonAbleModel):
