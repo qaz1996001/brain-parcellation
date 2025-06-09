@@ -205,6 +205,68 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
     return nifti_study_folder_path
 
 
+@Booster(BoosterParamsMyRABBITMQ(queue_name='raw_dicom_2_rename_dicom_queue',
+                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
+                                 qps=10,))
+def raw_dicom_2_rename_dicom(func_params: Dict[str, any]):
+
+    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
+                                                               strict=False)
+    # 1. raw dicom -> rename dicom
+    if task_params.sub_dir is not None:
+        result = process_dir.push(func_params)
+        result.set_timeout(3600)
+        data = result.get()
+        return data
+    return None
+
+
+@Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_series_queue',
+                                 qps=10, ))
+def dicom_2_nii_series(func_params: Dict[str, any]):
+    task_params = intput_params.Dicom2NiiSeriesParams.model_validate(func_params)
+    output_dicom_path       = task_params.output_dicom_path
+    dicom_study_folder_path = output_dicom_path.parent
+    output_nifti_path       = task_params.output_nifti_path
+    series_path             = output_dicom_path
+    FILE_SIZE = 500
+    if output_dicom_path is None:
+        return
+    if series_path.name in Dicm2NiixConverter.exclude_set:
+        return
+    output_series_path = pathlib.Path(
+        f'{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}')
+    output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
+    call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
+                                                            output_series_path=output_series_path,
+                                                            series_path=series_path)
+    if output_series_file_path.exists():
+        if output_series_file_path.stat().st_size < FILE_SIZE:
+            output_series_file_path.unlink()
+        async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+    else:
+        async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+    result = async_result.result
+    nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
+    file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
+                                     post_process_manager=ConvertManager.nifti_post_process_manager))
+    dcop_event = DCOPEventRequest(study_uid   = task_params.study_uid,
+                                  series_uid  = task_params.series_uid,
+                                  ope_no      = DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
+                                  study_id    = series_path.parent.name,
+                                  tool_id     = 'NIFTI_TOOL',
+                                  params_data = task_params.get_str_dict(),
+                                  result_data = {'result':result})
+
+    dcop_event_list_json = json.dumps([dcop_event.model_dump()])
+    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+    with httpx.Client(timeout=300) as clinet:
+        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+                    data=dcop_event_list_json)
+
+    return nifti_study_folder_path
+
+
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_instances_queue',
                                  qps=100,
                                  log_level=logging.WARNING,
@@ -302,15 +364,6 @@ def process_dir(func_params: Dict[str, any]):
         clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
                     data=dcop_event_list_json)
 
-    # if task_params.output_nifti_path is not None:
-    #     output_nifti_path = task_params.output_nifti_path
-    #     dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(dicom_study_folder_path=dicom_study_folder_path,
-    #                                                                output_nifti_path=output_nifti_path)
-    #
-    #     dicom_2_nii_file_result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
-    #     dicom_2_nii_file_result.set_timeout(3600)
-    #     data= dicom_2_nii_file_result.get()
-    #     return data
     return dicom_study_folder_path
 
 
