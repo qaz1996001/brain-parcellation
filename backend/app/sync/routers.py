@@ -22,10 +22,10 @@ async def get_study_uuid() -> Response:
     return Response("DICOM Service is running")
 
 
-@router.get(urls.SYNC_PROT_OPE_NO, status_code=200,
-             summary="根據 study series UUID ope_no 查詢資料",
-             description="根據 study series UUID ope_no 查詢資料",
-             response_description="",)
+# @router.get(urls.SYNC_PROT_OPE_NO, status_code=200,
+#              summary="根據 study series UUID ope_no 查詢資料",
+#              description="根據 study series UUID ope_no 查詢資料",
+#              response_description="",)
 async def get_study_last(data :List[OrthancIDRequest],
                          dcop_event_service: Annotated[DCOPEventDicomService,
                          Depends(alchemy.provide_service(DCOPEventDicomService))],) -> Response:
@@ -79,32 +79,18 @@ async def post_study_uuid(request:OrthancIDRequest,
                           background_tasks: BackgroundTasks
                           ) -> Response:
 
-    result_list = []
-    for ids in request.ids:
-        new_data = await DCOPEventModel.create_event(study_uid=ids,
-                                                     series_uid=None,
-                                                     status=DCOPStatus.STUDY_NEW.name,
-                                                     session=dcop_event_service.repository.session,)
-        new_data_obj = await dcop_event_service.create(data=new_data)
-        result_list.append(new_data_obj)
 
-        data = await DCOPEventModel.create_event(study_uid=ids,
-                                                 series_uid=None,
-                                                 status=DCOPStatus.STUDY_TRANSFERRING.name,
-                                                 session=dcop_event_service.repository.session,)
-
-        obj = await dcop_event_service.create(data=data)
-        background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info, ids, )
-        result_list.append(obj)
-    background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete,result_list)
+    result_list = await dcop_event_service.add_study_new(data_list=request.ids)
+    print('result_list',result_list)
+    background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
     return result_list
 
 
 
-@router.delete(urls.SYNC_PROT_STUDY, status_code=200,
-               summary="delete Study UUID",
-               description="",
-               response_description="",)
+# @router.delete(urls.SYNC_PROT_STUDY, status_code=200,
+#                summary="delete Study UUID",
+#                description="",
+#                response_description="",)
 async def delete_study_uuid(request:OrthancIDRequest) -> Response:
     print(request.ids)
     return Response("DICOM Service is running")
@@ -164,4 +150,19 @@ async def post_study_series_nifti_tool(data_list :List[DCOPEventNIFTITOOLRequest
     background_tasks.add_task(dcop_event_service.study_series_nifti_tool,data_list)
     return Response("post_study_nifti_tool")
 
+
+
+
+@router.post(urls.SYNC_PROT_STUDY_CONVERSION_COMPLETE,
+             status_code=200,
+             summary="檢查 study series nifti conversion complete",
+             description="",
+             response_description="",)
+async def post_check_study_series_conversion_complete(
+        dcop_event_service: Annotated[DCOPEventDicomService,
+        Depends(alchemy.provide_service(DCOPEventDicomService))],
+        background_tasks: BackgroundTasks) -> Response:
+
+    background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete)
+    return Response("post_check_study_series_conversion_complete")
 
