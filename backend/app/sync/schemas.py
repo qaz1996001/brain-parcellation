@@ -5,7 +5,7 @@ from typing import List, Annotated, Dict, Any
 from datetime import datetime
 from typing import Optional
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator,AfterValidator
+from pydantic import BaseModel, Field, field_validator, AfterValidator, ConfigDict
 
 
 def validate_orthanc_id(v: str) -> str:
@@ -23,14 +23,15 @@ class OrthancIDRequest(BaseModel):
 
 
 class DCOPEventRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     study_uid  : OrthancID           = OrthancID('ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30')
     series_uid : Optional[OrthancID] = OrthancID('31fb1be1-71d25700-b131126f-c73708af-42d28093')
     ope_no     : str                 =  Field(...,min_length=7,max_length=7,pattern=r"^\d{3}\.\d{3}$",
                                                   description="格式必須為 xxx.xxx，其中 x 為數字")
     tool_id   : str                  = 'DICOM_TOOL'
     study_id  : Optional[str]           = None
-    params_data:Optional[Dict[str,str]] = None
-    result_data:Optional[Dict[str,str]] = None
+    params_data:Optional[Dict[str,Any]] = None
+    result_data:Optional[Dict[str,Any]] = None
 
 
 class DCOPEventNIFTITOOLRequest(BaseModel):
@@ -69,20 +70,21 @@ class DCOPEventNIFTITOOLRequest(BaseModel):
 
 class DCOPStatus(str, Enum):
 
-    STUDY_NEW                  = "100.020",
-    STUDY_TRANSFERRING         = "100.050",
-    STUDY_TRANSFER_COMPLETE    = "100.100",
+    STUDY_NEW                  = "100.020"
+    STUDY_TRANSFERRING         = "100.050"
+    STUDY_TRANSFER_COMPLETE    = "100.100"
 
-    SERIES_NEW                 = "100.025",
-    SERIES_TRANSFERRING        = "100.055",
-    SERIES_TRANSFER_COMPLETE   = "100.095",
+    SERIES_NEW                 = "100.025"
+    SERIES_TRANSFERRING        = "100.055"
+    SERIES_TRANSFER_COMPLETE   = "100.095"
 
 
-    STUDY_CONVERTING           = "200.150",
-    STUDY_CONVERSION_COMPLETE  = "200.155"
+    STUDY_CONVERTING           = "200.150"
+    STUDY_CONVERSION_COMPLETE  = "200.200"
 
-    SERIES_CONVERTING          = "200.195",
-    SERIES_CONVERSION_COMPLETE = "200.200"
+    SERIES_CONVERTING          = "200.155"
+    SERIES_CONVERSION_COMPLETE = "200.195"
+
 
     STUDY_INFERENCE_FAILED     = "300.000",
     STUDY_INFERENCE_READY      = "300.050",
