@@ -39,6 +39,7 @@ ai = [
     "brainextractor>=0.2.2",
     "nvidia-cublas-cu11==11.*",
     "nvidia-cuda-cupti-cu11==11.*",
+    "nvidia-cuda-nvcc-cu11==11.*",
     "nvidia-cuda-nvrtc-cu11==11.*",
     "nvidia-cuda-runtime-cu11==11.8.*",
     "nvidia-cudnn-cu11==8.8.*",
