@@ -1,9 +1,9 @@
 # app/sync/routers.py
 import os
 import pathlib
-from typing import Annotated, Tuple, List
+from typing import Annotated, Tuple, List, Optional
 
-from fastapi import APIRouter, Depends, Response, BackgroundTasks
+from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body
 
 from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from backend.app.sync import urls
@@ -122,18 +122,22 @@ async def post_ope_no(data :List[DCOPEventRequest],
     background_tasks.add_task(dcop_event_service.post_ope_no_task,data)
     return Response("post_ope_no")
 
-
+# dcop_event_list = [DCOPEventRequest.model_validate(event,strict=False) for event in data]
 @router.post(urls.SYNC_PROT_STUDY_TRANSFER_COMPLETE,
              status_code=200,
              summary="檢查 study series dicom transfer complete",
              description="",
              response_description="",)
-async def post_check_study_series_transfer_complete(
-        dcop_event_service: Annotated[DCOPEventDicomService,
-        Depends(alchemy.provide_service(DCOPEventDicomService))],
-        background_tasks: BackgroundTasks) -> Response:
+async def post_check_study_series_transfer_complete(background_tasks   : BackgroundTasks,
+                                                    dcop_event_service : Annotated[DCOPEventDicomService,
+                                                                         Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                                    dcop_event_list    : Optional[List[DCOPEventRequest]] = Body(default=None),
+                                                    ) -> Response:
 
-    background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete)
+    if dcop_event_list is None:
+        background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete)
+    else:
+        background_tasks.add_task(dcop_event_service.check_study_series_transfer_complete,dcop_event_list)
     return Response("post_check_study_series_transfer_complete")
 
 
@@ -158,11 +162,13 @@ async def post_study_series_nifti_tool(data_list :List[DCOPEventNIFTITOOLRequest
              summary="檢查 study series nifti conversion complete",
              description="",
              response_description="",)
-async def post_check_study_series_conversion_complete(
-        dcop_event_service: Annotated[DCOPEventDicomService,
-        Depends(alchemy.provide_service(DCOPEventDicomService))],
-        background_tasks: BackgroundTasks) -> Response:
-
-    background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete)
+async def post_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                                          Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                                      background_tasks: BackgroundTasks,
+                                                      dcop_event_list    : Optional[List[DCOPEventRequest]] = Body(default=None),) -> Response:
+    if dcop_event_list is None:
+        background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete)
+    else:
+        background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete,dcop_event_list)
     return Response("post_check_study_series_conversion_complete")
 
