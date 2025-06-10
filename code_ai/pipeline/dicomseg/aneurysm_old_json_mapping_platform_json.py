@@ -13,7 +13,7 @@ from typing import Optional, List, Union
 from code_ai import load_dotenv
 from code_ai.pipeline.dicomseg.schema import MaskRequest
 from code_ai.pipeline.dicomseg.schema import SortedRequest,StudyRequest,AITeamRequest
-from code_ai.pipeline.dicomseg.schema import SeriesRequest
+from code_ai.pipeline.dicomseg.schema import SortedSeriesRequest
 from code_ai.pipeline import get_study_id
 
 
@@ -96,7 +96,7 @@ def load_sort_dicom_json(sort_json_path: str) -> Optional[Union[List[SortedReque
             new_data_dict = {'series_instance_uid':data_dict['data'][i]['series_instance_uid'],
                              'instance':data_dict['data'][i]['instances']}
 
-            sort_series_list.append(SeriesRequest.model_validate(new_data_dict))
+            sort_series_list.append(SortedSeriesRequest.model_validate(new_data_dict))
 
 
         sort_mask_dict = { 'study_instance_uid' :study_instance_uid,

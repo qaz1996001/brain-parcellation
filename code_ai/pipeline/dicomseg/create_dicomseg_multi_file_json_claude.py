@@ -32,7 +32,7 @@ from pydicom.dicomdir import DicomDir
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import DCM_EXAMPLE
 from code_ai.pipeline.dicomseg.schema import MaskRequest, MaskSeriesRequest, MaskInstanceRequest
-from code_ai.pipeline.dicomseg.schema import StudyRequest, SortedRequest
+from code_ai.pipeline.dicomseg.schema import StudyRequest,StudySeriesRequest ,  SortedRequest
 from code_ai.pipeline.dicomseg.schema import AITeamRequest, GROUP_ID
 
 from code_ai.utils.inference.config import CONFIG_DICT
@@ -243,8 +243,44 @@ def make_sorted_json(source_images: List[Union[FileDataset, DicomDir]]) -> Sorte
     return SortedRequest.model_validate(sorted_dict)
 
 
+def make_study_series_json(source_images : List[Union[FileDataset, DicomDir]],
+                           sorted_dcms   : List[Union[pathlib.Path, str]]) -> List[StudySeriesRequest]:
+    """
+    Create a JSON representation of sorted DICOM instances for a study.
+
+    Args:
+        source_images: List of DICOM image datasets
+
+    Returns:
+        StudySeriesRequest: Validated sorted request data
+    """
+    instance_list = []
+    series_instance_uid_dict = {}
+    for index, dicom_ds in enumerate(source_images):
+        series_instance_uid = dicom_ds.get((0x0020, 0x000E)).value
+        if series_instance_uid_dict.get(series_instance_uid) is None:
+            series_type = os.path.basename(os.path.dirname(sorted_dcms[index]))
+            series_instance_uid_dict.update({series_instance_uid:series_type})
+        else:
+            continue
+
+    for series_instance_uid, series_type in series_instance_uid_dict.items():
+        instance_dict = dict()
+
+        # Update instance dictionary
+        instance_dict.update(dict(
+            series_type=series_type,
+            series_instance_uid=series_instance_uid
+        ))
+        instance_list.append(StudySeriesRequest.model_validate(instance_dict))
+
+    # Validate and return the sorted request
+    return instance_list
+
+
 def make_study_json(source_images: List[Union[FileDataset, DicomDir]],
-                    group_id: int = GROUP_ID) -> StudyRequest:
+                    study_series_request_list:List[StudySeriesRequest],
+                    group_id: int = GROUP_ID,) -> StudyRequest:
     """
     Create a JSON representation of a study.
 
@@ -284,6 +320,7 @@ def make_study_json(source_images: List[Union[FileDataset, DicomDir]],
         resolution_x=resolution_x,
         resolution_y=resolution_y,
         patient_id=patient_id,
+        series = study_series_request_list
     ))
 
     # Validate and return the study request
@@ -614,10 +651,13 @@ def process_prediction_mask(pred_data: np.ndarray,
     sorted_dcms, image, first_dcm, source_images = load_and_sort_dicom_files(path_dcms)
 
     # Create study and sorted JSON data
+    study_series_request = make_study_series_json(source_images=source_images,sorted_dcms=sorted_dcms)
+
     study_request = make_study_json(
         source_images=source_images,
-        group_id=GROUP_ID
+        study_series_request_list=study_series_request,group_id=GROUP_ID,
     )
+    study_request.series = study_series_request
     sorted_request = make_sorted_json(source_images=source_images)
 
     # Initialize AI team dictionary

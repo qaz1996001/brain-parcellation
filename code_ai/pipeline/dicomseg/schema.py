@@ -49,7 +49,7 @@ class InstanceRequest(BaseModel):
         return '0.0'
 
 
-class SeriesRequest(BaseModel):
+class SortedSeriesRequest(BaseModel):
     # dicom
     series_instance_uid :str
     instance            : List[InstanceRequest]
@@ -58,9 +58,25 @@ class SeriesRequest(BaseModel):
 
 class SortedRequest(BaseModel):
     study_instance_uid: str
-    series            : List[SeriesRequest]
+    series            : List[SortedSeriesRequest]
 
 
+class StudySeriesRequest(BaseModel):
+    # dicom
+    series_type         : str
+    series_instance_uid : str
+
+    @field_validator('series_type', mode='before')
+    @classmethod
+    def extract_series_type(cls, value):
+        if value is None:
+            return '1'
+        if isinstance(value, str):
+            series_type_enum_list: List[SeriesTypeEnum] = SeriesTypeEnum.to_list()
+            for series_type_enum in series_type_enum_list:
+                if value == series_type_enum.name:
+                    return series_type_enum.value
+        return value
 
 
 class StudyRequest(BaseModel):
@@ -83,6 +99,7 @@ class StudyRequest(BaseModel):
     resolution_y       :PositiveInt = 256
     study_instance_uid :str
     patient_id         :str
+    series             :List[StudySeriesRequest]
 
     @field_validator('patient_name', mode='before')
     @classmethod
@@ -186,8 +203,6 @@ class MaskSeriesRequest(BaseModel):
                 if value == series_type_enum.name:
                     return series_type_enum.value
         return value
-
-
 
 
 class MaskRequest(BaseModel):
