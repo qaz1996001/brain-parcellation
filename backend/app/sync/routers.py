@@ -1,14 +1,18 @@
 # app/sync/routers.py
 import os
 import pathlib
-from typing import Annotated, Tuple, List, Optional
+from typing import Annotated, Tuple, List, Optional, Any, Coroutine
 
-from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body
+from advanced_alchemy.extensions.fastapi.providers import FieldNameType
+from advanced_alchemy.service import OffsetPagination
+from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
+from advanced_alchemy.extensions.fastapi import (service, filters,)
 
-from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from backend.app.sync import urls
 from .service import DCOPEventDicomService
 from .model import DCOPEventModel
+from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, OrthancID,DCOPEventNIFTITOOLRequest
+
 from ..database import alchemy
 
 router = APIRouter()
@@ -35,6 +39,7 @@ async def get_study_last(data :List[OrthancIDRequest],
 
 
 async def get_series_info(study_uid: str,dcop_event_service:DCOPEventDicomService):
+    global task
     from code_ai.task.task_dicom2nii import dicom_to_nii
     from code_ai.task.schema.intput_params import Dicom2NiiParams
     from code_ai import load_dotenv
@@ -100,12 +105,23 @@ async def delete_study_uuid(request:OrthancIDRequest) -> Response:
 @router.get(urls.SYNC_PROT_OPE_NO, status_code=200,
              summary="根據 study series UUID ope_no 查詢資料",
              description="根據 study series UUID ope_no 查詢資料",
-             response_description="",)
-async def get_ope_no(data :List[DCOPEventRequest],
-                     dcop_event_service: Annotated[DCOPEventDicomService,
-                     Depends(alchemy.provide_service(DCOPEventDicomService))],) -> Response:
-
-    return Response("get_ope_no")
+             response_description="",
+             response_model=service.OffsetPagination[DCOPEventRequest])
+async def get_ope_no(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                   Depends(alchemy.provide_service(DCOPEventDicomService))],
+                     filters: Annotated[list[filters.FilterTypes],
+                                        Depends(alchemy.provide_filters(
+                                            {
+                                                "id_filter": OrthancID,
+                                                "pagination_type": "limit_offset",
+                                                "search": "study_uid,study_id,ope_no,tool_id",
+                                                "search_ignore_case": True,
+                                            }
+                                        )),]) -> OffsetPagination[DCOPEventModel]:
+    print('filters',filters)
+    results, total = await dcop_event_service.list_and_count(*filters)
+    return dcop_event_service.to_schema(results, total, filters=filters)
+    # return service.OffsetPagination[DCOPEventRequest]
 
 
 
@@ -122,7 +138,7 @@ async def post_ope_no(data :List[DCOPEventRequest],
     background_tasks.add_task(dcop_event_service.post_ope_no_task,data)
     return Response("post_ope_no")
 
-# dcop_event_list = [DCOPEventRequest.model_validate(event,strict=False) for event in data]
+
 @router.post(urls.SYNC_PROT_STUDY_TRANSFER_COMPLETE,
              status_code=200,
              summary="檢查 study series dicom transfer complete",
@@ -172,3 +188,64 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
         background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete,dcop_event_list)
     return Response("post_check_study_series_conversion_complete")
 
+
+# Advanced Alchemy 多條件搜索優化範例
+from advanced_alchemy.filters import (
+    SearchFilter,
+    BeforeAfter,
+    CollectionFilter,
+    OrderBy,
+    LimitOffset
+)
+from datetime import datetime
+
+# 方法3: 使用複雜的過濾器組合
+@router.get("/events/complex",
+            status_code=200,
+            summary="複雜多條件搜索",
+            response_model=service.OffsetPagination[DCOPEventRequest])
+async def get_events_complex(
+        dcop_event_service: Annotated[DCOPEventDicomService,
+        Depends(alchemy.provide_service(DCOPEventDicomService))],
+        filters_list: Annotated[list[filters.FilterTypes],
+        Depends(alchemy.provide_filters({
+            # 多欄位搜索
+            "search": "params_data,result_data",
+            "search_ignore_case": True,
+
+            # 日期範圍過濾器
+            "created_at": "before_after",
+
+            # 集合過濾器
+            "in_fields":[FieldNameType(name='tool_id',type_hint=str),
+                         FieldNameType(name='ope_no',type_hint=str),
+                         FieldNameType(name='study_uid',type_hint=str),
+                         FieldNameType(name='study_id',type_hint=str),
+                         FieldNameType(name='series_uid',type_hint=str),
+                         ],
+
+            # 排序配置
+            "order_by": ["study_uid", "ope_no","create_time", ],
+
+            # 分頁配置
+            "pagination_type": "limit_offset",
+            "limit": 50,
+            "offset": 0,
+
+            # ID 過濾器
+            "id_filter": OrthancID,
+        }))],
+) -> service.OffsetPagination[DCOPEventModel]:
+    """
+    複雜多條件搜索範例：
+    - 支援多種過濾器類型
+    - 可以組合使用不同的過濾條件
+
+    使用範例：
+    ?search=keyword&status=active,pending&created_at_after=2024-01-01&order_by=created_at,-study_uid&limit=10
+    """
+    print('filters_list',filters_list)
+    results, total = await dcop_event_service.list_and_count(*filters_list)
+    print('results',results)
+    print('total', total)
+    return dcop_event_service.to_schema(results, total, filters=filters_list)
