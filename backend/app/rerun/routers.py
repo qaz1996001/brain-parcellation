@@ -24,18 +24,13 @@ router = APIRouter()
             description="",
             response_description="",
             response_model=service.OffsetPagination[DCOPEventRequest])
-async def post_re_run_study_by_study_uid(request:OrthancIDRequest,
-                                         re_event_service: Annotated[ReRunStudyService,
+async def post_re_run_study_by_study_rename_id(data_list :List[str],
+                                               re_event_service: Annotated[ReRunStudyService,
                                                                       Depends(alchemy.provide_service(ReRunStudyService))],
-                                         background_tasks: BackgroundTasks) -> Response:
-    path_process_path   = pathlib.Path(os.getenv("PATH_PROCESS"))
-    path_cmd_tools_path = path_process_path.joinpath('Deep_cmd_tools')
-    path_json_path      = pathlib.Path(os.getenv("PATH_JSON"))
-    path_log_path       = pathlib.Path(os.getenv("PATH_LOG"))
-    raw_dicom_path      = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-    rename_dicom_path   = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-    rename_nifti_path   = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
-
+                                               dcop_event_service: Annotated[DCOPEventDicomService,
+                                                                      Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                               background_tasks: BackgroundTasks) -> Response:
+    background_tasks.add_task(re_event_service.re_run_by_study_rename_id, data_list,dcop_event_service)
     return Response('')
 
 
@@ -49,4 +44,5 @@ async def post_re_run_study_by_study_uid(request:OrthancIDRequest,
                                                                       Depends(alchemy.provide_service(ReRunStudyService))],
                                          background_tasks: BackgroundTasks) -> Response:
     background_tasks.add_task(re_event_service.re_run_by_study_uid, request.ids)
+
     return Response('')
