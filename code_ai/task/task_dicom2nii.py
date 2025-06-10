@@ -232,7 +232,7 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
     FILE_SIZE = 500
 
     UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
-
+    nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
     if (series_path.name in Dicm2NiixConverter.exclude_set) or (output_dicom_path is None):
         dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
                                       series_uid=task_params.series_uid,
@@ -255,7 +255,7 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
         else:
             async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
         result = async_result.result
-        nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
+
         file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
                                          post_process_manager=ConvertManager.nifti_post_process_manager))
         dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
