@@ -230,36 +230,43 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
     output_nifti_path       = task_params.output_nifti_path
     series_path             = output_dicom_path
     FILE_SIZE = 500
-    if output_dicom_path is None:
-        return
-    if series_path.name in Dicm2NiixConverter.exclude_set:
-        return
-    output_series_path = pathlib.Path(
-        f'{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}')
-    output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
-    call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
-                                                            output_series_path=output_series_path,
-                                                            series_path=series_path)
-    if output_series_file_path.exists():
-        if output_series_file_path.stat().st_size < FILE_SIZE:
-            output_series_file_path.unlink()
-        async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+
+    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+
+    if (series_path.name in Dicm2NiixConverter.exclude_set) or (output_dicom_path is None):
+        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
+                                      series_uid=task_params.series_uid,
+                                      ope_no=DCOPStatus.SERIES_CONVERSION_SKIP.value,
+                                      study_id=series_path.parent.name,
+                                      tool_id='NIFTI_TOOL',
+                                      params_data = task_params.get_str_dict(),
+                                      result_data = None)
     else:
-        async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
-    result = async_result.result
-    nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
-    file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
-                                     post_process_manager=ConvertManager.nifti_post_process_manager))
-    dcop_event = DCOPEventRequest(study_uid   = task_params.study_uid,
-                                  series_uid  = task_params.series_uid,
-                                  ope_no      = DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
-                                  study_id    = series_path.parent.name,
-                                  tool_id     = 'NIFTI_TOOL',
-                                  params_data = task_params.get_str_dict(),
-                                  result_data = {'result':result})
+        output_series_path = pathlib.Path(
+            f'{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}')
+        output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
+        call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
+                                                                output_series_path=output_series_path,
+                                                                series_path=series_path)
+        if output_series_file_path.exists():
+            if output_series_file_path.stat().st_size < FILE_SIZE:
+                output_series_file_path.unlink()
+            async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+        else:
+            async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+        result = async_result.result
+        nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
+        file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
+                                         post_process_manager=ConvertManager.nifti_post_process_manager))
+        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
+                                      series_uid=task_params.series_uid,
+                                      ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
+                                      study_id=series_path.parent.name,
+                                      tool_id='NIFTI_TOOL',
+                                      params_data=task_params.get_str_dict(),
+                                      result_data={'result':result})
 
     dcop_event_list_json = json.dumps([dcop_event.model_dump()])
-    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     with httpx.Client(timeout=300) as clinet:
         clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
                     data=dcop_event_list_json)
