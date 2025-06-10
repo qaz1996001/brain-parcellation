@@ -21,25 +21,30 @@ CREATE TABLE dcop_event_bt (
 -- 歷史表結構相同
 CREATE TABLE dcop_event_bth AS TABLE dcop_event_bt WITH NO DATA;
 
-CREATE TABLE dcop_collect_bt (
-    VsPrimaryKey VARCHAR(128) NOT NULL,
-    tool_id      VARCHAR(32),
-    study_uid    VARCHAR(128) NOT NULL,
-    series_uid   VARCHAR(128),
-    patient_id   VARCHAR(64),
-    modality     VARCHAR(16),
-    status       VARCHAR(32),
-    ope_no       VARCHAR(7) NOT NULL,
-    ope_name     VARCHAR(36),
-    file_path    VARCHAR(256),
-    claim_time   TIMESTAMP,
-    rec_time     TIMESTAMP,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (VsPrimaryKey)
-);
--- 歷史表結構相同
-CREATE TABLE dcop_collect_bth AS TABLE dcop_collect_bt WITH NO DATA;
+-- CREATE TABLE dcop_collect_bt (
+--     VsPrimaryKey VARCHAR(128) NOT NULL,
+--     tool_id      VARCHAR(32),
+--     study_uid    VARCHAR(128) NOT NULL,
+--     series_uid   VARCHAR(128),
+--     patient_id   VARCHAR(64),
+--     modality     VARCHAR(16),
+--     status       VARCHAR(32),
+--     ope_no       VARCHAR(7) NOT NULL,
+--     ope_name     VARCHAR(36),
+--     file_path    VARCHAR(256),
+--     claim_time   TIMESTAMP,
+--     rec_time     TIMESTAMP,
+--     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     PRIMARY KEY (VsPrimaryKey)
+-- );
+-- dcop_collect_bt 索引
+-- CREATE INDEX idx_collect_bt_study_uid ON dcop_collect_bt(study_uid);
+-- CREATE INDEX idx_collect_bt_series_uid ON dcop_collect_bt(series_uid);
+-- CREATE INDEX idx_collect_bt_create_time ON dcop_collect_bt(create_time);
+-- CREATE INDEX idx_collect_bt_ope_no ON dcop_collect_bt(ope_no);
+-- -- 歷史表結構相同
+-- CREATE TABLE dcop_collect_bth AS TABLE dcop_collect_bt WITH NO DATA;
 
 create table dcop_conf_bt
 (
@@ -80,7 +85,12 @@ values  ('DICOM_TOOL', '100.020', '檢測到新的study', 'STUDY_NEW', null, 1, 
         ('INFERENCE_TOOL', '300.155', 'series推論執行中', 'SERIES_INFERENCE_RUNNING', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
         ('INFERENCE_TOOL', '300.295', 'series推論完成', 'SERIES_INFERENCE_COMPLETE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
         ('INFERENCE_TOOL', '300.300', 'study推論完成', 'STUDY_INFERENCE_COMPLETE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
-        ('UPLOAD_TOOL', '500.500', 'study結果已發送', 'STUDY_RESULTS_SENT', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828');
+        ('UPLOAD_TOOL', '500.500', 'study結果已發送', 'STUDY_RESULTS_SENT', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
+        ('DICOM_TOOL', '100.021', '重新的執行study', 'STUDY_NEW_RE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
+        ('DICOM_TOOL', '100.051', 'study重新傳輸DICOM中', 'STUDY_TRANSFERRING_RE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
+        ('DICOM_TOOL', '200.151', 'study重新轉換NIFTI', 'STUDY_CONVERTING_RE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828'),
+        ('DICOM_TOOL', '300.151', 'study重新推論執行中', 'STUDY_INFERENCE_RUNNING_RE', null, 1, null, '2025-05-29 12:49:40.626828', '2025-05-29 12:49:40.626828');
+
 
 -- dcop_event_bt 索引
 CREATE INDEX idx_event_bt_study_uid ON dcop_event_bt(study_uid);
@@ -88,11 +98,6 @@ CREATE INDEX idx_event_bt_series_uid ON dcop_event_bt(series_uid);
 CREATE INDEX idx_event_bt_create_time ON dcop_event_bt(create_time);
 CREATE INDEX idx_event_bt_ope_no ON dcop_event_bt(ope_no);
 
--- dcop_collect_bt 索引
-CREATE INDEX idx_collect_bt_study_uid ON dcop_collect_bt(study_uid);
-CREATE INDEX idx_collect_bt_series_uid ON dcop_collect_bt(series_uid);
-CREATE INDEX idx_collect_bt_create_time ON dcop_collect_bt(create_time);
-CREATE INDEX idx_collect_bt_ope_no ON dcop_collect_bt(ope_no);
 
 -- dcop_conf_bt 索引
 
@@ -110,13 +115,13 @@ END;
 $$ language 'plpgsql';
 
 
-CREATE TRIGGER trigger_update_update_time_on_dcop_collect_bt
-AFTER INSERT ON dcop_collect_bt
-EXECUTE FUNCTION update_update_time_on_user_task();
-
-CREATE TRIGGER trigger_update_update_time_on_dcop_collect_bth
-AFTER INSERT ON dcop_collect_bth
-EXECUTE FUNCTION update_update_time_on_user_task();
+-- CREATE TRIGGER trigger_update_update_time_on_dcop_collect_bt
+-- AFTER INSERT ON dcop_collect_bt
+-- EXECUTE FUNCTION update_update_time_on_user_task();
+--
+-- CREATE TRIGGER trigger_update_update_time_on_dcop_collect_bth
+-- AFTER INSERT ON dcop_collect_bth
+-- EXECUTE FUNCTION update_update_time_on_user_task();
 
 
 CREATE TRIGGER trigger_update_update_time_on_dcop_event_bt
