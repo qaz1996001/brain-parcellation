@@ -44,7 +44,7 @@ class PipelineConfig:
     def __init__(self, script_name, data_key):
         self.script_name = script_name
         self.data_key = data_key
-
+    #
     def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
         input_path_list = [str(x) for x in task.input_path_list]
         output_path = os.path.dirname(task.output_path)
@@ -52,6 +52,10 @@ class PipelineConfig:
         chuan_root  = PATH_ROOT.parent.joinpath('chuan')
         # PATH_ROOT = / mnt / e / pipeline / sean
         if self.data_key == 'Aneurysm':
+            # pipeline_aneurysm_tensorflow.py [-h] [--ID ID]
+#                                        [--Inputs INPUTS [INPUTS ...]]
+#                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
+#                                        [--Output_folder OUTPUT_FOLDE
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_root)}  && '
                         f'{self.python3} code/{self.script_name} '
@@ -64,7 +68,7 @@ class PipelineConfig:
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {output_path} '
-                        f'--InputsDicomDir {input_dicom_dir} '
+                        f'--DicomDir {input_dicom_dir} '
                         )
         else:
             if input_dicom_dir is None:
