@@ -42,7 +42,9 @@ async def post_re_run_study_by_study_rename_id(data_list :List[str],
 async def post_re_run_study_by_study_uid(request:OrthancIDRequest,
                                          re_event_service: Annotated[ReRunStudyService,
                                                                       Depends(alchemy.provide_service(ReRunStudyService))],
+                                         dcop_event_service: Annotated[DCOPEventDicomService,
+                                                                          Depends(alchemy.provide_service(DCOPEventDicomService))],
                                          background_tasks: BackgroundTasks) -> Response:
-    background_tasks.add_task(re_event_service.re_run_by_study_uid, request.ids)
+    background_tasks.add_task(re_event_service.re_run_by_study_uid, request.ids,dcop_event_service)
 
     return Response('')
