@@ -48,20 +48,39 @@ class PipelineConfig:
     def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
         input_path_list = [str(x) for x in task.input_path_list]
         output_path = os.path.dirname(task.output_path)
-        if input_dicom_dir is None:
-            return (f'export PYTHONPATH={self.base_path} && '
-                    f'{self.python3} code_ai/pipeline/{self.script_name} '
-                    f'--ID {study_id} '
-                    f'--Inputs {" ".join(input_path_list)} '
-                    f'--Output_folder {output_path} ')
+        PATH_ROOT   = pathlib.Path(os.getenv('PATH_ROOT'))
+        chuan_root  = PATH_ROOT.parent.joinpath('chuan')
+        # PATH_ROOT = / mnt / e / pipeline / sean
+        if self.data_key == 'Aneurysm':
+            if input_dicom_dir is None:
+                return (f'cd {str(chuan_root)}  && '
+                        f'{self.python3} code/{self.script_name} '
+                        f'--ID {study_id} '
+                        f'--Inputs {" ".join(input_path_list)} '
+                        f'--Output_folder {output_path} ')
+            else:
+                return (f'cd {str(chuan_root)}  && '
+                        f'{self.python3} code/{self.script_name} '
+                        f'--ID {study_id} '
+                        f'--Inputs {" ".join(input_path_list)} '
+                        f'--Output_folder {output_path} '
+                        f'--InputsDicomDir {input_dicom_dir} '
+                        )
         else:
-            return (f'export PYTHONPATH={self.base_path} && '
-                    f'{self.python3} code_ai/pipeline/{self.script_name} '
-                    f'--ID {study_id} '
-                    f'--Inputs {" ".join(input_path_list)} '
-                    f'--Output_folder {output_path} '
-                    f'--InputsDicomDir {input_dicom_dir} '
-                    )
+            if input_dicom_dir is None:
+                return (f'export PYTHONPATH={self.base_path} && '
+                        f'{self.python3} code_ai/pipeline/{self.script_name} '
+                        f'--ID {study_id} '
+                        f'--Inputs {" ".join(input_path_list)} '
+                        f'--Output_folder {output_path} ')
+            else:
+                return (f'export PYTHONPATH={self.base_path} && '
+                        f'{self.python3} code_ai/pipeline/{self.script_name} '
+                        f'--ID {study_id} '
+                        f'--Inputs {" ".join(input_path_list)} '
+                        f'--Output_folder {output_path} '
+                        f'--InputsDicomDir {input_dicom_dir} '
+                        )
 
 
 pipelines = {
