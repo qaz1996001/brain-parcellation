@@ -6,13 +6,14 @@ import subprocess
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
 
+import httpx
 import nb_log
 
 from funboost import BoosterParams, ConcurrentModeEnum, BrokerEnum, Booster, BrokerConnConfig
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import pydicom
-
+from code_ai.task.schema.intput_params import Dicom2NiiParams
 from code_ai.utils.database import get_sqla_helper
 from code_ai.utils.model import RawDicomToNiiInference
 
@@ -22,7 +23,7 @@ logger = nb_log.LogManager('add_raw_dicom_to_nii_inference').get_logger_and_add_
 )
 
 
-def get_env_paths() -> tuple:
+def get_env_paths() -> Tuple[pathlib.Path,pathlib.Path,pathlib.Path]:
     """獲取環境變數中的路徑設置"""
     from code_ai import load_dotenv
     load_dotenv()
@@ -80,12 +81,22 @@ def add_task_record(session: Session, name: str, sub_dir: Optional[str],
         raise
 
 
+def post_study(study_uid_list : List[str]):
+    from backend.app.sync import urls
+    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+    url = '{}{}'.format(UPLOAD_DATA_API_URL,urls.SYNC_PROT_STUDY)
+    data = {"ids": study_uid_list}
+    print(data)
+    with httpx.Client(timeout=300) as clinet:
+        rep = clinet.post(url=url, json = data)
+        print(rep)
+
+
 def process_dicom_to_nii_task(session: Session, input_dicom_path: pathlib.Path,
                               output_dicom_path: pathlib.Path,
-                              output_nifti_path: pathlib.Path) -> Optional[str]:
+                              output_nifti_path: pathlib.Path) -> Optional[Dicom2NiiParams]:
     """處理單個DICOM到NII的轉換任務"""
-    from code_ai.task.task_dicom2nii import dicom_to_nii
-    from code_ai.task.schema.intput_params import Dicom2NiiParams
+
 
     task_params = Dicom2NiiParams(
         sub_dir=input_dicom_path,
@@ -107,7 +118,7 @@ def process_dicom_to_nii_task(session: Session, input_dicom_path: pathlib.Path,
     # 發送任務
     try:
         logger.info(f"提交DICOM轉NII任務: {input_dicom_path}")
-        task = dicom_to_nii.push(task_params.get_str_dict())
+        # task = dicom_to_nii.push(task_params.get_str_dict())
 
         # 添加任務記錄
         add_task_record(
@@ -117,7 +128,7 @@ def process_dicom_to_nii_task(session: Session, input_dicom_path: pathlib.Path,
             output_dicom_path=str(task_params.output_dicom_path),
             output_nifti_path=str(task_params.output_nifti_path)
         )
-        return task
+        return task_params
     except Exception as e:
         logger.error(f"處理DICOM轉NII任務出錯: {str(e)}")
         return None
@@ -633,6 +644,194 @@ def process_pipeline_tasks(session: Session, tasks_file_path: str) -> Dict[str, 
     return stats
 
 
+# @Booster(BoosterParams(
+#     queue_name='add_raw_dicom_to_nii_inference_queue',
+#     broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
+#     concurrent_mode=ConcurrentModeEnum.SOLO,
+#     qps=1,
+#     log_level=20,  # INFO level
+#     is_print_detail_exception=True
+# ))
+# def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dict[str, Any]:
+#     """
+#     主函數: 定時檢查並處理DICOM到NII的轉換和推理任務
+#
+#     Args:
+#         tasks_file_path: 可選的任務配置文件路徑，用於檢查和重新運行特定任務
+#
+#     Returns:
+#         Dict[str, Any]: 處理結果統計
+#     """
+#     start_time = time.time()
+#     logger.info("開始執行DICOM到NII轉換和推理任務檢查")
+#
+#     try:
+#         # 獲取環境路徑
+#         input_dicom, output_dicom_path, output_nifti_path = get_env_paths()
+#
+#         # 檢查並創建必要的目錄
+#         check_and_create_directories([output_dicom_path, output_nifti_path])
+#
+#         # 獲取資料庫連接
+#         enginex, sqla_helper = get_sqla_helper()
+#         session: Session = sqla_helper.session
+#
+#         # 如果提供了任務配置文件，處理特定任務
+#         if tasks_file_path:
+#             logger.info(f"使用任務配置文件: {tasks_file_path}")
+#             pipeline_stats = process_pipeline_tasks(session, tasks_file_path)
+#
+#             elapsed_time = time.time() - start_time
+#             result = {
+#                 "status": "success",
+#                 "pipeline_stats": pipeline_stats,
+#                 "elapsed_time": elapsed_time
+#             }
+#
+#             logger.info(f"完成特定任務處理，總耗時: {elapsed_time:.2f}秒")
+#             return result
+#
+#         # 正常的DICOM到NII轉換處理
+#         # 找出所有輸入目錄
+#         input_dicom_list = []
+#         if input_dicom.exists():
+#             folders = sorted(input_dicom.iterdir())
+#             input_dicom_list = [f for f in folders if f.is_dir()]
+#
+#         # 如果沒有子目錄，使用主目錄
+#         if len(input_dicom_list) == 0:
+#             input_dicom_list = [input_dicom]
+#
+#         logger.info(f"發現 {len(input_dicom_list)} 個DICOM目錄待處理")
+#
+#         # 處理所有DICOM到NII的轉換任務 - 批次處理版本
+#         processed_tasks = []
+#         # 先收集所有需要處理的任務
+#         for input_dicom_path in input_dicom_list:
+#             try:
+#                 task = process_dicom_to_nii_task(
+#                     session, input_dicom_path, output_dicom_path, output_nifti_path
+#                 )
+#                 if task:
+#                     processed_tasks.append(task)
+#             except Exception as e:
+#                 logger.error(f"處理DICOM目錄出錯 {input_dicom_path}: {str(e)}")
+#
+#         # 為所有任務設置超時
+#         for task in processed_tasks:
+#             task.set_timeout(600)  # 10分鐘超時
+#
+#         # 批次等待所有任務完成
+#         logger.info(f"已提交 {len(processed_tasks)} 個DICOM到NII轉換任務，等待所有任務完成...")
+#         processed_results = []
+#         if processed_tasks:
+#             for task in processed_tasks:
+#                 result = task.result
+#                 processed_results.append(result)
+#                 logger.debug(f"DICOM轉NII任務完成: {result}")
+#             logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
+#         else:
+#             logger.info("沒有新的DICOM到NII轉換任務需要處理")
+#
+#         # 處理NII推理任務 - 批次處理版本
+#         inference_tasks = []
+#
+#         # 首先處理新轉換的NII文件
+#         if processed_results:
+#             for result_path in processed_results:
+#                 nifti_study_path = output_nifti_path.joinpath(os.path.basename(result_path))
+#                 dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
+#
+#                 # 檢查任務是否重複
+#                 nifti_path_str = str(nifti_study_path)
+#                 dicom_path_str = str(dicom_study_path)
+#
+#                 filter_args = {
+#                     "sub_dir": None,
+#                     "output_dicom_path": dicom_path_str,
+#                     "output_nifti_path": nifti_path_str
+#                 }
+#
+#                 if not is_task_exists(session, **filter_args):
+#                     # 收集推理任務但暫不發送
+#                     inference_tasks.append((nifti_study_path, dicom_study_path))
+#
+#         # 然後檢查現有的NII目錄中是否有未處理的文件
+#         elif output_nifti_path.exists():
+#             existing_nii_paths = sorted(output_nifti_path.iterdir())
+#             logger.info(f"檢查 {len(existing_nii_paths)} 個現有NII文件")
+#
+#             for nifti_study_path in existing_nii_paths:
+#                 if not nifti_study_path.is_dir():
+#                     continue
+#
+#                 dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
+#
+#                 # 檢查任務是否重複
+#                 nifti_path_str = str(nifti_study_path)
+#                 dicom_path_str = str(dicom_study_path)
+#
+#                 filter_args = {
+#                     "sub_dir": None,
+#                     "output_dicom_path": dicom_path_str,
+#                     "output_nifti_path": nifti_path_str
+#                 }
+#
+#                 if not is_task_exists(session, **filter_args):
+#                     # 收集推理任務但暫不發送
+#                     inference_tasks.append((nifti_study_path, dicom_study_path))
+#
+#         # 批次提交所有推理任務
+#         logger.info(f"準備批次提交 {len(inference_tasks)} 個NII推理任務")
+#         inference_count = 0
+#         from code_ai.task.task_pipeline import task_pipeline_inference
+#
+#         for nifti_path, dicom_path in inference_tasks:
+#             try:
+#                 nifti_path_str = str(nifti_path)
+#                 dicom_path_str = str(dicom_path)
+#
+#                 logger.info(f"提交NII推理任務: {nifti_path}")
+#                 task_data = {
+#                     'nifti_study_path': nifti_path_str,
+#                     'dicom_study_path': dicom_path_str,
+#                 }
+#                 task_pipeline_inference.push(task_data)
+#
+#                 # 添加任務記錄
+#                 add_task_record(
+#                     session=session,
+#                     name='task_pipeline_inference_queue',
+#                     sub_dir=None,
+#                     output_dicom_path=dicom_path_str,
+#                     output_nifti_path=nifti_path_str
+#                 )
+#                 inference_count += 1
+#             except Exception as e:
+#                 logger.error(f"提交NII推理任務出錯: {str(e)}")
+#
+#         # 任務已全部提交，等待處理完成（這裡不需要等待結果，因為推理任務是異步的）
+#         logger.info(f"已批次提交 {inference_count} 個NII推理任務")
+#
+#         elapsed_time = time.time() - start_time
+#         logger.info(f"完成 {inference_count} 個NII推理任務提交，總耗時: {elapsed_time:.2f}秒")
+#
+#         return {
+#             "status": "success",
+#             "dicom_to_nii_count": len(processed_results),
+#             "inference_count": inference_count,
+#             "elapsed_time": elapsed_time
+#         }
+#
+#     except Exception as e:
+#         logger.error(f"執行檢查任務失敗: {str(e)}", exc_info=True)
+#         return {
+#             "status": "error",
+#             "error": str(e),
+#             "elapsed_time": time.time() - start_time
+#         }
+
+
 @Booster(BoosterParams(
     queue_name='add_raw_dicom_to_nii_inference_queue',
     broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
@@ -698,117 +897,35 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
         # 先收集所有需要處理的任務
         for input_dicom_path in input_dicom_list:
             try:
-                task = process_dicom_to_nii_task(
+                task_params = process_dicom_to_nii_task(
                     session, input_dicom_path, output_dicom_path, output_nifti_path
                 )
-                if task:
-                    processed_tasks.append(task)
+                if task_params:
+                    processed_tasks.append(task_params)
             except Exception as e:
                 logger.error(f"處理DICOM目錄出錯 {input_dicom_path}: {str(e)}")
 
-        # 為所有任務設置超時
-        for task in processed_tasks:
-            task.set_timeout(600)  # 10分鐘超時
 
+        study_dir_name_list = list(map(lambda x:os.path.basename(x.sub_dir), processed_tasks))
+        print(study_dir_name_list)
+        post_study(study_dir_name_list)
         # 批次等待所有任務完成
         logger.info(f"已提交 {len(processed_tasks)} 個DICOM到NII轉換任務，等待所有任務完成...")
-        processed_results = []
-        if processed_tasks:
-            for task in processed_tasks:
-                result = task.result
-                processed_results.append(result)
-                logger.debug(f"DICOM轉NII任務完成: {result}")
-            logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
-        else:
-            logger.info("沒有新的DICOM到NII轉換任務需要處理")
-
-        # 處理NII推理任務 - 批次處理版本
-        inference_tasks = []
-
-        # 首先處理新轉換的NII文件
-        if processed_results:
-            for result_path in processed_results:
-                nifti_study_path = output_nifti_path.joinpath(os.path.basename(result_path))
-                dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
-
-                # 檢查任務是否重複
-                nifti_path_str = str(nifti_study_path)
-                dicom_path_str = str(dicom_study_path)
-
-                filter_args = {
-                    "sub_dir": None,
-                    "output_dicom_path": dicom_path_str,
-                    "output_nifti_path": nifti_path_str
-                }
-
-                if not is_task_exists(session, **filter_args):
-                    # 收集推理任務但暫不發送
-                    inference_tasks.append((nifti_study_path, dicom_study_path))
-
-        # 然後檢查現有的NII目錄中是否有未處理的文件
-        elif output_nifti_path.exists():
-            existing_nii_paths = sorted(output_nifti_path.iterdir())
-            logger.info(f"檢查 {len(existing_nii_paths)} 個現有NII文件")
-
-            for nifti_study_path in existing_nii_paths:
-                if not nifti_study_path.is_dir():
-                    continue
-
-                dicom_study_path = output_dicom_path.joinpath(nifti_study_path.name)
-
-                # 檢查任務是否重複
-                nifti_path_str = str(nifti_study_path)
-                dicom_path_str = str(dicom_study_path)
-
-                filter_args = {
-                    "sub_dir": None,
-                    "output_dicom_path": dicom_path_str,
-                    "output_nifti_path": nifti_path_str
-                }
-
-                if not is_task_exists(session, **filter_args):
-                    # 收集推理任務但暫不發送
-                    inference_tasks.append((nifti_study_path, dicom_study_path))
-
-        # 批次提交所有推理任務
-        logger.info(f"準備批次提交 {len(inference_tasks)} 個NII推理任務")
-        inference_count = 0
-        from code_ai.task.task_pipeline import task_pipeline_inference
-
-        for nifti_path, dicom_path in inference_tasks:
-            try:
-                nifti_path_str = str(nifti_path)
-                dicom_path_str = str(dicom_path)
-
-                logger.info(f"提交NII推理任務: {nifti_path}")
-                task_data = {
-                    'nifti_study_path': nifti_path_str,
-                    'dicom_study_path': dicom_path_str,
-                }
-                task_pipeline_inference.push(task_data)
-
-                # 添加任務記錄
-                add_task_record(
-                    session=session,
-                    name='task_pipeline_inference_queue',
-                    sub_dir=None,
-                    output_dicom_path=dicom_path_str,
-                    output_nifti_path=nifti_path_str
-                )
-                inference_count += 1
-            except Exception as e:
-                logger.error(f"提交NII推理任務出錯: {str(e)}")
-
-        # 任務已全部提交，等待處理完成（這裡不需要等待結果，因為推理任務是異步的）
-        logger.info(f"已批次提交 {inference_count} 個NII推理任務")
+        # processed_results = []
+        # if processed_tasks:
+        #     for task in processed_tasks:
+        #         result = task.result
+        #         processed_results.append(result)
+        #         logger.debug(f"DICOM轉NII任務完成: {result}")
+        #     logger.info(f"完成 {len(processed_results)} 個DICOM到NII轉換任務")
+        # else:
+        #     logger.info("沒有新的DICOM到NII轉換任務需要處理")
 
         elapsed_time = time.time() - start_time
-        logger.info(f"完成 {inference_count} 個NII推理任務提交，總耗時: {elapsed_time:.2f}秒")
 
         return {
             "status": "success",
-            "dicom_to_nii_count": len(processed_results),
-            "inference_count": inference_count,
+            "dicom_to_nii_count": len(input_dicom_list),
             "elapsed_time": elapsed_time
         }
 
@@ -819,6 +936,7 @@ def add_raw_dicom_to_nii_inference(tasks_file_path: Optional[str] = None) -> Dic
             "error": str(e),
             "elapsed_time": time.time() - start_time
         }
+
 
 
 if __name__ == '__main__':
