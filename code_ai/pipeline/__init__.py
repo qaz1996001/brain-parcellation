@@ -50,6 +50,7 @@ class PipelineConfig:
         output_path = os.path.dirname(task.output_path)
         PATH_ROOT   = pathlib.Path(os.getenv('PATH_ROOT'))
         chuan_root  = PATH_ROOT.parent.joinpath('chuan')
+        chuan_code = chuan_root.joinpath('code')
         # PATH_ROOT = / mnt / e / pipeline / sean
         if self.data_key == 'Aneurysm':
             # pipeline_aneurysm_tensorflow.py [-h] [--ID ID]
@@ -57,8 +58,8 @@ class PipelineConfig:
 #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
 #                                        [--Output_folder OUTPUT_FOLDE
             if input_dicom_dir is None:
-                return (f'cd {str(chuan_root)}  && '
-                        f'{self.python3} code/{self.script_name} '
+                return (f'cd {str(chuan_code)}  && '
+                        f'{self.python3} {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {output_path} ')
