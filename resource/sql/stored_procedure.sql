@@ -100,3 +100,45 @@ END;
 $$;
 
 alter function get_stydy_ope_no_status(varchar) owner to postgres_n;
+
+CREATE OR REPLACE FUNCTION get_all_studies_status()
+RETURNS TABLE (
+    json_data JSON
+) AS $$
+BEGIN
+    RETURN QUERY
+    WITH series_analysis AS (
+  SELECT
+    study_uid,
+    study_id,
+    -- 使用聚合函數處理 result_data
+    json_agg(result_data) as result,
+    COUNT(DISTINCT series_uid) as total_series,
+    COUNT(DISTINCT CASE WHEN ope_no = '100.095' THEN series_uid END) as completed_series,
+    array_agg(DISTINCT series_uid) as all_series_array,
+    array_agg(DISTINCT series_uid) FILTER (WHERE ope_no = '100.095') as completed_series_array
+  FROM dcop_event_bt
+  WHERE tool_id = 'DICOM_TOOL'
+    AND result_data is not null
+--     AND study_id IS NOT NULL
+    AND ope_no::FLOAT < 100.100
+  GROUP BY study_uid, study_id
+)
+SELECT
+    json_build_object(
+        'study_uid',study_uid,
+        'study_id',study_id,
+        'result',result,
+        'total_series', total_series,
+        'completed_series', completed_series,
+        'completed_series_array', COALESCE(completed_series_array, ARRAY[]::text[]),
+        'uncompleted_series_array',
+        CASE
+            WHEN completed_series_array IS NULL THEN all_series_array
+            ELSE (SELECT array_agg(uid) FROM unnest(all_series_array) AS uid
+                                        WHERE uid != ALL(completed_series_array))
+            END
+    ) as json_data
+from series_analysis;
+END;
+$$ LANGUAGE plpgsql;
