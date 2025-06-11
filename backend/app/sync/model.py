@@ -150,41 +150,41 @@ class DCOPEventModel(base.DefaultBase):
         )
 
         # 執行查詢
-        result = await session.execute(conf_query)
-        conf_result = result.first()
-        # await db.execute(query)
-        # 如果沒有找到對應的配置
-        if conf_result is None:
-            raise ValueError(f"No configuration found for tool_id: {tool_id}, ope_no: {ope_no}")
-        status, ope_name = conf_result
+        async with session:
+            result = await session.execute(conf_query)
+            conf_result = result.first()
+            # await db.execute(query)
+            # 如果沒有找到對應的配置
+            if conf_result is None:
+                raise ValueError(f"No configuration found for tool_id: {tool_id}, ope_no: {ope_no}")
+            status, ope_name = conf_result
 
-        if series_uid is not None:
-            obj = cls(
-                VsPrimaryKey=f"{tool_id}_{status}_{series_uid}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                tool_id=tool_id,
-                study_uid=study_uid,
-                series_uid=series_uid,
-                code_name=status,
-                ope_no=ope_no,
-                ope_name=ope_name,
-                study_id = study_id,
-                result_data=result_data,
-                params_data=params_data,
-                claim_time=datetime.utcnow(),
-                rec_time=datetime.utcnow())
-        else:
-            obj = cls(
-                VsPrimaryKey=f"{tool_id}_{status}_{study_uid}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
-                tool_id=tool_id,
-                study_uid=study_uid,
-                series_uid=series_uid,
-                code_name=status,
-                ope_no=ope_no,
-                ope_name=ope_name,
-                study_id=study_id,
-                result_data=result_data,
-                params_data=params_data,
-                claim_time=datetime.utcnow(),
-                rec_time=datetime.utcnow())
-
+            if series_uid is not None:
+                obj = cls(
+                    VsPrimaryKey=f"{tool_id}_{status}_{series_uid}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    tool_id=tool_id,
+                    study_uid=study_uid,
+                    series_uid=series_uid,
+                    code_name=status,
+                    ope_no=ope_no,
+                    ope_name=ope_name,
+                    study_id = study_id,
+                    result_data=result_data,
+                    params_data=params_data,
+                    claim_time=datetime.utcnow(),
+                    rec_time=datetime.utcnow())
+            else:
+                obj = cls(
+                    VsPrimaryKey=f"{tool_id}_{status}_{study_uid}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    tool_id=tool_id,
+                    study_uid=study_uid,
+                    series_uid=series_uid,
+                    code_name=status,
+                    ope_no=ope_no,
+                    ope_name=ope_name,
+                    study_id=study_id,
+                    result_data=result_data,
+                    params_data=params_data,
+                    claim_time=datetime.utcnow(),
+                    rec_time=datetime.utcnow())
         return obj
