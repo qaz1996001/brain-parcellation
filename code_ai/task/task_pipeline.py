@@ -33,11 +33,13 @@ def _send_events(api_url: str, event_data: List[dict]) -> None:
         event_data_json = json.dumps(event_data)
         rep = client.post(url=url, timeout=180, data=event_data_json)
 
+
 @Booster(BoosterParamsMyAI(queue_name ='task_pipeline_inference_queue',
                            user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
                            qps=1,
                            ))
 def task_pipeline_inference(func_params  : Dict[str,any]):
+    from code_ai.task.task_dicom2nii import call_post_httpx
     upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
     path_process   = os.getenv("PATH_PROCESS")
     path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
@@ -74,8 +76,9 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                                    'func_params': func_params,
                                                    'task': fct.function_result_status.get_status_dict()
                                                    })
-
-        _send_events(api_url,[dcop_event.model_dump()])
+        call_post_httpx.push({'url':api_url,
+                              'data': dcop_event.model_dump_json(),
+                              })
     else:
         pass
 
@@ -98,8 +101,9 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                                    },
                                       result_data = {'result':result,
                                                 })
-
-        _send_events(api_url,[dcop_event.model_dump()])
+        call_post_httpx.push({'url': api_url,
+                              'data': dcop_event.model_dump_json(),
+                              })
     return result
 
 

@@ -8,6 +8,7 @@ import subprocess
 from typing import List, Dict
 
 import httpx
+import orjson
 from funboost import BrokerEnum, Booster
 from pydicom import dcmread
 
@@ -125,6 +126,20 @@ def file_processing(func_params: Dict[str, any]):
     if study_folder_path is None:
         return
     post_process_manager.post_process(study_folder_path)
+
+
+@Booster(BoosterParamsMyRABBITMQ(queue_name='post_httpx_queue',
+                                 qps=5, ))
+def call_post_httpx(func_params: Dict[str, any]):
+    url         = func_params['url']
+    data        = func_params['data']
+    with httpx.Client(timeout=300) as clinet:
+        if isinstance(data,list):
+            dcop_event_list = [ DCOPEventRequest.model_validate_json(temp).model_dump() for temp in data]
+            rep = clinet.post(url=url,json=dcop_event_list)
+        else:
+            dcop_event = DCOPEventRequest.model_validate_json(data).model_dump()
+            rep = clinet.post(url=url, json=[dcop_event])
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
@@ -266,11 +281,10 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
                                       params_data=task_params.get_str_dict(),
                                       result_data={'result':result})
 
-    dcop_event_list_json = json.dumps([dcop_event.model_dump()])
-    with httpx.Client(timeout=300) as clinet:
-        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
-                    data=dcop_event_list_json)
-
+    dcop_event_list_json = dcop_event.model_dump_json()
+    call_post_httpx.push({'url' :"{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+                          'data':dcop_event_list_json
+                          })
     return nifti_study_folder_path
 
 
@@ -364,12 +378,14 @@ def process_dir(func_params: Dict[str, any]):
                                           result_data = {f'raw_dicom_path':os.path.dirname(result_dict[0]),
                                                          f'rename_dicom_path':os.path.dirname( result_dict[1]),}
                                           )
-            dcop_event_list.append(dcop_event.model_dump())
-    dcop_event_list_json = json.dumps(dcop_event_list)
-    print('dcop_event_list',dcop_event_list_json)
-    with httpx.Client(timeout=300) as clinet:
-        clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
-                    data=dcop_event_list_json)
+            dcop_event_list.append(dcop_event.model_dump_json())
+    call_post_httpx.push({'url' :"{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+                          'data':dcop_event_list
+                          })
+    # print('dcop_event_list',dcop_event_list_json)
+    # with httpx.Client(timeout=300) as clinet:
+    #     clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+    #                 data=dcop_event_list_json)
 
     return dicom_study_folder_path
 
