@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest,DCOPEventNIFTITOOLRequest
-from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE,SYNC_PROT_STUDY_TRANSFER_COMPLETE
+from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,SYNC_PROT_STUDY_TRANSFER_COMPLETE
 
 
 class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]):
@@ -47,11 +47,11 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
             case DCOPStatus.STUDY_TRANSFER_COMPLETE.value:
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.STUDY_CONVERSION_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE}"
+                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE}"
+                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case _ :
                 url = None
         return url
@@ -330,7 +330,7 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
 
 
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE}"
+        url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
         async with httpx.AsyncClient(timeout=180) as client:
             await client.post(url=url)
 
