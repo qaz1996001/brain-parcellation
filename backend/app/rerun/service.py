@@ -91,17 +91,18 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
                                              field_value=study_uid)
         try:
 
-            async with AsyncSession(self.repository.session.bind) as session:
-                async with session.begin():
-                    new_data_re, data_transferring_re, task_params = await self.get_study_new_re_model(
-                        study_uid=study_uid, session=session)
-                    session.add_all([new_data_re, data_transferring_re])
-                    await session.commit()
-                    await session.flush(new_data_re)
-                    await session.flush(data_transferring_re)
-                    await dcop_event_service.dicom_tool_get_series_info([new_data_re])
-                    task = dicom_to_nii.push(task_params.get_str_dict())
-                    print(task)
+            # async with AsyncSession(self.repository.session.bind) as session:
+            async with self.repository.session as session:
+                new_data_re, data_transferring_re, task_params = await self.get_study_new_re_model(
+                    study_uid=study_uid, session=session)
+                session.add_all([new_data_re, data_transferring_re])
+                await session.commit()
+                await session.refresh(new_data_re)
+                await session.refresh(data_transferring_re)
+                print('new_data_re',new_data_re)
+                await dcop_event_service.dicom_tool_get_series_info([new_data_re])
+                task = dicom_to_nii.push(task_params.get_str_dict())
+                print(task)
             flage = True
         except:
             traceback.print_exc()
