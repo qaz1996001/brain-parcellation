@@ -182,23 +182,31 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
         result_list = []
 
         for ids in data_list:
-            study_uid_raw_dicom_path = raw_dicom_path.joinpath(ids)
-            new_data = await DCOPEventModel.create_event(study_uid=ids,
-                                                         series_uid=None,
-                                                         status=DCOPStatus.STUDY_NEW.name,
-                                                         session=self.repository.session, )
-            new_data_obj = await self.create(data=new_data)
-            task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
-                                          output_dicom_path=rename_dicom_path,
-                                          output_nifti_path=rename_nifti_path, )
-            data_transferring = await DCOPEventModel.create_event(study_uid=ids,
-                                                                  series_uid=None,
-                                                                  status=DCOPStatus.STUDY_TRANSFERRING.name,
-                                                                  session=self.repository.session, )
-            data_transferring.params_data = task_params.get_str_dict()
+            existing = await self.repository.session.execute(
+                select(DCOPEventModel).where(
+                    DCOPEventModel.study_uid == ids,
+            ))
+            existing_record = existing.scalars().first()
 
-            obj = await self.create_many(data=[new_data_obj,data_transferring],auto_commit=True)
-            result_list.append(new_data_obj)
+            # 如果记录不存在，则创建新记录
+            if not existing_record:
+                study_uid_raw_dicom_path = raw_dicom_path.joinpath(ids)
+                new_data = await DCOPEventModel.create_event(study_uid=ids,
+                                                             series_uid=None,
+                                                             status=DCOPStatus.STUDY_NEW.name,
+                                                             session=self.repository.session, )
+                new_data_obj = await self.create(data=new_data)
+                task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
+                                              output_dicom_path=rename_dicom_path,
+                                              output_nifti_path=rename_nifti_path, )
+                data_transferring = await DCOPEventModel.create_event(study_uid=ids,
+                                                                      series_uid=None,
+                                                                      status=DCOPStatus.STUDY_TRANSFERRING.name,
+                                                                      session=self.repository.session, )
+                data_transferring.params_data = task_params.get_str_dict()
+
+                obj = await self.create_many(data=[new_data_obj,data_transferring],auto_commit=True)
+                result_list.append(new_data_obj)
 
         return result_list
 
