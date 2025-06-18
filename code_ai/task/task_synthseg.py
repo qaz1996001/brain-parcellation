@@ -188,7 +188,7 @@ def resample_to_original_task(func_params  : Dict[str,any]):
 #          # is_using_distributed_frequency_control=True,
 #          is_send_consumer_hearbeat_to_redis = True,
 #          is_using_rpc_mode=True)
-@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+@Booster(BoosterParamsMyAI(queue_name ='save_file_tasks_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,)
          )
 def save_file_tasks(func_params  : Dict[str,any]):
@@ -199,7 +199,24 @@ def save_file_tasks(func_params  : Dict[str,any]):
     depth_number = task_params.depth_number
     save_mode = task_params.save_mode
     save_file_path = task_params.save_file_path
-
+    cmd_str = ('export PYTHONPATH={} && '
+               '{} code_ai/pipeline/save_file.py '
+               '--synthseg_file {} '
+               '--david_file {} '
+               '--wm_file {} '
+               '--depth_number {} '
+               '--save_mode {} '
+               '--save_file_path {}'
+               '--cmb_file_list '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                                         PYTHON3,
+                                         synthseg_file,
+                                         david_file,
+                                         wm_file,
+                                         depth_number,
+                                         save_mode,
+                                         save_file_path)
+               )
+    print(cmd_str)
     if save_file_path.exists() and save_file_path.stat().st_size > 20240:
         return save_file_path
     else:
@@ -210,7 +227,8 @@ def save_file_tasks(func_params  : Dict[str,any]):
                    '--wm_file {} '
                    '--depth_number {} '
                    '--save_mode {} '
-                   '--save_file_path {}'.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
+                   '--save_file_path {}'
+                   '--cmb_file_list '.format(pathlib.Path(__file__).parent.parent.parent.absolute(),
                                               PYTHON3,
                                               synthseg_file,
                                               david_file,
@@ -258,14 +276,6 @@ def post_process_synthseg_task(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-# @Booster('call_pipeline_synthseg_tensorflow_queue',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.SOLO,
-#          concurrent_num=5,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
 
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg_tensorflow_queue',
                            concurrent_num = 2,
@@ -292,15 +302,7 @@ def call_pipeline_synthseg_tensorflow(func_params  : Dict[str,any]):
     stdout, stderr = process.communicate()
     return stdout,stderr
 
-# 16784400_20240918
-# @Booster('call_pipeline_synthseg5class_tensorflow',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.SOLO,
-#          concurrent_num=5,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
+
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg5class_tensorflow',
                            )
          )
@@ -326,14 +328,7 @@ def call_pipeline_synthseg5class_tensorflow(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-# @Booster('call_pipeline_flirt',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.THREADING,
-#          concurrent_num=6,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
+
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_flirt',
                            concurrent_mode=ConcurrentModeEnum.THREADING,
                            )
