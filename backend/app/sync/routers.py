@@ -132,13 +132,25 @@ async def post_study_series_nifti_tool(data_list :List[DCOPEventNIFTITOOLRequest
              summary="檢查 study series nifti conversion complete",
              description="",
              response_description="",)
-async def post_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
+async def post_check_study_series_conversion_complete_uid(dcop_event_service: Annotated[DCOPEventDicomService,
                                                                           Depends(alchemy.provide_service(DCOPEventDicomService))],
                                                       background_tasks: BackgroundTasks,
-                                                      dcop_event_list    : Optional[List[DCOPEventRequest]] = Body(default=None),) -> Response:
-    if dcop_event_list is None:
+                                                      study_uid_list    : Optional[List[OrthancID]] = Body(default=None),
+                                                      # dcop_event_list    : Optional[List[DCOPEventRequest]] = Body(default=None),
+                                                      ) -> Response:
+    if study_uid_list is None:
         background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete)
     else:
+        session = dcop_event_service.repository.session
+        statement = Select(DCOPEventModel.study_uid.distinct(), DCOPEventModel.study_id).where(
+            DCOPEventModel.study_uid.in_(study_uid_list))
+        async with session:
+            execute = await session.execute(statement)
+            results: List[Row] = execute.all()
+            print('results', results)
+        dcop_event_list = [DCOPEventRequest(study_uid=result[0],
+                                            study_id=result[1],
+                                            ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value) for result in results]
         background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete,dcop_event_list)
     return Response("post_check_study_series_conversion_complete")
 
@@ -148,10 +160,10 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
              summary="檢查 study series nifti conversion complete",
              description="study rename id list",
              response_description="",)
-async def post_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
-                                                                          Depends(alchemy.provide_service(DCOPEventDicomService))],
-                                                      background_tasks: BackgroundTasks,
-                                                      study_id_list    : Optional[List[str]] = Body(default=None),) -> Response:
+async def post_check_study_series_conversion_complete_rename_id(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                                                    Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                                                background_tasks: BackgroundTasks,
+                                                                study_id_list    : Optional[List[str]] = Body(default=None),) -> Response:
     if study_id_list is None:
         return Response("post_check_study_series_conversion_complete")
     else:
@@ -165,7 +177,7 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
                                             study_id=result[1],
                                             ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value) for result in results]
         background_tasks.add_task(dcop_event_service.check_study_series_conversion_complete,dcop_event_list)
-    return Response("post_check_study_series_conversion_complete")
+    return Response("post_check_study_series_conversion_complete_rename_id")
 
 
 # Advanced Alchemy 多條件搜索優化範例

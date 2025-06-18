@@ -32,6 +32,8 @@ class DCOPEventRequest(BaseModel):
     study_id  : Optional[str]           = None
     params_data:Optional[Dict[str,Any]] = None
     result_data:Optional[Dict[str,Any]] = None
+    create_time : Optional[datetime]    = None
+
 
 
 class DCOPEventNIFTITOOLRequest(BaseModel):
