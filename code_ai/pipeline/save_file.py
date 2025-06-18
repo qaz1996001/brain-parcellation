@@ -13,7 +13,7 @@ if __name__ == '__main__':
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
     from code_ai.task import CMBProcess, DWIProcess, run_wmh
-    from code_ai.utils_inference import InferenceEnum
+    from code_ai.utils.inference import InferenceEnum
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--synthseg_file', type=str, required=True,
