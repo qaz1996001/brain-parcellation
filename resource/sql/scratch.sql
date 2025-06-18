@@ -1,21 +1,23 @@
-CREATE TABLE dcop_event_bt (
-    VsPrimaryKey VARCHAR(128) NOT NULL,
-    tool_id VARCHAR(32) NOT NULL,
-    study_uid VARCHAR(128) NOT NULL,
-    series_uid VARCHAR(128),
-    kind INTEGER, -- 事件類型
-    code_name VARCHAR(32) NOT NULL,
-    code_desc VARCHAR(64),
-    event_cate INTEGER, -- 事件類別
-    field_value DOUBLE PRECISION,
-    field_data VARCHAR(128),
-    ope_no VARCHAR(7) NOT NULL,
-    ope_name VARCHAR(36),
-    claim_time TIMESTAMP NOT NULL,
-    rec_time TIMESTAMP NOT NULL,
-    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (VsPrimaryKey)
+create table dcop_event_bt
+(
+    vsprimarykey varchar(128) not null
+        constraint pk_dcop_event_bt
+            primary key,
+    tool_id      varchar(32)  not null,
+    study_uid    varchar(128) not null,
+    series_uid   varchar(128),
+    study_id     varchar(128),
+    event_cate   integer,
+    code_name    varchar(32)  not null,
+    code_desc    varchar(64),
+    params_data  json,
+    result_data  json,
+    ope_no       varchar(7)   not null,
+    ope_name     varchar(36),
+    claim_time   timestamp    not null,
+    rec_time     timestamp    not null,
+    create_time  timestamp    not null,
+    update_time  timestamp
 );
 
 -- 歷史表結構相同
@@ -60,7 +62,6 @@ create table dcop_conf_bt
     constraint pk_dcop_conf_bt
         primary key (tool_id, ope_no)
 );
-
 
 -- 插入狀態配置
 
