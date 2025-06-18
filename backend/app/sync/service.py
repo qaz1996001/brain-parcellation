@@ -78,6 +78,7 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
                 match new_data_obj.ope_no:
                     case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
+                        data_dict = dict(study_uid=dcop_event.study_uid,)
                     case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case _ :
@@ -636,7 +637,7 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
         return result_set
 
     async def _create_study_complete_events(self, study_data_list, raw_dicom_path, rename_dicom_path,
-                                            rename_nifti_path):
+                                            rename_nifti_path,upload_data_api_url):
         """Create STUDY_CONVERSION_COMPLETE events for studies with all series converted."""
         study_events = []
 
@@ -662,7 +663,13 @@ class DCOPEventDicomService(service.SQLAlchemyAsyncRepositoryService[DCOPEventMo
             )
             study_events.append(dcop_event)
 
-        print('result_set', study_data_list)
+            # Send inference events
+
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        study_events_dump_list = list(map(lambda x:x.model_dump(),study_events))
+        await self._send_events(upload_data_api_url,study_events_dump_list)
+
+        print('result_set', study_events_dump_list)
         return study_events
 
     async def _queue_inference_tasks(self, study_events, upload_data_api_url, rename_dicom_path,
