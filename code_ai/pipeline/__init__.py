@@ -65,7 +65,7 @@ class PipelineConfig:
                         f'--Output_folder {output_path} ')
             else:
                 return (f'cd {str(chuan_code)}  && '
-                        f'{self.python3} code/{self.script_name} '
+                        f'{self.python3} {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {output_path} '
