@@ -53,7 +53,7 @@ class PipelineConfig:
         chuan_code = chuan_root.joinpath('code')
         # PATH_ROOT = / mnt / e / pipeline / sean
         if self.data_key == 'Aneurysm':
-            # pipeline_aneurysm_tensorflow.py [-h] [--ID ID]
+# pipeline_aneurysm_tensorflow.py [-h] [--ID ID]
 #                                        [--Inputs INPUTS [INPUTS ...]]
 #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
 #                                        [--Output_folder OUTPUT_FOLDE
@@ -64,7 +64,7 @@ class PipelineConfig:
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {output_path} ')
             else:
-                return (f'cd {str(chuan_root)}  && '
+                return (f'cd {str(chuan_code)}  && '
                         f'{self.python3} code/{self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
@@ -140,7 +140,6 @@ def upload_dicom_seg(input_dicom_seg_folder:str,input_nifti:str):
     print('upload_dicom_seg',cmd_str)
 
     process = subprocess.Popen(args=cmd_str, shell=True,
-                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
     return stdout, stderr
