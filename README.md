@@ -23,6 +23,20 @@ conda activate shhai
 conda deactivate
 ```
 
+
+
+``` bash
+cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) && python3 backend/app/main.py
+cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) && python3 funboost_cli_user.py
+
+cd /var/www/brain-parcellation
+conda activate tf_2_14
+
+
+conda deactivate
+```
+
+
 #### MRA_BRAIN 
 
 ```bash 
@@ -79,7 +93,9 @@ python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
 EOF
 
 ```
-
+```bash 
+export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
+```
 ### 
 
 1. raw dicom -> rename dicom 
@@ -102,3 +118,15 @@ EOF
 4. pipeline_inference -> upload 
    1. DCOPEventDicomService.check_study_upload_complete 
 
+## Suntory
+1. raw dicom -> rename dicom  > rename nifti \
+   [raw_diom_to_nii_inference.py](code_ai/pipeline/raw_diom_to_nii_inference.py)
+
+```bash
+export PYTHONPATH=$(pwd) && python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
+  --input_dicom /data/10TB/sean/Suntory/raw_data \
+  --output_dicom /data/10TB/sean/Suntory/rename_dicom \
+  --output_nifti /data/10TB/sean/Suntory/rename_nifti
+
+```
+2. nifti -> synthseg_wmh_tensorflow
