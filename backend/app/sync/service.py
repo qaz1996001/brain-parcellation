@@ -2,24 +2,24 @@ import json
 import logging
 import os
 import pathlib
+import traceback
 from typing import List, Optional, Tuple
 import re
 import httpx
-from advanced_alchemy.extensions.fastapi import (
-    repository,
-    service,
-)
+from advanced_alchemy.extensions.fastapi import repository
 from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio.engine import AsyncEngine
+from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 from .model import DCOPEventModel
-from .schemas import DCOPStatus, DCOPEventRequest,DCOPEventNIFTITOOLRequest
-from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,SYNC_PROT_STUDY_TRANSFER_COMPLETE
+from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
+from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
+    SYNC_PROT_STUDY_TRANSFER_COMPLETE
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                        )
     can_inference_pattern = re.compile(pattern_str)
 
-    async def get_check_url_by_ope_no(self,ope_no:str) -> Optional[str]:
+    async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
         from code_ai import load_dotenv
         load_dotenv()
         UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
@@ -56,11 +56,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
-            case _ :
+            case _:
                 url = None
         return url
 
-    async def post_ope_no_task(self,data :List[DCOPEventRequest]):
+    async def post_ope_no_task(self, data: List[DCOPEventRequest]):
         from code_ai import load_dotenv
         load_dotenv()
         check_url_set = set()
@@ -85,7 +85,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case _ :
+                    case _:
                         url = None
                 if url is not None and url not in check_url_set:
                     check_url_set.add(url)
@@ -114,7 +114,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         from code_ai import load_dotenv
         load_dotenv()
-        logger.info(f'check_study_series_transfer_complete data {data}',)
+        logger.info(f'check_study_series_transfer_complete data {data}', )
         # Get configuration from environment
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
@@ -124,7 +124,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         if data is None:
             dcop_event_list, dcop_event_dump_list = await self._get_studies_ready_for_transfer()
         else:
-            dcop_event_list = [DCOPEventRequest.model_validate(event,strict=False) for event in data]
+            dcop_event_list = [DCOPEventRequest.model_validate(event, strict=False) for event in data]
             dcop_event_dump_list = [dcop_event.model_dump() for dcop_event in dcop_event_list]
 
         # Process eligible studies for conversion
@@ -135,7 +135,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return dcop_event_list
 
-    async def add_study_new(self,data_list):
+    async def add_study_new(self, data_list):
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
         load_dotenv()
@@ -182,13 +182,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         Returns:
             Tuple containing list of DCOPEventRequest objects and their serialized versions.
         """
-        engine: AsyncEngine = self.repository.session.bind
+        # engine: AsyncEngine = self.repository.session.bind
         dcop_event_list = []
         dcop_event_dump_list = []
 
-        async with engine.connect() as conn:
-            results = await conn.execute(text('select * from public.get_all_studies_status()'))
-
+        # async with engine.connect() as conn:
+        async with self.session_manager.get_session() as session:
+            results = await session.execute(text('select * from public.get_all_studies_status()'))
             for result in results.all():
                 logger.info(f'result {result}')
                 study_data = result[0]
@@ -261,7 +261,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 request_data = json.dumps([nifti_tool_request.model_dump()])
                 await client.post(url=url, data=request_data)
 
-    async def study_series_nifti_tool(self,data :List[DCOPEventNIFTITOOLRequest]):
+    async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
         建立
            DCOPStatus.STUDY_CONVERTING
@@ -272,11 +272,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         from code_ai import load_dotenv
         load_dotenv()
-        session:AsyncSession = self.repository.session
+        # session: AsyncSession = self.repository.session
         for dcop in data:
             match dcop.ope_no:
                 case DCOPStatus.STUDY_CONVERTING.value:
-                    async with session:
+                    async with self.session_manager.get_session() as session:
                         # DICOM_TOOL
                         conf_query = select(DCOPEventModel, ).where(and_(*[DCOPEventModel.study_id == dcop.study_id,
                                                                            DCOPEventModel.study_uid.isnot(None),
@@ -284,15 +284,15 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                                            DCOPEventModel.ope_no == DCOPStatus.SERIES_TRANSFER_COMPLETE.value]))
                         execute = await session.execute(conf_query)
                         dcop_event = execute.first()[0]
-                    study_transfer_complete_data = await DCOPEventModel.create_event_ope_no(tool_id=dcop.tool_id,
-                                                                                            study_uid=dcop_event.study_uid,
-                                                                                            series_uid=None,
-                                                                                            study_id=dcop.study_id,
-                                                                                            ope_no=dcop.ope_no,
-                                                                                            result_data=dcop.result_data,
-                                                                                            params_data=dcop.params_data,
-                                                                                            session=session)
-                    async with session:
+                        study_transfer_complete_data = await DCOPEventModel.create_event_ope_no(tool_id=dcop.tool_id,
+                                                                                                study_uid=dcop_event.study_uid,
+                                                                                                series_uid=None,
+                                                                                                study_id=dcop.study_id,
+                                                                                                ope_no=dcop.ope_no,
+                                                                                                result_data=dcop.result_data,
+                                                                                                params_data=dcop.params_data,
+                                                                                                session=session)
+
                         session.add(study_transfer_complete_data)
                         await session.commit()
                         await session.refresh(study_transfer_complete_data)
@@ -301,13 +301,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
 
-
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
         async with httpx.AsyncClient(timeout=180) as client:
             await client.post(url=url)
 
-    async def nifti_tool_get_series_info(self, study_uid: str,session:AsyncSession):
+    async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
@@ -318,19 +317,19 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # async with engine.connect() as conn:
         sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
         results = await session.execute(sql,
-                                     {'status': DCOPStatus.STUDY_CONVERTING.value,
-                                      'study_uid': study_uid})
+                                        {'status': DCOPStatus.STUDY_CONVERTING.value,
+                                         'study_uid': study_uid})
 
         dcop_event_list = results.all()
         task_params_list = []
-        dcop_model_list  = []
+        dcop_model_list = []
         for dcop_event in dcop_event_list:
             result_data = dcop_event.result_data[0]
             output_dicom_path = result_data['rename_dicom_path']
             output_nifti_path = pathlib.Path(path_rename_nifti)
             task_params = Dicom2NiiSeriesParams(sub_dir=None,
                                                 study_uid=dcop_event.study_uid,
-                                                series_uid =dcop_event.series_uid,
+                                                series_uid=dcop_event.series_uid,
                                                 output_dicom_path=output_dicom_path,
                                                 output_nifti_path=output_nifti_path)
             new_data_obj = await DCOPEventModel.create_event_ope_no(tool_id='NIFTI_TOOL',
@@ -350,7 +349,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # If create_many raises an exception, the 'except' block will catch it,
                 # and the push operations will not be executed.
                 # data_obj = await self.create_many(dcop_model_list, auto_commit=True)
-                logger.info('session.add_all',dcop_model_list)
+                logger.info(f'session.add_all {dcop_model_list}', )
                 session.add_all(dcop_model_list)
                 await session.commit()
                 for dcop_model in dcop_model_list:
@@ -371,20 +370,19 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             # An error occurred during create_many or subsequent push operations.
             # Rollback ensures no partial changes are left if auto_commit somehow failed or
             # if you had other uncommitted operations before this try block.
-            await self.repository.session.rollback()
+            await session.rollback()
             logger.info(f"An error occurred: {e}. Database transaction rolled back.")
             # Re-raise the exception if you want it to propagate further up the call stack
             raise
         finally:
             pass
 
-
-    async def dicom_tool_get_series_info(self, data :List[DCOPEventModel]):
+    async def dicom_tool_get_series_info(self, data: List[DCOPEventModel]):
         from code_ai.task.task_dicom2nii import dicom_to_nii
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
         load_dotenv()
-        raw_dicom_path    = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
 
@@ -393,32 +391,36 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             logger.info(f'1000000100 dcop_event {dcop_event}')
             study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
             if study_uid_raw_dicom_path.exists():
-                series_uid_path_list = sorted(study_uid_raw_dicom_path.iterdir())
-                new_data_list = []
-                task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
-                                              output_dicom_path=rename_dicom_path,
-                                              output_nifti_path=rename_nifti_path, )
+                async with self.session_manager.get_session() as session:
+                    series_uid_path_list = sorted(study_uid_raw_dicom_path.iterdir())
+                    new_data_list = []
+                    task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
+                                                  output_dicom_path=rename_dicom_path,
+                                                  output_nifti_path=rename_nifti_path, )
 
-                for series_uid_path in series_uid_path_list:
-                    series_new_data = await DCOPEventModel.create_event(study_uid=study_uid,
-                                                                        series_uid=series_uid_path.name,
-                                                                        status=DCOPStatus.SERIES_NEW.name,
-                                                                        session=self.repository.session, )
-                    series_transferring_data = await DCOPEventModel.create_event(study_uid=study_uid,
-                                                                                 series_uid=series_uid_path.name,
-                                                                                 status=DCOPStatus.SERIES_TRANSFERRING.name,
-                                                                                 session=self.repository.session, )
-                    series_transferring_data.params_data = task_params.get_str_dict()
-                    new_data_list.append(series_new_data)
-                    new_data_list.append(series_transferring_data)
-                try:
-                    data_obj = await self.create_many(new_data_list, auto_commit=True)
-                    task = dicom_to_nii.push(task_params.get_str_dict())
-                except:
-                    await self.repository.session.rollback()
+                    for series_uid_path in series_uid_path_list:
+                        series_new_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                                            series_uid=series_uid_path.name,
+                                                                            status=DCOPStatus.SERIES_NEW.name,
+                                                                            session=session, )
+                        series_transferring_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                                                     series_uid=series_uid_path.name,
+                                                                                     status=DCOPStatus.SERIES_TRANSFERRING.name,
+                                                                                     session=session, )
+                        series_transferring_data.params_data = task_params.get_str_dict()
+                        new_data_list.append(series_new_data)
+                        new_data_list.append(series_transferring_data)
+                    try:
+                        session.add_all(new_data_list)
+                        await session.commit()
+                        await session.flush()
+                        task = dicom_to_nii.push(task_params.get_str_dict())
+                        logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
+                    except:
+                        await session.rollback()
+                        logger.error(traceback.print_exc())
 
         return None
-
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):
         """
@@ -435,7 +437,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
-        logger.info(f'data {data}' )
+        logger.info(f'data {data}')
         # post_check_study_series_conversion_complete call check
         if data is None:
             # Query studies not yet at STUDY_CONVERSION_COMPLETE status
@@ -449,7 +451,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         if not completed_studies:
             return None
-        logger.info(f'completed_studies {completed_studies}',)
+        logger.info(f'completed_studies {completed_studies}', )
         # Create and send study completion events
         study_events = await self._create_study_complete_events(
             completed_studies,
@@ -458,7 +460,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             rename_nifti_path
         )
         # Process events from the provided data list
-        logger.info(f'study_events {study_events}', )
+        logger.info(f'study_events {study_events}')
         completed_study_events = await self._identify_completed_studies(study_events)
 
         # Process completed studies and queue them for inference
@@ -473,17 +475,18 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             )
         return None
 
-    async def _query_studies_pending_completion(self,study_uid:Optional[str]=None):
+    async def _query_studies_pending_completion(self, study_uid: Optional[str] = None):
         """Query for studies that have not yet reached STUDY_CONVERSION_COMPLETE status."""
-        async with self.repository.session as session:
+        # async with self.repository.session as session:
+        async with self.session_manager.get_session() as session:
             if study_uid is None:
-                sql    = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status)')
+                sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status)')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value}
             else:
                 sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
-                          'study_uid':study_uid}
-            execute = await session.execute(sql,params)
+                          'study_uid': study_uid}
+            execute = await session.execute(sql, params)
             results = execute.all()
 
         can_inference_dict = {}
@@ -491,8 +494,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         for result in results:
             test_str = ','.join(list(result.ope_no))
             match_result = self.can_inference_pattern.match(test_str)
-            logger.info(f'match_result {match_result} , {test_str}',)
-            logger.info(self.pattern_str,self.can_inference_pattern.findall(test_str))
+            logger.info('match_result  {} , {}'.format(match_result, test_str))
+            logger.info("{} {}".format(self.pattern_str, self.can_inference_pattern.findall(test_str)))
             if match_result:
                 can_inference_dict.update({result.series_uid: (result.study_uid, result.study_id)})
             else:
@@ -540,6 +543,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def _queue_inference_tasks(self, study_events, upload_data_api_url, rename_dicom_path,
                                      rename_nifti_path, task_pipeline_inference):
         """Queue inference tasks for completed studies and send related events."""
+        redis_backend = FastAPICache.get_backend()
+        redis_client = redis_backend.redis
+
         for dcop_event in study_events:
             dicom_study_path = rename_dicom_path.joinpath(dcop_event.study_id)
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
@@ -558,11 +564,18 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     'study_id': dcop_event.study_id
                 }
             )
+            inference_task_key = f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"
+            if await redis_client.get(inference_task_key):
+                logger.info(
+                    f"Skipping duplicate inference task for study_id: {dcop_event.study_id}. Already in cache.")
+                continue  # Skip this study_event and move to the next one
 
             # Push to inference task pipeline
             task_pipeline_result: AsyncResult = task_pipeline_inference.push(
                 dcop_event_inference_ready.params_data
             )
+            await redis_client.set(inference_task_key, "queued", ex=21600)  # Value can be anything, key is what matters
+            logger.info(f"Added study_uid: {dcop_event.study_uid} to cache with key: {inference_task_key}")
 
             # Create STUDY_INFERENCE_QUEUED event
             dcop_event_inference_queued = DCOPEventRequest(
@@ -603,26 +616,26 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return series_by_study
 
-    async def _identify_completed_studies(self, study_events_list:List[DCOPEventRequest]):
+    async def _identify_completed_studies(self, study_events_list: List[DCOPEventRequest]):
         """Identify studies with all series converted and create completion events."""
         completed_study_events = []
         # Query to get all series for this study
-        async with self.repository.session as session:
+        async with self.session_manager.get_session() as session:
             done_count = 0
-            undone     = 0
+            undone = 0
             for study_events in study_events_list:
-                sql    = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
+                sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                           'study_uid': study_events.study_uid}
-                execute = await session.execute(sql,params)
+                execute = await session.execute(sql, params)
                 results = execute.all()
                 for result in results:
                     if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
-                        done_count+=1
+                        done_count += 1
                     elif DCOPStatus.SERIES_CONVERSION_SKIP.value in result.ope_no:
-                        done_count+=1
+                        done_count += 1
                     else:
-                        undone+=1
-                if done_count== len(results):
+                        undone += 1
+                if done_count == len(results):
                     completed_study_events.append(result)
         return completed_study_events
