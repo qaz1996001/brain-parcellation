@@ -1,6 +1,5 @@
 # app/sync/routers.py
-import os
-import pathlib
+import logging
 from typing import Annotated, Tuple, List, Optional, Any, Coroutine
 
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
@@ -16,6 +15,8 @@ from .model import DCOPEventModel
 from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, OrthancID,DCOPEventNIFTITOOLRequest
 
 from ..database import alchemy
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,19 +41,9 @@ async def post_study_uuid(request:OrthancIDRequest,
 
 
     result_list = await dcop_event_service.add_study_new(data_list=request.ids)
-    print('result_list',result_list)
+    logger.info(f'1000000000 result_list {result_list}')
     background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
     return result_list
-
-
-
-# @router.delete(urls.SYNC_PROT_STUDY, status_code=200,
-#                summary="delete Study UUID",
-#                description="",
-#                response_description="",)
-async def delete_study_uuid(request:OrthancIDRequest) -> Response:
-    print(request.ids)
-    return Response("DICOM Service is running")
 
 
 
@@ -72,7 +63,7 @@ async def get_ope_no(dcop_event_service: Annotated[DCOPEventDicomService,
                                                 "search_ignore_case": True,
                                             }
                                         )),]) -> OffsetPagination[DCOPEventModel]:
-    print('filters',filters)
+    logger.info(f'filters {filters}',)
     results, total = await dcop_event_service.list_and_count(*filters)
     return dcop_event_service.to_schema(results, total, filters=filters)
     # return service.OffsetPagination[DCOPEventRequest]
@@ -160,7 +151,7 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
         async with session:
             execute = await session.execute(statement)
             results:List[Row] = execute.all()
-            print('results',results)
+            logger.info(f'results {results}',)
         dcop_event_list = [DCOPEventRequest(study_uid=result[0],
                                             study_id=result[1],
                                             ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value) for result in results]
@@ -215,8 +206,5 @@ async def get_events_complex(
     使用範例：
     ?search=keyword&status=active,pending&created_at_after=2024-01-01&order_by=created_at,-study_uid&limit=10
     """
-    print('filters_list',filters_list)
     results, total = await dcop_event_service.list_and_count(*filters_list)
-    print('results',results)
-    print('total', total)
     return dcop_event_service.to_schema(results, total, filters=filters_list)
