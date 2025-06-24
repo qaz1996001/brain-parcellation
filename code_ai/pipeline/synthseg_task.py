@@ -1,9 +1,4 @@
 import argparse
-import pathlib
-import subprocess
-from typing import List
-import nibabel as nib
-import numpy as np
 
 if __name__ == '__main__':
     import tensorflow as tf

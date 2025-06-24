@@ -1,6 +1,7 @@
 import pathlib
 import os
 
+
 def load_dotenv():
     from dotenv import load_dotenv
     env_state = os.getenv("ENV_STATE",'dev')
