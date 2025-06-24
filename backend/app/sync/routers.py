@@ -5,6 +5,7 @@ from typing import Annotated, Tuple, List, Optional, Any, Coroutine
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
+from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (service, filters,)
 from sqlalchemy import Select
 from sqlalchemy.engine.row import Row
@@ -208,3 +209,31 @@ async def get_events_complex(
     """
     results, total = await dcop_event_service.list_and_count(*filters_list)
     return dcop_event_service.to_schema(results, total, filters=filters_list)
+
+
+
+@router.get("/cache",
+            status_code=200,
+            summary="cache")
+async def get_events_complex():
+    redis_backend = FastAPICache.get_backend()
+    redis_client = redis_backend.redis
+    cached_keys = await redis_client.keys("inference_task:*")
+    logger.warning(f"cached_keys {cached_keys}")
+    study_uids = []
+    for key in cached_keys:
+        # 從鍵中提取 study_uid。鍵的格式為 "fastapi-cache:inference_task:<study_uid>"
+        # Extract study_uid from the key. Key format is "fastapi-cache:inference_task:<study_uid>"
+        try:
+            # Assuming key is bytes, decode it first
+            if isinstance(key,str):
+                key_str = key
+            else:
+                key_str = key.decode('utf-8')
+            parts = key_str.split(':')
+            if parts[0] == "inference_task":
+                study_uids.append(parts[1].split(','))
+        except Exception as e:
+            logger.info(f"Error parsing cache key {key}: {e}")
+
+    return study_uids
