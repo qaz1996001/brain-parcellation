@@ -15,16 +15,7 @@ from code_ai.utils.inference import replace_suffix
 from code_ai.utils_synthseg import TemplateProcessor
 
 
-# 定義 Funboost 任務
-# @Booster('resample_task_queue',
-#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode = ConcurrentModeEnum.SOLO,
-#          concurrent_num  = 8,
-#          qps=2,
-#          is_send_consumer_hearbeat_to_redis = True,
-#          is_push_to_dlx_queue_when_retry_max_times  = True,
-#          is_using_rpc_mode =True)
-# def resample_task(file, resample_file):
+
 @Booster(BoosterParamsMyAI(queue_name ='resample_task_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,
                            qps = 2
@@ -39,16 +30,6 @@ def resample_task(func_params  : Dict[str,any]):
     if not resample_file.exists():
         resample_one(str(file), str(resample_file))
     return str(resample_file)
-
-# @Booster('synthseg_task_queue',
-#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode = ConcurrentModeEnum.SOLO,
-#          concurrent_num  = 4,
-#          qps=1,
-#          # is_using_distributed_frequency_control=True,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
 
 
 @Booster(BoosterParamsMyAI(queue_name ='synthseg_task_queue',)
@@ -82,15 +63,7 @@ def synthseg_task(func_params  : Dict[str,any]):
         print(e)
         raise e  # Funboost 會自動處理重試
 
-# @Booster('process_synthseg_task_queue',
-#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode = ConcurrentModeEnum.SOLO,
-#          concurrent_num  = 4,
-#          qps=1,
-#          # is_using_distributed_frequency_control=True,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
+
 @Booster(BoosterParamsMyAI(queue_name ='process_synthseg_task_queue',)
          )
 def process_synthseg_task(func_params  : Dict[str,any]):
@@ -128,13 +101,6 @@ def process_synthseg_task(func_params  : Dict[str,any]):
         return synthseg_file, david_file
 
 
-# @Booster('resample_to_original_task_queue',
-#          broker_kind     = BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode = ConcurrentModeEnum.THREADING,
-#          concurrent_num  = 4,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis = True,
-#          is_using_rpc_mode=True)
 @Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,)
          )
@@ -179,15 +145,6 @@ def resample_to_original_task(func_params  : Dict[str,any]):
                     shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
         return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
 
-
-# @Booster('save_file_tasks_queue',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.THREADING,
-#          concurrent_num=4,
-#          qps=1,
-#          # is_using_distributed_frequency_control=True,
-#          is_send_consumer_hearbeat_to_redis = True,
-#          is_using_rpc_mode=True)
 @Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,)
          )
@@ -226,15 +183,7 @@ def save_file_tasks(func_params  : Dict[str,any]):
         return save_file_path
 
 
-# @Booster('post_process_synthseg_task_queue',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.THREADING,
-#          concurrent_num=4,
-#          qps=1,
-#          # is_using_distributed_frequency_control=True,
-#          is_send_consumer_hearbeat_to_redis = True,
-#          is_using_rpc_mode=True)
-@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+@Booster(BoosterParamsMyAI(queue_name ='post_process_synthseg_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,)
          )
 def post_process_synthseg_task(func_params  : Dict[str,any]):
@@ -257,15 +206,6 @@ def post_process_synthseg_task(func_params  : Dict[str,any]):
     print('post_process_synthseg_task', stdout, stderr)
     return stdout,stderr
 
-
-# @Booster('call_pipeline_synthseg_tensorflow_queue',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.SOLO,
-#          concurrent_num=5,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
 
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg_tensorflow_queue',
                            concurrent_num = 2,
@@ -292,15 +232,7 @@ def call_pipeline_synthseg_tensorflow(func_params  : Dict[str,any]):
     stdout, stderr = process.communicate()
     return stdout,stderr
 
-# 16784400_20240918
-# @Booster('call_pipeline_synthseg5class_tensorflow',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.SOLO,
-#          concurrent_num=5,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
+
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_synthseg5class_tensorflow',
                            )
          )
@@ -326,14 +258,6 @@ def call_pipeline_synthseg5class_tensorflow(func_params  : Dict[str,any]):
     return stdout,stderr
 
 
-# @Booster('call_pipeline_flirt',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM,
-#          concurrent_mode=ConcurrentModeEnum.THREADING,
-#          concurrent_num=6,
-#          qps=1,
-#          is_send_consumer_hearbeat_to_redis=True,
-#          is_push_to_dlx_queue_when_retry_max_times=True,
-#          is_using_rpc_mode=True)
 @Booster(BoosterParamsMyAI(queue_name ='call_pipeline_flirt',
                            concurrent_mode=ConcurrentModeEnum.THREADING,
                            )
