@@ -145,7 +145,8 @@ def resample_to_original_task(func_params  : Dict[str,any]):
                     shutil.copyfileobj(raw_file_f, outpput_raw_file_f)
         return original_file,original_seg_file,original_synthseg33_seg_file,original_david_seg_file,original_save_seg_file
 
-@Booster(BoosterParamsMyAI(queue_name ='resample_to_original_task_queue',
+
+@Booster(BoosterParamsMyAI(queue_name ='save_file_tasks_queue',
                            concurrent_mode = ConcurrentModeEnum.THREADING,)
          )
 def save_file_tasks(func_params  : Dict[str,any]):
