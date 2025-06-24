@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import pathlib
 import shutil
@@ -21,10 +22,14 @@ from backend.app.sync.model import DCOPEventModel
 from backend.app.sync.schemas import DCOPStatus, OrthancID
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
+from backend.app.service import BaseRepositoryService
 from code_ai import load_dotenv
 
 
-class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]):
+logger = logging.getLogger(__name__)
+
+
+class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         model_type = DCOPEventModel
 
@@ -41,7 +46,7 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
                       """)
 
 
-    async def get_study_new_re_model(self, study_uid:str,session:AsyncSession=None) :
+    async def get_study_new_re_model(self, study_uid:str,session:AsyncSession) :
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
         load_dotenv()
@@ -50,8 +55,6 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
 
         study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
-        if session is None:
-            session = self.repository.session
 
         new_data_re = await DCOPEventModel.create_event(study_uid=study_uid,
                                                         series_uid=None,
@@ -70,43 +73,41 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
         return new_data_re, data_transferring_re,task_params
 
 
-
     async def re_run_by_study_rename_id(self, data_list:List[str],
                                         dcop_event_service:DCOPEventDicomService) -> Optional[str]:
         result_list = []
+        logger.info('re_run_by_study_rename_id data_list {}'.format(data_list))
         for study_id in data_list:
             models = await self.list(DCOPEventModel.study_id==study_id,LimitOffset(limit=10,offset=0))
-            print('models',models)
             if len(models) > 0:
-                print('model',models[0])
+                logger.info('model',models[0])
                 flage = await self.re_run_by_study_uid_on_one(models[0].study_uid,dcop_event_service)
                 result_list.append((models[0].study_uid, flage))
-        print(result_list)
 
 
     async def re_run_by_study_uid_on_one(self, study_uid:str,dcop_event_service:DCOPEventDicomService) -> bool:
         from code_ai.task.task_dicom2nii import dicom_to_nii
-        print('del_study_result_by_field 1')
+        logger.info('del_study_result_by_field 1')
         await self.del_study_result_by_field(field_name='study_uid',
                                              field_value=study_uid)
         try:
 
             # async with AsyncSession(self.repository.session.bind) as session:
-            async with self.repository.session as session:
+            async with self.session_manager.get_session() as session:
                 new_data_re, data_transferring_re, task_params = await self.get_study_new_re_model(
                     study_uid=study_uid, session=session)
                 session.add_all([new_data_re, data_transferring_re])
                 await session.commit()
                 await session.refresh(new_data_re)
                 await session.refresh(data_transferring_re)
-                print('new_data_re',new_data_re)
+                logger.info('new_data_re {}'.format(new_data_re))
                 await dcop_event_service.dicom_tool_get_series_info([new_data_re])
                 task = dicom_to_nii.push(task_params.get_str_dict())
-                print(task)
+                logger.info(f're_run_by_study_uid_on_one task {task}' )
             flage = True
         except:
-            traceback.print_exc()
-            await self.repository.session.rollback()
+            logger.info(traceback.print_exc())
+            await session.rollback()
             flage = False
         return flage
 
@@ -117,28 +118,10 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
         # 4.
         result_list = []
         for study_uid in data_list:
-            print('del_study_result_by_field 1')
+            logger.info('del_study_result_by_field 1')
             flage = await self.re_run_by_study_uid_on_one(study_uid=study_uid,dcop_event_service = dcop_event_service)
             result_list.append((study_uid,flage))
-        print(result_list)
-        # for study_uid in data_list:
-        #     print('del_study_result_by_field 1')
-        #     await self.del_study_result_by_field(field_name='study_uid',
-        #                                          field_value=study_uid)
-        #     try:
-        #         async with AsyncSession(self.repository.session.bind) as session:
-        #             async with session.begin():
-        #                 new_data_re, data_transferring_re, task_params = await self.get_study_new_re_model(
-        #                     study_uid=study_uid,session=session)
-        #                 session.add_all([new_data_re, data_transferring_re])
-        #                 await session.commit()
-        #                 await session.flush(new_data_re)
-        #                 await session.flush(data_transferring_re)
-        #                 task = dicom_to_nii.push(task_params.get_str_dict())
-        #                 print(task)
-        #     except:
-        #         traceback.print_exc()
-        #         await self.repository.session.rollback()
+        logger.info(f're_run_by_study_uid {re_run_by_study_uid}')
         return
 
     async def del_study_result_by_field(self, field_name:str,field_value:str) -> Optional[str]:
@@ -166,9 +149,11 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
         wmh_path = process_path.joinpath('Deep_WMH')
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
-        engine: AsyncEngine = self.repository.session.bind
-        async with engine.connect() as conn:
-            execute = await conn.execute(sql, parameters)
+        # engine: AsyncEngine = self.repository.session.bind
+        # async with engine.connect() as conn:
+        #     execute = await conn.execute(sql, parameters)
+        async with self.session_manager.get_session() as session:
+            execute = await session.execute(sql, parameters)
             result = execute.first()
             if result is not None:
                 study_aneurysm_path = aneurysm_path.joinpath(result.study_id)
@@ -185,16 +170,16 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
                          study_rename_dicom_path, study_rename_nifti_path]):
                     await self.del_path(input_path)
                 try:
-                    if conn.in_transaction():
-                        insert_execute = await conn.execute(self.insert_sql, {'study_uid': result.study_uid})
-                        delete_execute = await conn.execute(self.delete_sql, {'study_uid': result.study_uid})
+                    insert_execute = await session.execute(self.insert_sql, {'study_uid': result.study_uid})
+                    delete_execute = await session.execute(self.delete_sql, {'study_uid': result.study_uid})
 
-                    await conn.commit()
-                    print('insert_execute', insert_execute)
-                    print('delete_execute', delete_execute)
+                    await session.commit()
+                    logger.info(f'insert_execute {insert_execute}')
+                    logger.info(f'delete_execute {delete_execute}')
                 except:
-                    await conn.rollback()
-                    traceback.print_exc()
+                    await session.rollback()
+                    logger.error(f'except {traceback.print_exc()}')
+
 
     @staticmethod
     async def _send_events(event_data: List[dict]) -> None:
@@ -213,12 +198,12 @@ class ReRunStudyService(service.SQLAlchemyAsyncRepositoryService[DCOPEventModel]
 
     @staticmethod
     async def del_path(input_path :pathlib.Path):
-        print('input_path',input_path)
+        logger.info(f'input_path {input_path}')
         if input_path.is_file() and input_path.exists():
             await aiofiles.os.remove(input_path)
-            print('remove')
+            logger.info('remove')
         elif input_path.is_dir() and input_path.exists():
-            print('rmtree')
+            logger.info('rmtree')
             shutil.rmtree(input_path,ignore_errors=True)
         else:
             pass
