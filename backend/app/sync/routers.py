@@ -150,7 +150,7 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
         statement = Select(DCOPEventModel.study_uid.distinct(),DCOPEventModel.study_id).where(DCOPEventModel.study_id.in_(study_id_list))
         async with session:
             execute = await session.execute(statement)
-            results:List[Row] = execute.all()
+            results:List[Row] = list(execute.all())
             logger.info(f'results {results}',)
         dcop_event_list = [DCOPEventRequest(study_uid=result[0],
                                             study_id=result[1],
