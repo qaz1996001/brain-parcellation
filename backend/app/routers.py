@@ -5,7 +5,7 @@ from fastapi import APIRouter,Request
 if TYPE_CHECKING:
     import pathlib
 
-from backend.app import series,sync,find,rerun
+from backend.app import series,sync,find,rerun, study
 
 
 router = APIRouter()
@@ -13,7 +13,7 @@ router.include_router(series.router, prefix="/series", tags=["series"])
 router.include_router(find.router, tags=["find"])
 router.include_router(rerun.router, tags=["rerun"])
 router.include_router(sync.router, tags=["sync"])
-
+router.include_router(study.router, tags=["study"])
 
 
 
