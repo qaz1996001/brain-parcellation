@@ -56,6 +56,9 @@ export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_wmh_tensorflow.py
    --InputsDicomDir /mnt/e/pipeline/sean/rename_dicom/14914694_20220905_MR_21109050071/T2FLAIR_AXI
 ```
 ```bash 
+sudo apt install unzip
+conda activate tf_2_14
+uv pip install -r pyproject.toml --system
 
 cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
 cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
