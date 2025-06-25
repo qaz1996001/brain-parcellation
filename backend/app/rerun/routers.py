@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
 from advanced_alchemy.extensions.fastapi import (service, filters,)
 
 from backend.app.sync.service import DCOPEventDicomService
-from backend.app.sync.schemas import DCOPEventRequest,OrthancID,OrthancIDRequest
+from backend.app.sync.schemas import DCOPEventRequest,PostStudyRequest
 from backend.app.sync.model import DCOPEventModel
 
 from . import urls
@@ -39,7 +39,7 @@ async def post_re_run_study_by_study_rename_id(data_list :List[str],
             description="",
             response_description="",
             response_model=service.OffsetPagination[DCOPEventRequest])
-async def post_re_run_study_by_study_uid(request:OrthancIDRequest,
+async def post_re_run_study_by_study_uid(request:PostStudyRequest,
                                          re_event_service: Annotated[ReRunStudyService,
                                                                       Depends(alchemy.provide_service(ReRunStudyService))],
                                          dcop_event_service: Annotated[DCOPEventDicomService,

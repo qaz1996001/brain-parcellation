@@ -80,7 +80,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         for study_id in data_list:
             models = await self.list(DCOPEventModel.study_id==study_id,LimitOffset(limit=10,offset=0))
             if len(models) > 0:
-                logger.info('model',models[0])
+                logger.info('model {}'.format(models[0]))
                 flage = await self.re_run_by_study_uid_on_one(models[0].study_uid,dcop_event_service)
                 result_list.append((models[0].study_uid, flage))
 
@@ -121,7 +121,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
             logger.info('del_study_result_by_field 1')
             flage = await self.re_run_by_study_uid_on_one(study_uid=study_uid,dcop_event_service = dcop_event_service)
             result_list.append((study_uid,flage))
-        logger.info(f're_run_by_study_uid {re_run_by_study_uid}')
+        logger.info(f're_run_by_study_uid {result_list}')
         return
 
     async def del_study_result_by_field(self, field_name:str,field_value:str) -> Optional[str]:
