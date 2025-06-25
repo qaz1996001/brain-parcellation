@@ -11,7 +11,6 @@ from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
@@ -419,7 +418,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     except:
                         await session.rollback()
                         logger.error(traceback.print_exc())
-
         return None
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):

@@ -1,19 +1,20 @@
 # app/sync/routers.py
 import logging
-from typing import Annotated, Tuple, List, Optional, Any, Coroutine
-
+from typing import Annotated, Tuple, List, Optional, Any
+from pydantic import Field
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (service, filters,)
-from sqlalchemy import Select
+from sqlalchemy import Select, text
 from sqlalchemy.engine.row import Row
 
 from backend.app.sync import urls
 from .service import DCOPEventDicomService
 from .model import DCOPEventModel
-from .schemas import DCOPStatus, DCOPEventRequest, OrthancID, DCOPEventNIFTITOOLRequest, PostStudyRequest
+from .schemas import DCOPStatus, DCOPEventRequest, OrthancID, DCOPEventNIFTITOOLRequest, PostStudyRequest, OpeNo, \
+    StydySeriesOpeNoStatus
 
 from ..database import alchemy
 
@@ -238,3 +239,44 @@ async def get_events_complex():
             logger.info(f"Error parsing cache key {key}: {e}")
 
     return study_uids
+
+
+
+@router.get("/query/study_series_ope_no_status",
+            status_code=200,
+            summary="study_series_ope_no_status")
+async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                           Depends(alchemy.provide_service(DCOPEventDicomService))],
+                    study_uid:Optional[OrthancID] = Query(None),
+                    ope_no:OpeNo = Query(...)):
+    async with dcop_event_service.session_manager.get_session() as session:
+        if study_uid is None:
+            sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status)')
+            params = {'status': ope_no}
+        else:
+            sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
+            params = {'status': ope_no,
+                      'study_uid': study_uid}
+        execute = await session.execute(sql, params)
+        results = execute.all()
+        return [ StydySeriesOpeNoStatus.model_validate(result) for result in results]
+
+
+@router.get("/query/stydy_ope_no_status",
+            status_code=200,
+            summary="stydy_ope_no_status")
+async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                           Depends(alchemy.provide_service(DCOPEventDicomService))],
+                    study_uid:Optional[OrthancID] = Query(None),
+                    ope_no:OpeNo = Query(...)):
+    async with dcop_event_service.session_manager.get_session() as session:
+        if study_uid is None:
+            sql = text('SELECT * FROM public.get_stydy_ope_no_status(:status)')
+            params = {'status': ope_no}
+        else:
+            sql = text('SELECT * FROM public.get_stydy_ope_no_status(:status) where study_uid=:study_uid')
+            params = {'status': ope_no,
+                      'study_uid': study_uid}
+        execute = await session.execute(sql, params)
+        results = execute.all()
+        return [ StydySeriesOpeNoStatus.model_validate(result) for result in results]

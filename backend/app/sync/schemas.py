@@ -1,4 +1,5 @@
 # app/sync/schemas.py
+import datetime
 import re
 from typing import List, Annotated, Dict, Any
 
@@ -14,8 +15,11 @@ def validate_orthanc_id(v: str) -> str:
     return v
 
 
+
 OrthancID = Annotated[str, AfterValidator(validate_orthanc_id)]
 
+OpeNo = Annotated[str, Field(...,min_length=7,max_length=7,pattern=r"^\d{3}\.\d{3}$",
+                             description="格式必須為 xxx.xxx，其中 x 為數字")]
 
 # class OrthancIDRequest(BaseModel):
 #     ids: list[OrthancID]
@@ -32,10 +36,11 @@ class DCOPEventRequest(BaseModel):
     series_uid : Optional[OrthancID] = OrthancID('31fb1be1-71d25700-b131126f-c73708af-42d28093')
     ope_no     : str                 =  Field(...,min_length=7,max_length=7,pattern=r"^\d{3}\.\d{3}$",
                                                   description="格式必須為 xxx.xxx，其中 x 為數字")
-    tool_id   : str                  = 'DICOM_TOOL'
-    study_id  : Optional[str]           = None
-    params_data:Optional[Dict[str,Any]] = None
-    result_data:Optional[Dict[str,Any]] = None
+    tool_id     : str                    = 'DICOM_TOOL'
+    study_id    : Optional[str]          = None
+    params_data :Optional[Dict[str,Any]] = None
+    result_data :Optional[Dict[str,Any]] = None
+    create_time :Optional[datetime.datetime] = None
 
 
 class DCOPEventNIFTITOOLRequest(BaseModel):
@@ -88,3 +93,14 @@ class DCOPStatus(str, Enum):
     STUDY_INFERENCE_RUNNING_RE  = "300.151"
 
     pass
+
+
+
+class StydySeriesOpeNoStatus(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    study_uid   : OrthancID
+    series_uid  : Optional[OrthancID] = None
+    study_id    : Optional[str] = None
+    ope_no      : List[OpeNo]
+    result_data : Optional[List[Any]] = None
+    params_data : Optional[List[Any]] = None
