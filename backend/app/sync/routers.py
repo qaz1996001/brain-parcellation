@@ -13,7 +13,7 @@ from sqlalchemy.engine.row import Row
 from backend.app.sync import urls
 from .service import DCOPEventDicomService
 from .model import DCOPEventModel
-from .schemas import OrthancIDRequest, DCOPStatus, DCOPEventRequest, OrthancID,DCOPEventNIFTITOOLRequest
+from .schemas import DCOPStatus, DCOPEventRequest, OrthancID, DCOPEventNIFTITOOLRequest, PostStudyRequest
 
 from ..database import alchemy
 
@@ -34,17 +34,18 @@ async def get_study_uuid() -> Response:
              summary="更新同步的 Study UUID",
              description="傳入 STUDY_TRANSFER_COMPLETE Study UUID",
              response_description="",)
-async def post_study_uuid(request:OrthancIDRequest,
+async def post_study_uuid(request:PostStudyRequest,
                           dcop_event_service: Annotated[DCOPEventDicomService,
                           Depends(alchemy.provide_service(DCOPEventDicomService))],
                           background_tasks: BackgroundTasks
                           ) -> Response:
+    logger.info(f'1000000000 request {request}')
+    return request
 
-
-    result_list = await dcop_event_service.add_study_new(data_list=request.ids)
-    logger.info(f'1000000000 result_list {result_list}')
-    background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
-    return result_list
+    # result_list = await dcop_event_service.add_study_new(data_list=request.ids)
+    # logger.info(f'1000000000 result_list {result_list}')
+    # background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
+    # return result_list
 
 
 

@@ -2,7 +2,6 @@
 import re
 from typing import List, Annotated, Dict, Any
 
-from datetime import datetime
 from typing import Optional
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator, AfterValidator, ConfigDict
@@ -18,8 +17,13 @@ def validate_orthanc_id(v: str) -> str:
 OrthancID = Annotated[str, AfterValidator(validate_orthanc_id)]
 
 
-class OrthancIDRequest(BaseModel):
-    ids: list[OrthancID]
+# class OrthancIDRequest(BaseModel):
+#     ids: list[OrthancID]
+
+
+class PostStudyRequest(BaseModel):
+    ids:list[OrthancID] = Field(default=[OrthancID('ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30')])
+    msg:str =  Field(..., description="格式必須為 xxx.xxx，其中 x 為數字")
 
 
 class DCOPEventRequest(BaseModel):
@@ -42,31 +46,6 @@ class DCOPEventNIFTITOOLRequest(BaseModel):
     params_data:Optional[Dict[str,Any]] = None
     result_data:Optional[Dict[str,Any]] = None
 
-
-# class DCOPStatus(str, Enum):
-#     STUDY_NEW                  = "STUDY_NEW",
-#     STUDY_TRANSFERRING         = "STUDY_TRANSFERRING",
-#     STUDY_TRANSFER_COMPLETE    = "STUDY_TRANSFER_COMPLETE",
-#     STUDY_CONVERTING           = "STUDY_CONVERTING",
-#     STUDY_CONVERSION_COMPLETE  = "STUDY_CONVERSION_COMPLETE"
-#     STUDY_INFERENCE_READY      = "STUDY_INFERENCE_READY",
-#     STUDY_INFERENCE_QUEUED     = "STUDY_INFERENCE_QUEUED",
-#     STUDY_INFERENCE_RUNNING    = "STUDY_INFERENCE_RUNNING",
-#     STUDY_INFERENCE_FAILED     = "STUDY_INFERENCE_FAILED",
-#     STUDY_INFERENCE_COMPLETE   = "STUDY_INFERENCE_COMPLETE",
-#     STUDY_RESULTS_SENT         = "STUDY_RESULTS_SENT",
-#     SERIES_NEW                 = "SERIES_NEW",
-#     SERIES_TRANSFERRING        = "SERIES_TRANSFERRING",
-#     SERIES_TRANSFER_COMPLETE   = "SERIES_TRANSFER_COMPLETE",
-#     SERIES_CONVERTING          = "SERIES_CONVERTING",
-#     SERIES_CONVERSION_COMPLETE = "SERIES_CONVERSION_COMPLETE"
-#     SERIES_INFERENCE_FAILED    = "SERIES_INFERENCE_FAILED",
-#     SERIES_INFERENCE_READY     = "SERIES_INFERENCE_READY",
-#     SERIES_INFERENCE_QUEUED    = "SERIES_INFERENCE_QUEUED",
-#     SERIES_INFERENCE_RUNNING   = "SERIES_INFERENCE_RUNNING",
-#     SERIES_INFERENCE_COMPLETE  = "SERIES_INFERENCE_COMPLETE"
-#     SERIES_RESULTS_SENT        = "SERIES_RESULTS_SENT"
-#     pass
 
 class DCOPStatus(str, Enum):
 
