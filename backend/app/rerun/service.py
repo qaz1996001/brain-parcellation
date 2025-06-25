@@ -23,6 +23,7 @@ from backend.app.sync.schemas import DCOPStatus, OrthancID
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from backend.app.service import BaseRepositoryService
+from code_ai.task.schema.intput_params import Dicom2NiiParams
 from code_ai import load_dotenv
 
 
@@ -46,9 +47,13 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                       """)
 
 
-    async def get_study_new_re_model(self, study_uid:str,session:AsyncSession) :
-        from code_ai.task.schema.intput_params import Dicom2NiiParams
-        from code_ai import load_dotenv
+    async def get_study_new_re_model(self,
+                                     study_uid:str,
+                                     session:AsyncSession) ->Tuple[DCOPEventModel,
+                                                                    DCOPEventModel,
+                                                                    DCOPEventModel,
+                                                                    DCOPEventModel,
+                                                                    Dicom2NiiParams] :
         load_dotenv()
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
@@ -60,17 +65,25 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                                                         series_uid=None,
                                                         status=DCOPStatus.STUDY_NEW_RE.name,
                                                         session=session, )
+        new_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                     series_uid=None,
+                                                     status=DCOPStatus.STUDY_NEW.name,
+                                                     session=session, )
 
         data_transferring_re = await DCOPEventModel.create_event(study_uid=study_uid,
                                                                  series_uid=None,
                                                                  status=DCOPStatus.STUDY_TRANSFERRING_RE.name,
                                                                  session=session, )
+        data_transferring = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                              series_uid=None,
+                                                              status=DCOPStatus.STUDY_TRANSFERRING.name,
+                                                              session=session, )
 
         task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
                                       output_dicom_path=rename_dicom_path,
                                       output_nifti_path=rename_nifti_path, )
         data_transferring_re.params_data = task_params.get_str_dict()
-        return new_data_re, data_transferring_re,task_params
+        return new_data_re,new_data, data_transferring_re,data_transferring ,task_params
 
 
     async def re_run_by_study_rename_id(self, data_list:List[str],
@@ -91,24 +104,24 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         await self.del_study_result_by_field(field_name='study_uid',
                                              field_value=study_uid)
         try:
-
             # async with AsyncSession(self.repository.session.bind) as session:
             async with self.session_manager.get_session() as session:
-                new_data_re, data_transferring_re, task_params = await self.get_study_new_re_model(
-                    study_uid=study_uid, session=session)
+                data_tuple = await self.get_study_new_re_model(study_uid=study_uid, session=session)
+                new_data_re, new_data, data_transferring_re, data_transferring, task_params = data_tuple
                 session.add_all([new_data_re, data_transferring_re])
                 await session.commit()
                 await session.refresh(new_data_re)
                 await session.refresh(data_transferring_re)
                 logger.info('new_data_re {}'.format(new_data_re))
-                await dcop_event_service.dicom_tool_get_series_info([new_data_re])
-                task = dicom_to_nii.push(task_params.get_str_dict())
-                logger.info(f're_run_by_study_uid_on_one task {task}' )
             flage = True
         except:
             logger.info(traceback.print_exc())
             await session.rollback()
             flage = False
+
+        if flage:
+            await dcop_event_service.dicom_tool_get_series_info([new_data_re])
+
         return flage
 
     async def re_run_by_study_uid(self, data_list:List[OrthancID],dcop_event_service:DCOPEventDicomService) -> Optional[str]:
