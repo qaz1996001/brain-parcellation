@@ -7,6 +7,7 @@ from typing import List, Optional, Tuple
 import re
 import httpx
 from advanced_alchemy.extensions.fastapi import repository
+from advanced_alchemy.service import OffsetPagination
 from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
@@ -16,7 +17,7 @@ from fastapi_cache import FastAPICache
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 from .model import DCOPEventModel
-from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
+from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID
 from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
     SYNC_PROT_STUDY_TRANSFER_COMPLETE
 
@@ -638,3 +639,51 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 if done_count == len(results):
                     completed_study_events.append(result)
         return completed_study_events
+
+
+    async def get_stydy_series_ope_no_status(self,study_uid:OrthancID,
+                                             ope_no:OpeNo,
+                                             limit: int,
+                                             offset: int
+                                      ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+        async with self.session_manager.get_session() as session:
+            if study_uid is None:
+                sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) LIMIT :limit OFFSET :offset')
+                params = {'status': ope_no, 'limit': limit, 'offset': offset}
+                count_sql = text('SELECT COUNT(*) FROM public.get_stydy_series_ope_no_status(:status)')
+                count_params = {'status': ope_no}
+            else:
+                sql = text(
+                    'SELECT * FROM public.get_stydy_series_ope_no_status(:status) WHERE study_uid = :study_uid LIMIT :limit OFFSET :offset')
+                params = {'status': ope_no, 'study_uid': study_uid, 'limit': limit, 'offset': offset}
+                count_sql = text(
+                    'SELECT COUNT(*) FROM public.get_stydy_series_ope_no_status(:status) WHERE study_uid = :study_uid')
+                count_params = {'status': ope_no, 'study_uid': study_uid}
+
+            total_count_result = await session.execute(count_sql, count_params)
+            total_count = total_count_result.scalar_one()
+            execute = await session.execute(sql, params)
+            results = execute.all()
+            items = [StydySeriesOpeNoStatus.model_validate(row) for row in results]
+            return OffsetPagination(
+                items=items,
+                total=total_count,
+                limit=limit,
+                offset=offset,
+            )
+
+    async def get_check_study_series_conversion_complete(self,) -> List[StydySeriesOpeNoStatus]:
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        completed_studies = await self.query_studies_pending_completion()
+        study_events = await self.create_study_complete_events(
+            completed_studies,
+            raw_dicom_path,
+            rename_dicom_path,
+            rename_nifti_path
+        )
+        # Process events from the provided data list
+        completed_study_events = await self.identify_completed_studies(study_events)
+        logger.info(f'completed_study_events {completed_study_events}')
+        return [StydySeriesOpeNoStatus.model_validate(result) for result in completed_study_events]

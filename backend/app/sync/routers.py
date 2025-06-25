@@ -246,41 +246,34 @@ async def get_events_complex():
 @router.get("/query/study_series_ope_no_status",
             status_code=200,
             summary="study_series_ope_no_status")
-async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
+async def get_study_series_ope_no_status(dcop_event_service: Annotated[DCOPEventDicomService,
                                                            Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                         limit: int = Query(20, ge=1),
+                                         offset: int = Query(0, ge=0),
                     study_uid:Optional[OrthancID] = Query(None),
                     ope_no:OpeNo = Query(...)):
-    async with dcop_event_service.session_manager.get_session() as session:
-        if study_uid is None:
-            sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status)')
-            params = {'status': ope_no}
-        else:
-            sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
-            params = {'status': ope_no,
-                      'study_uid': study_uid}
-        execute = await session.execute(sql, params)
-        results = execute.all()
-        return [ StydySeriesOpeNoStatus.model_validate(result) for result in results]
+    result = await dcop_event_service.get_stydy_series_ope_no_status(study_uid=study_uid,
+                                                                     ope_no=ope_no,
+                                                                     limit=limit,
+                                                                     offset=offset, )
+    return result
 
 
 @router.get("/query/stydy_ope_no_status",
             status_code=200,
             summary="stydy_ope_no_status")
-async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
+async def get_stydy_ope_no_status(dcop_event_service: Annotated[DCOPEventDicomService,
                                                            Depends(alchemy.provide_service(DCOPEventDicomService))],
-                    study_uid:Optional[OrthancID] = Query(None),
-                    ope_no:OpeNo = Query(...)):
-    async with dcop_event_service.session_manager.get_session() as session:
-        if study_uid is None:
-            sql = text('SELECT * FROM public.get_stydy_ope_no_status(:status)')
-            params = {'status': ope_no}
-        else:
-            sql = text('SELECT * FROM public.get_stydy_ope_no_status(:status) where study_uid=:study_uid')
-            params = {'status': ope_no,
-                      'study_uid': study_uid}
-        execute = await session.execute(sql, params)
-        results = execute.all()
-        return [ StydySeriesOpeNoStatus.model_validate(result) for result in results]
+                                  study_uid:Optional[OrthancID] = Query(None),
+                                  ope_no:OpeNo = Query(...),
+                                  limit: int = Query(20, ge=1),
+                                  offset: int = Query(0, ge=0),
+                                  ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+    result = await dcop_event_service.get_stydy_ope_no_status(study_uid=study_uid,
+                                                              ope_no=ope_no,
+                                                              limit=limit,
+                                                              offset=offset,)
+    return result
 
 
 
@@ -289,20 +282,6 @@ async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
             summary="check_study_series_conversion_complete")
 async def get_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
                                                   Depends(alchemy.provide_service(DCOPEventDicomService))],):
-    upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-    raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-    rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-    rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
-    completed_studies = await dcop_event_service.query_studies_pending_completion()
-    study_events = await dcop_event_service.create_study_complete_events(
-        completed_studies,
-        raw_dicom_path,
-        rename_dicom_path,
-        rename_nifti_path
-    )
-    # Process events from the provided data list
-    completed_study_events = await dcop_event_service.identify_completed_studies(study_events)
-    logger.info(f'completed_study_events {completed_study_events}')
-
-    return [ StydySeriesOpeNoStatus.model_validate(result) for result in completed_study_events]
+    result = await dcop_event_service.get_check_study_series_conversion_complete()
+    return result
 
