@@ -85,8 +85,7 @@ def post_study(study_uid_list : List[str]):
     from backend.app.sync import urls
     UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     url = '{}{}'.format(UPLOAD_DATA_API_URL,urls.SYNC_PROT_STUDY)
-    data = {"ids": study_uid_list}
-    print(data)
+    data = {"ids": study_uid_list,'msg':'scheduler_check_add_task.py'}
     with httpx.Client(timeout=300) as clinet:
         rep = clinet.post(url=url, json = data)
         print(rep)
