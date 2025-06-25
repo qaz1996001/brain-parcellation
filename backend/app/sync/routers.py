@@ -1,7 +1,8 @@
 # app/sync/routers.py
 import logging
+import os
+import pathlib
 from typing import Annotated, Tuple, List, Optional, Any
-from pydantic import Field
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
@@ -280,3 +281,28 @@ async def get_query(dcop_event_service: Annotated[DCOPEventDicomService,
         execute = await session.execute(sql, params)
         results = execute.all()
         return [ StydySeriesOpeNoStatus.model_validate(result) for result in results]
+
+
+
+@router.get("/query/check_study_series_conversion_complete",
+            status_code=200,
+            summary="check_study_series_conversion_complete")
+async def get_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
+                                                  Depends(alchemy.provide_service(DCOPEventDicomService))],):
+    upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+    raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
+    rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
+    rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+    completed_studies = await dcop_event_service.query_studies_pending_completion()
+    study_events = await dcop_event_service.create_study_complete_events(
+        completed_studies,
+        raw_dicom_path,
+        rename_dicom_path,
+        rename_nifti_path
+    )
+    # Process events from the provided data list
+    completed_study_events = await dcop_event_service.identify_completed_studies(study_events)
+    logger.info(f'completed_study_events {completed_study_events}')
+
+    return [ StydySeriesOpeNoStatus.model_validate(result) for result in completed_study_events]
+

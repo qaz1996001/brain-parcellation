@@ -439,11 +439,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # post_check_study_series_conversion_complete call check
         if data is None:
             # Query studies not yet at STUDY_CONVERSION_COMPLETE status
-            completed_studies = await self._query_studies_pending_completion()
+            completed_studies = await self.query_studies_pending_completion()
         else:
             completed_studies = set()
             for dcop_enent in data:
-                result_set = await self._query_studies_pending_completion(dcop_enent.study_uid)
+                result_set = await self.query_studies_pending_completion(dcop_enent.study_uid)
                 logger.info(f'result_set {result_set}')
                 completed_studies.update(result_set)
 
@@ -451,7 +451,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             return None
         logger.info(f'completed_studies {completed_studies}', )
         # Create and send study completion events
-        study_events = await self._create_study_complete_events(
+        study_events = await self.create_study_complete_events(
             completed_studies,
             raw_dicom_path,
             rename_dicom_path,
@@ -459,10 +459,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         )
         # Process events from the provided data list
         logger.info(f'study_events {study_events}')
-        completed_study_events = await self._identify_completed_studies(study_events)
-
+        completed_study_events = await self.identify_completed_studies(study_events)
         # Process completed studies and queue them for inference
         if completed_study_events:
+            completed_study_events_dump = [completed_study.model_dump() for completed_study in completed_study_events]
+            await self._send_events(upload_data_api_url, completed_study_events_dump)
             # Queue inference tasks for completed studies
             await self._queue_inference_tasks(
                 completed_study_events,
@@ -473,7 +474,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             )
         return None
 
-    async def _query_studies_pending_completion(self, study_uid: Optional[str] = None):
+    async def query_studies_pending_completion(self, study_uid: Optional[str] = None):
         """Query for studies that have not yet reached STUDY_CONVERSION_COMPLETE status."""
         # async with self.repository.session as session:
         async with self.session_manager.get_session() as session:
@@ -508,8 +509,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return result_set
 
-    async def _create_study_complete_events(self, study_data_list, raw_dicom_path, rename_dicom_path,
-                                            rename_nifti_path):
+    async def create_study_complete_events(self, study_data_list, raw_dicom_path, rename_dicom_path,
+                                           rename_nifti_path):
         """Create STUDY_CONVERSION_COMPLETE events for studies with all series converted."""
         study_events = []
 
@@ -614,7 +615,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return series_by_study
 
-    async def _identify_completed_studies(self, study_events_list: List[DCOPEventRequest]):
+    async def identify_completed_studies(self, study_events_list: List[DCOPEventRequest]):
         """Identify studies with all series converted and create completion events."""
         completed_study_events = []
         # Query to get all series for this study
