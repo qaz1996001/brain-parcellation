@@ -215,9 +215,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
+            event_data_list = list(filter(lambda x:x,event_data))
             # event_data_json = json.dumps(event_data)
-            logger.info(f'_send_events {event_data}')
-            await client.post(url=url, timeout=180, data=event_data)
+            logger.info(f'_send_events {event_data_list}')
+            await client.post(url=url, timeout=180, data=event_data_list)
 
     async def _initiate_conversion_process(
             self,
