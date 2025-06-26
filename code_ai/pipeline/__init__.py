@@ -63,13 +63,13 @@ class PipelineConfig:
                         f'{self.python3} {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {output_path} ')
+                        f'--Output_folder {task.output_path} ')
             else:
                 return (f'cd {str(chuan_code)}  && '
                         f'{self.python3} {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {output_path} '
+                        f'--Output_folder {task.output_path} '
                         f'--DicomDir {input_dicom_dir} '
                         )
         else:
