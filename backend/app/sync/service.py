@@ -470,7 +470,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             completed_study_events_dump = [StydySeriesOpeNoStatus.model_validate(completed_study).model_dump() for completed_study in completed_study_events]
             study_events_filter = []
             for completed_study in completed_study_events:
-                study_event = list(filter(lambda x:x.study_uid==completed_study['study_uid'],study_events))
+                study_event = list(filter(lambda x:x.study_uid == completed_study.study_uid,study_events))
                 study_events_filter.extend(study_event)
             await self._send_events(upload_data_api_url, study_events_filter)
             # Queue inference tasks for completed studies
