@@ -33,6 +33,8 @@ dependencies = [
     "asyncpg>=0.30.0",
     "fastapi-cache2>=0.2.2",
     "reflex>=0.7.14",
+    "advanced-alchemy>=1.4.4",
+    "scikit-image>=0.25.2",
 ]
 
 [dependency-groups]

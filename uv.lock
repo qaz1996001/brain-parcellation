@@ -14,6 +14,21 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "advanced-alchemy"
+version = "1.4.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "alembic" },
+    { name = "greenlet" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f6/e3/641c6790277ee2371a60224e88c8f5ae71c4215778b8ef11d172cb5ba7f4/advanced_alchemy-1.4.4.tar.gz", hash = "sha256:f28c17562ca0e715002ff360caa81cb5b264d26e0b9732d86aa7545124457df7", size = 692435, upload-time = "2025-05-27T00:42:25.748Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3d/6d/ba8722fa31ab55561225788cbf65a08a0fb249af98d128649e233ee4758b/advanced_alchemy-1.4.4-py3-none-any.whl", hash = "sha256:ea0570d1c74e2deb5bbcda51337e545fdf71ccd7d2bf458620738e624ba86593", size = 228051, upload-time = "2025-05-27T00:42:23.436Z" },
+]
+
+[[package]]
 name = "aiofiles"
 version = "24.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2998,6 +3013,7 @@ name = "shh-ai-pyton"
 version = "0.1.3"
 source = { virtual = "." }
 dependencies = [
+    { name = "advanced-alchemy" },
     { name = "aiofiles" },
     { name = "asyncpg" },
     { name = "celery" },
@@ -3021,6 +3037,7 @@ dependencies = [
     { name = "python-multipart" },
     { name = "redis" },
     { name = "reflex" },
+    { name = "scikit-image" },
     { name = "simpleitk" },
     { name = "sqlalchemy" },
     { name = "tqdm" },
@@ -3069,6 +3086,7 @@ all = [
 
 [package.metadata]
 requires-dist = [
+    { name = "advanced-alchemy", specifier = ">=1.4.4" },
     { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "celery", specifier = "==5.4.0" },
@@ -3092,6 +3110,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "redis", specifier = "==5.2.1" },
     { name = "reflex", specifier = ">=0.7.14" },
+    { name = "scikit-image", specifier = ">=0.25.2" },
     { name = "simpleitk", specifier = "==2.4.1" },
     { name = "sqlalchemy", specifier = "==2.0.38" },
     { name = "tqdm", specifier = "==4.67.1" },
