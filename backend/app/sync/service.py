@@ -471,6 +471,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             for completed_study in completed_study_events:
                 study_event = list(filter(lambda x:x.study_uid == completed_study.study_uid,study_events))
                 study_events_filter.extend(study_event)
+            study_events_filter = list(map(lambda x:x.model_dump(),study_events_filter))
             await self._send_events(upload_data_api_url, study_events_filter)
             # Queue inference tasks for completed studies
             await self._queue_inference_tasks(
@@ -602,8 +603,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
             # Send inference events
             await self._send_events(upload_data_api_url,
-                                    [dcop_event_inference_ready.model_dump_json(),
-                                     dcop_event_inference_queued.model_dump_json()])
+                                    [dcop_event_inference_ready.model_dump(),
+                                     dcop_event_inference_queued.model_dump()])
 
     def _group_series_by_study(self, events):
         """Group series completion events by study."""
