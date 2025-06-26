@@ -463,7 +463,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         completed_study_events = await self.identify_completed_studies(study_events)
         # Process completed studies and queue them for inference
         if completed_study_events:
-            completed_study_events_dump = [completed_study.model_dump() for completed_study in completed_study_events]
+            completed_study_events_dump = [StydySeriesOpeNoStatus.model_validate(completed_study).model_dump() for completed_study in completed_study_events]
             await self._send_events(upload_data_api_url, completed_study_events_dump)
             # Queue inference tasks for completed studies
             await self._queue_inference_tasks(
