@@ -485,12 +485,26 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def query_studies_pending_completion(self, study_uid: Optional[str] = None):
         """Query for studies that have not yet reached STUDY_CONVERSION_COMPLETE status."""
         # async with self.repository.session as session:
+        # --SELECT sos.study_id, debb.ope_no,sos.ope_no
+        # --FROM  public.get_stydy_series_ope_no_status_create_time('200.200') as sos ,
+        # --       (select deb.study_id, max(deb.ope_no::numeric)as ope_no from dcop_event_bt deb group by study_id  )  as debb
+        # --where  sos.study_id = debb.study_id
+        # --and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])
+        # --order by sos.create_time desc
         async with self.session_manager.get_session() as session:
             if study_uid is None:
-                sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status)')
+                sql = text('SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  FROM public.get_stydy_series_ope_no_status(:status) as sos , '
+                           '(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb '
+                           'where  sos.study_id = debb.study_id and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value}
             else:
-                sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
+                # --
+                sql = text('SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data FROM public.get_stydy_series_ope_no_status(:status) as sos , '
+                           '(SELECT deb.study_id, max(deb.ope_no::numeric)as ope_no from dcop_event_bt deb where deb.study_uid= :study_uid group by study_id  )  as debb '
+                           'where sos.study_uid=:study_uid '
+                           'and sos.study_id = debb.study_id '
+                           'and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) ')
+                # sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                           'study_uid': study_uid}
             execute = await session.execute(sql, params)
@@ -711,11 +725,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             )
 
 
-    async def get_check_study_series_conversion_complete(self,) -> Dict[str,Any] :
+    async def get_check_study_series_conversion_complete(self,study_uid: Optional[str] = None) -> Dict[str,Any] :
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
-        completed_studies = await self.query_studies_pending_completion()
+        completed_studies = await self.query_studies_pending_completion(study_uid=study_uid)
         study_events = await self.create_study_complete_events(
             completed_studies,
             raw_dicom_path,

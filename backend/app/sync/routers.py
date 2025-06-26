@@ -281,7 +281,8 @@ async def get_stydy_ope_no_status(dcop_event_service: Annotated[DCOPEventDicomSe
             status_code=200,
             summary="check_study_series_conversion_complete")
 async def get_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
-                                                  Depends(alchemy.provide_service(DCOPEventDicomService))],):
-    result = await dcop_event_service.get_check_study_series_conversion_complete()
+                                                     Depends(alchemy.provide_service(DCOPEventDicomService))],
+                                                     study_uid: Optional[str] = Query(None)):
+    result = await dcop_event_service.get_check_study_series_conversion_complete(study_uid=study_uid)
     return result
 
