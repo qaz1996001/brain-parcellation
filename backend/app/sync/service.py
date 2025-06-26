@@ -216,11 +216,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             event_data: List of serialized DCOPEventRequest objects.
         """
         event_data_list = list(filter(lambda x: x is not None, event_data))
+        logger.info(f'_send_events {event_data_list}')
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
             # event_data_json = json.dumps(event_data)
-            logger.info(f'_send_events {event_data_list}')
-            await client.post(url=url, timeout=180, data=event_data_list)
+            await client.post(url=url, data=event_data_list)
 
     async def _initiate_conversion_process(
             self,
@@ -463,7 +463,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             rename_nifti_path
         )
         # Process events from the provided data list
-        logger.info(f'study_events {study_events}')
         completed_study_events = await self.identify_completed_studies(study_events)
         # Process completed studies and queue them for inference
         if completed_study_events:
