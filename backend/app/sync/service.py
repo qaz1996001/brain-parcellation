@@ -3,7 +3,7 @@ import logging
 import os
 import pathlib
 import traceback
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 import re
 import httpx
 from advanced_alchemy.extensions.fastapi import repository
@@ -466,7 +466,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         completed_study_events = await self.identify_completed_studies(study_events)
         # Process completed studies and queue them for inference
         if completed_study_events:
-            completed_study_events_dump = [StydySeriesOpeNoStatus.model_validate(completed_study).model_dump() for completed_study in completed_study_events]
             study_events_filter = []
             for completed_study in completed_study_events:
                 study_event = list(filter(lambda x:x.study_uid == completed_study.study_uid,study_events))
@@ -680,7 +679,39 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 offset=offset,
             )
 
-    async def get_check_study_series_conversion_complete(self,) -> List[StydySeriesOpeNoStatus]:
+    async def get_stydy_ope_no_status(self,study_uid:OrthancID,
+                                      ope_no:OpeNo,
+                                      limit: int,
+                                      offset: int
+                                      ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+        async with self.session_manager.get_session() as session:
+            if study_uid is None:
+                sql = text('SELECT * FROM public.get_stydy_ope_no_status(:status) LIMIT :limit OFFSET :offset')
+                params = {'status': ope_no, 'limit': limit, 'offset': offset}
+                count_sql = text('SELECT COUNT(*) FROM public.get_stydy_ope_no_status(:status)')
+                count_params = {'status': ope_no}
+            else:
+                sql = text(
+                    'SELECT * FROM public.get_stydy_ope_no_status(:status) WHERE study_uid = :study_uid LIMIT :limit OFFSET :offset')
+                params = {'status': ope_no, 'study_uid': study_uid, 'limit': limit, 'offset': offset}
+                count_sql = text(
+                    'SELECT COUNT(*) FROM public.get_stydy_ope_no_status(:status) WHERE study_uid = :study_uid')
+                count_params = {'status': ope_no, 'study_uid': study_uid}
+
+            total_count_result = await session.execute(count_sql, count_params)
+            total_count = total_count_result.scalar_one()
+            execute = await session.execute(sql, params)
+            results = execute.all()
+            items = [StydySeriesOpeNoStatus.model_validate(row) for row in results]
+            return OffsetPagination(
+                items=items,
+                total=total_count,
+                limit=limit,
+                offset=offset,
+            )
+
+
+    async def get_check_study_series_conversion_complete(self,) -> Dict[str,Any] :
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
@@ -693,5 +724,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         )
         # Process events from the provided data list
         completed_study_events = await self.identify_completed_studies(study_events)
-        logger.info(f'completed_study_events {completed_study_events}')
-        return [StydySeriesOpeNoStatus.model_validate(result) for result in completed_study_events]
+        return {'studies_pending_completion':completed_studies,
+                "completed_study_events": [StydySeriesOpeNoStatus.model_validate(result) for result in completed_study_events]
+        }
