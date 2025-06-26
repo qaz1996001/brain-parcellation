@@ -123,6 +123,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # Retrieve study status information if not provided
         if data is None:
             dcop_event_list, dcop_event_dump_list = await self._get_studies_ready_for_transfer()
+            for dcop_event_dump in dcop_event_dump_list:
+                dcop_event_dump['params_data']
         else:
             dcop_event_list = [DCOPEventRequest.model_validate(event, strict=False) for event in data]
             dcop_event_dump_list = [dcop_event.model_dump() for dcop_event in dcop_event_list]
@@ -213,9 +215,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             api_url: Base URL for the upload data API.
             event_data: List of serialized DCOPEventRequest objects.
         """
+        event_data_list = list(filter(lambda x: x is not None, event_data))
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
-            event_data_list = list(filter(lambda x: x is not None, event_data))
             # event_data_json = json.dumps(event_data)
             logger.info(f'_send_events {event_data_list}')
             await client.post(url=url, timeout=180, data=event_data_list)
@@ -466,7 +468,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # Process completed studies and queue them for inference
         if completed_study_events:
             completed_study_events_dump = [StydySeriesOpeNoStatus.model_validate(completed_study).model_dump() for completed_study in completed_study_events]
-            await self._send_events(upload_data_api_url, completed_study_events_dump)
+            study_events_filter = []
+            for completed_study in completed_study_events:
+                study_event = list(filter(lambda x:x.study_uid==completed_study['study_uid'],study_events))
+                study_events_filter.extend(study_event)
+            await self._send_events(upload_data_api_url, study_events_filter)
             # Queue inference tasks for completed studies
             await self._queue_inference_tasks(
                 completed_study_events,
