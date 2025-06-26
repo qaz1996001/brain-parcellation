@@ -207,7 +207,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return dcop_event_list, dcop_event_dump_list
 
-    async def _send_events(self, api_url: str, event_data: List[dict]) -> None:
+    async def _send_events(self, api_url: str, event_data) -> None:
         """
         Sends study transfer complete events to the API.
 
@@ -220,7 +220,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
             # event_data_json = json.dumps(event_data)
-            await client.post(url=url, data=event_data_list)
+            await client.post(url=url, json=event_data_list)
 
     async def _initiate_conversion_process(
             self,
@@ -602,8 +602,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
             # Send inference events
             await self._send_events(upload_data_api_url,
-                                    [dcop_event_inference_ready.model_dump(),
-                                     dcop_event_inference_queued.model_dump()])
+                                    [dcop_event_inference_ready.model_dump_json(),
+                                     dcop_event_inference_queued.model_dump_json()])
 
     def _group_series_by_study(self, events):
         """Group series completion events by study."""
