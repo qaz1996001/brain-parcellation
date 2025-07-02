@@ -30,8 +30,10 @@ import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3, load_dotenv
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import dicom_seg_multi_file, upload_dicom_seg, pipeline_parser, upload_json
-from code_ai.pipeline import get_study_id
+from code_ai.pipeline import get_study_id,pipeline_parser
+from code_ai.pipeline.dicomseg import dicom_seg_cmb_file
+from code_ai.pipeline.upload import upload_dicom_seg, upload_json
+
 
 load_dotenv()
 
@@ -164,31 +166,15 @@ if __name__ == '__main__':
     cmb_path_str,output_nii_path_str,output_json_path_str = pipeline_cmb(ID, swan_path_str, t1_path_str, path_output,
                                                                          path_code, path_processModel,path_json,
                                                                          path_log, path_synthseg, gpu_n)
-    # dicom_seg
-    if cmb_path_str is not None:
-        stdout, stderr = dicom_seg_multi_file(ID,InputsDicomDir,cmb_path_str,path_output )
-        upload_dicom_seg(path_output,cmb_path_str,)
+
     if output_nii_path_str is not None:
-        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir, output_nii_path_str, path_output)
+        stdout, stderr = dicom_seg_cmb_file(ID, InputsDicomDir, output_nii_path_str, path_output)
         upload_dicom_seg(path_output, output_nii_path_str, )
+        upload_json(ID, InferenceEnum.CMB)
+    # dicom_seg
+    # if cmb_path_str is not None:
+    #     stdout, stderr = dicom_seg_cmb_file(ID,InputsDicomDir,cmb_path_str,path_output )
+    #     upload_dicom_seg(path_output,cmb_path_str,)
 
 
-    platform_json_path = output_nii_path_str.replace('.nii.gz', '_platform_json.json')
-    with open(platform_json_path) as f:
-        platform_json = json.load(f)
-    with open(output_json_path_str) as f:
-        output_json = json.load(f)
-    for i , ser in enumerate(platform_json['mask']['series']):
-        try:
-            cmb_dict = next(filter(lambda x:ser['instances'][0]['mask_index'] == x['label#'],
-                                  output_json))
-            platform_json['mask']['series'][i]['instances'][0]['diameter'] = str(cmb_dict['pred_diameter'])
-            platform_json['mask']['series'][i]['instances'][0]['type']     = str(cmb_dict['class_name'])
-            platform_json['mask']['series'][i]['instances'][0]['location'] = str(cmb_dict['type_name'])
-
-        except StopIteration:
-            continue
-    with open(platform_json_path,mode='w') as f:
-        json.dump(platform_json,f)
-    upload_json(ID, InferenceEnum.CMB)
 

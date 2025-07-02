@@ -377,7 +377,8 @@ class CMBServiceTF:
                                 'Pred_diameter': ((props['bbox-3'] - props['bbox-0']) * spacing[0] + (
                                         props['bbox-4'] - props['bbox-1']) * spacing[1]) / 2,
                                 'Pred_mean': props['intensity_mean'] / 0.6,
-                                'TP_conf': TP_conf, 'CMB_prob': (props['intensity_mean'] / 0.6 + TP_conf) / 2,
+                                'TP_conf': TP_conf,
+                                'CMB_prob': (props['intensity_mean'] / 0.6 + TP_conf) / 2,
                                 'Pred_type': pred_type})
         # sort and false-positive filtering
         df_pred = df_pred[(df_pred['CMB_prob'] > min_th)]  # filter too small CMB_prob
@@ -434,13 +435,14 @@ class CMBServiceTF:
             label_index                       = get_location(lb)
             df_tsv.loc[lb, 'type']            = f"C{label_index}"  # location
             df_tsv.loc[lb, 'type_name']       = cls.label_index_name_mapping_dict.get(label_index, '')
-            df_tsv.loc[lb, 'LPS_coordinates'] = ",".join([str(x) for x in props.bbox])
+            # df_tsv.loc[lb, 'LPS_coordinates'] = ",".join([str(x) for x in props.bbox])
             df_tsv.loc[lb, 'pred_diameter']   = df_pred.loc[df_pred['Pred_label'] == lb, 'Pred_diameter'].values[0]
+            df_tsv.loc[lb, 'CMB_prob']        = df_pred.loc[df_pred['Pred_label'] == lb, 'CMB_prob'].values[0]
             # df_tsv.loc[lb, 'cube_shape']    = ",".join([str(x) for x in props.image.shape])
             # df_tsv.loc[lb, 'mask_in_cube']  = ",".join(['1' if x > 0 else '0' for x in props.image.ravel()])
         # df_tsv['image_size']                = ",".join([str(x) for x in label_arr.shape])
-        df_tsv['CAD_method'] = "AI_v3"
-        df_tsv['Doctor']     = "AI"
+        # df_tsv['CAD_method'] = "AI_v3"
+        # df_tsv['Doctor']     = "AI"
         df_tsv['c-time']     = datetime.datetime.now().strftime('%Y/%m/%d %H:%M')
 
         with open(output_json_path_str, 'w') as f:
