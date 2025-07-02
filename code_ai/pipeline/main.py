@@ -541,11 +541,6 @@ def main(args):
 
     # --------- 檢 參數 建立存檔名稱 end----------------
     synth_seg = SynthSeg()
-    print('args',args)
-    print('file_list', file_list)
-    print('resample_file_list', resample_file_list)
-    print('template_resample_file_list', template_resample_file_list)
-    print('template_synthseg_file_list', template_synthseg_file_list)
     for i in range(len(file_list)):
         try:
             if args.template:
