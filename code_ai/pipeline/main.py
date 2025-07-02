@@ -364,8 +364,6 @@ import gc
 
 from code_ai.utils.resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
 
-# from code_ai.utils_resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
-
 
 def str_to_bool(v):
     if isinstance(v, bool):
@@ -543,22 +541,32 @@ def main(args):
 
     # --------- 檢 參數 建立存檔名稱 end----------------
     synth_seg = SynthSeg()
+    print('args',args)
+    print('file_list', file_list)
+    print('resample_file_list', resample_file_list)
+    print('template_resample_file_list', template_resample_file_list)
+    print('template_synthseg_file_list', template_synthseg_file_list)
     for i in range(len(file_list)):
         try:
             if args.template:
                 resample_one(str(file_list[i]), str(resample_file_list[i]))
                 synth_seg.run_segmentations33(path_images=str(resample_file_list[i]),
-                                              path_segmentations33=str(synthseg33_file_list[i]), )
+                                              path_segmentations33=str(synthseg33_file_list[i]),)
+
                 resample_one(str(template_file_list[i]), str(template_resample_file_list[i]))
                 synth_seg.run(path_images=str(template_resample_file_list[i]),
                               path_segmentations=str(template_synthseg_file_list[i]),
                               path_segmentations33=str(template_synthseg33_file_list[i]),
                               )
 
+                original_seg_file, argmin = resampleSynthSEG2original_z_index(file_list[i],
+                                                                              resample_file_list[i],
+                                                                              synthseg33_file_list[i])
                 synthseg_nii = nib.load(str(template_synthseg_file_list[i]))
-                synthseg_array = synthseg_nii.get_fdata()
                 synthseg33_nii = nib.load(str(template_synthseg33_file_list[i]))
-                synthseg33_array = synthseg33_nii.get_fdata()
+
+                synthseg_array = np.array(synthseg_nii.dataobj)
+                synthseg33_array = np.array(synthseg33_nii.dataobj)
                 seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(synthseg_array=synthseg_array,
                                                                                 synthseg33=synthseg33_array,
                                                                                 depth_number=depth_number)
@@ -604,11 +612,12 @@ def main(args):
                                                                                    template_coregistration_file_name,)
                     print(f'cmb {flirt_cmd_apply_str}')
                     os.system(flirt_cmd_apply_str)
-                    print('resampleSynthSEG2original',cmb_file_list[i].parent.joinpath(f'{cmb_coregistration_file_name}.nii.gz'))
-                    resampleSynthSEG2original(file_list[i],
-                                              resample_file_list[i],
-                                              cmb_file_list[i].parent.joinpath(f'{cmb_coregistration_file_name}.nii.gz'
-                                                                               ))
+                    print('save_original_seg_by_argmin_z_index ',cmb_file_list[i].parent.joinpath(f'{cmb_coregistration_file_name}.nii.gz'))
+                    save_original_seg_by_argmin_z_index(file_list[i],
+                                                        cmb_file_list[i].parent.joinpath(
+                                                            f'{cmb_coregistration_file_name}.nii.gz'
+                                                            ),
+                                                        argmin=argmin)
 
                 if args.dwi:
                     dwi_basename = str(dwi_file_list[i]).replace('.nii.gz', '')
@@ -637,7 +646,7 @@ def main(args):
                 synthseg_nii = nib.load(synthseg_file_list[i])
                 synthseg_array = np.array(synthseg_nii.dataobj)
                 synthseg33_nii = nib.load(synthseg33_file_list[i])
-                synthseg33_array = synthseg33_nii.get_fdata()
+                synthseg33_array = np.array(synthseg33_nii.dataobj)
                 seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(synthseg_array=synthseg_array,
                                                                                 synthseg33=synthseg33_array,
                                                                                 depth_number=depth_number)
