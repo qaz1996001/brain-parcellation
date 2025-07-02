@@ -26,9 +26,9 @@ import pynvml  # 导包
 import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
-
-from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file, upload_dicom_seg
 from code_ai import PYTHON3, load_dotenv
+from code_ai.pipeline import study_id_pattern, pipeline_parser, upload_dicom_seg
+from code_ai.pipeline.dicomseg import dicom_seg_multi_file
 load_dotenv()
 
 
