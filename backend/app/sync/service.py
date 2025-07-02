@@ -392,7 +392,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         for dcop_event in data:
             study_uid = dcop_event.study_uid
-            logger.info(f'1000000100 dcop_event {dcop_event}')
+            logger.info(f'dicom_tool_get_series_info dcop_event {dcop_event}')
             study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
             if study_uid_raw_dicom_path.exists():
                 async with self.session_manager.get_session() as session:

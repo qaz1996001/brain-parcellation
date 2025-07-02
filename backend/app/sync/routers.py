@@ -242,6 +242,70 @@ async def get_events_complex():
     return study_uids
 
 
+@router.delete("/cache",
+               status_code=200,
+               summary="cache")
+async def delete_events_complex(study_id:Optional[str]        = Query(None),
+                                study_uid:Optional[OrthancID] = Query(None)):
+    redis_backend = FastAPICache.get_backend()
+    redis_client = redis_backend.redis
+
+    if not study_id and not study_uid:
+        return {"error": "Either study_id or study_uid must be provided"}
+
+    # 取得所有快取鍵
+    cached_keys = await redis_client.keys("inference_task:*")
+
+    deleted_keys = []
+
+    for key in cached_keys:
+        try:
+            # 確保鍵是字串格式
+            if isinstance(key, str):
+                key_str = key
+            else:
+                key_str = key.decode('utf-8')
+
+            # 解析鍵格式: "inference_task:<study_uid>,<study_id>"
+            parts = key_str.split(':')
+            logger.info('parts {}'.format(parts))
+            if len(parts) >= 2 and parts[0] == "inference_task":
+                # 取得 study_uid 和 study_id 部分
+                uid_id_part = parts[1]
+
+                # 分割 study_uid 和 study_id
+                if ',' in uid_id_part:
+                    cached_study_uid, cached_study_id = uid_id_part.split(',', 1)
+
+                    # 檢查是否符合刪除條件
+                    should_delete = False
+                    if study_uid and cached_study_uid == study_uid:
+                        should_delete = True
+                    elif study_id and cached_study_id == study_id:
+                        should_delete = True
+
+                    if should_delete:
+                        # 刪除快取
+                        await redis_client.delete(key)
+                        deleted_keys.append(key_str)
+                        logger.info(f"Deleted cache key: {key_str}")
+
+        except Exception as e:
+            logger.error(f"Error processing cache key {key}: {e}")
+
+    return {
+        "message": f"Cache deletion completed",
+        "deleted_keys": deleted_keys,
+        "deleted_count": len(deleted_keys),
+        "search_criteria": {
+            "study_id": study_id,
+            "study_uid": study_uid
+        }
+    }
+
+
+
+
 
 @router.get("/query/study_series_ope_no_status",
             status_code=200,
