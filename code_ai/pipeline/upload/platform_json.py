@@ -24,7 +24,6 @@ def main():
 
     UPLOAD_DATA_JSON_URL = os.getenv("UPLOAD_DATA_JSON_URL")
 
-
     client = httpx.Client()
     if isinstance(args.Inputs, str):
         with open(args.Inputs, 'rb') as f:

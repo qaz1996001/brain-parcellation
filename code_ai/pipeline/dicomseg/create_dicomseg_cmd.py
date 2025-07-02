@@ -33,7 +33,10 @@ from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import DCM_EXAMPLE
 from code_ai.pipeline.dicomseg.schema import MaskRequest, MaskSeriesRequest, MaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema import StudyRequest,StudySeriesRequest , SortedRequest
-from code_ai.pipeline.dicomseg.schema import AITeamRequest, GROUP_ID
+from code_ai.pipeline.dicomseg.schema import AITeamRequest
+from code_ai import load_dotenv
+load_dotenv()
+GROUP_ID = os.getenv("GROUP_ID_CMB",44)
 
 from code_ai.utils.inference.config import CONFIG_DICT
 
