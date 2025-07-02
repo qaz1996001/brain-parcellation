@@ -23,6 +23,17 @@ conda activate shhai
 conda deactivate
 ```
 
+```bash 
+conda activate tf_2_14
+
+cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
+cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
+
+
+conda activate tf_2_14
+
+```
+
 #### MRA_BRAIN 
 
 ```bash 
@@ -60,15 +71,15 @@ sudo apt install unzip
 conda activate tf_2_14
 uv pip install -r pyproject.toml --system
 
-cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
 cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
+cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
 
 
 conda activate tf_2_14
 
 cat <<EOF | xargs -I{} bash -c 'conda run -n tf_2_14 bash -c "
 cd /var/www/brain-parcellation && \
-export PYTHONPATH=\$(pwd) && \
+&export PYTHONPATH=\$(pwd) & \
 python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
   --input_dicom \"{}\" \
   --output_dicom /data/4TB1/pipeline/sean/rename_dicom \

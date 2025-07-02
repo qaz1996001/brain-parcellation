@@ -2472,6 +2472,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pynvml"
+version = "11.5.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/e9/9931792cb776716363fc7c3039b477d11278173d71ddc230eb9b5f4ce93f/pynvml-11.5.3.tar.gz", hash = "sha256:183d223ae487e5f00402d8da06c68c978ef8a9295793ee75559839c6ade7b229", size = 73685, upload-time = "2024-07-16T14:05:38.937Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/5b/16e50abf152be7f18120f11dfff495014a9eaff7b764626e1656f04ad262/pynvml-11.5.3-py3-none-any.whl", hash = "sha256:a5fba3ab14febda50d19dbda012ef62ae0aed45b7ccc07af0bc5be79223e450c", size = 53135, upload-time = "2024-07-16T14:05:37.23Z" },
+]
+
+[[package]]
 name = "pyopengl"
 version = "3.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3032,6 +3041,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pydicom" },
     { name = "pydicom-seg" },
+    { name = "pynvml" },
     { name = "pyorthanc", extra = ["all"] },
     { name = "python-dotenv" },
     { name = "python-multipart" },
@@ -3105,6 +3115,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = "==2.9.9" },
     { name = "pydicom", specifier = "==2.4.3" },
     { name = "pydicom-seg", specifier = ">=0.4.1" },
+    { name = "pynvml", specifier = ">=11.5.3" },
     { name = "pyorthanc", extras = ["all"], specifier = ">=1.20.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
