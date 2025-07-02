@@ -20,20 +20,6 @@ from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 
-def _send_events(api_url: str, event_data: List[dict]) -> None:
-    """
-    Sends study transfer complete events to the API.
-
-    Args:
-        api_url: Base URL for the upload data API.
-        event_data: List of serialized DCOPEventRequest objects.
-    """
-    with httpx.Client(timeout=180) as client:
-        url = f"{api_url}"
-        event_data_json = json.dumps(event_data)
-        rep = client.post(url=url, timeout=180, data=event_data_json)
-
-
 @Booster(BoosterParamsMyAI(queue_name ='task_pipeline_inference_queue',
                            user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
                            qps=1,
@@ -88,8 +74,9 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         result_list.append((inference_item.cmd_str,stdout.decode(), stderr.decode()))
-        logger.info(stderr.decode())
-        logger.warn(stderr.decode())
+        print('stdout.decode()',stdout.decode())
+        # logger.info("{}".format(stdout.decode()))
+        # logger.warn("{}".format(stderr.decode()))
     result = Serialization.to_json_str(result_list)
     if study_uid and study_id:
         dcop_event = DCOPEventRequest(study_uid=study_uid, series_uid=None, study_id=study_id,
