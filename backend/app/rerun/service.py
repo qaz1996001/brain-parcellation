@@ -108,7 +108,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
             async with self.session_manager.get_session() as session:
                 data_tuple = await self.get_study_new_re_model(study_uid=study_uid, session=session)
                 new_data_re, new_data, data_transferring_re, data_transferring, task_params = data_tuple
-                session.add_all([new_data_re, data_transferring_re])
+                session.add_all([new_data_re, new_data, data_transferring_re, data_transferring])
                 await session.commit()
                 await session.refresh(new_data_re)
                 await session.refresh(data_transferring_re)
@@ -121,7 +121,6 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
 
         if flage:
             await dcop_event_service.dicom_tool_get_series_info([new_data_re])
-
         return flage
 
     async def re_run_by_study_uid(self, data_list:List[OrthancID],dcop_event_service:DCOPEventDicomService) -> Optional[str]:
@@ -142,6 +141,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         parameters = {'status': DCOPStatus.STUDY_RESULTS_SENT.value,
                       field_name: field_value}
         await self.del_study_result_by_parameters(sql=sql, parameters=parameters)
+        await self.del_study_cache(field_name,field_value)
 
     async def del_study_result_by_study_uid(self, study_uid:str) -> Optional[str]:
 
@@ -177,10 +177,9 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 study_wmh_path = wmh_path.joinpath(result.study_id)
                 study_rename_dicom_path = rename_dicom_path.joinpath(result.study_id)
                 study_rename_nifti_path = rename_nifti_path.joinpath(result.study_id)
-                async for input_path in self.async_path_generator(
-                        [study_aneurysm_path, study_cmb_path, study_cmd_tools_path,
+                for input_path in [study_aneurysm_path, study_cmb_path, study_cmd_tools_path,
                          study_infarct_path, study_synthseg_path, study_wmh_path,
-                         study_rename_dicom_path, study_rename_nifti_path]):
+                         study_rename_dicom_path, study_rename_nifti_path]:
                     await self.del_path(input_path)
                 try:
                     insert_execute = await session.execute(self.insert_sql, {'study_uid': result.study_uid})
@@ -193,6 +192,12 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                     await session.rollback()
                     logger.error(f'except {traceback.print_exc()}')
 
+    async def del_study_cache(self, field_name:str,field_value:str):
+        load_dotenv()
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        async with httpx.AsyncClient(timeout=180) as client:
+            url = f"{upload_data_api_url}/cache"
+            await client.delete(url=url, timeout=180, params={field_name:field_value})
 
     @staticmethod
     async def _send_events(event_data: List[dict]) -> None:
