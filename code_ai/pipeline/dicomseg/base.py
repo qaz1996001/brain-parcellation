@@ -47,7 +47,9 @@ class PlatformJSONBuilder(Generic[T], metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def build_mask_series(self,
                           source_images: List[Union[FileDataset, DicomDir]],
-                          dcm_seg: Union[FileDataset, DicomDir],
+                          reslut_list: List[Dict[str, Any]],
+                          pred_json_list: List[Dict[str, Any]],
+                          # dcm_seg: Union[FileDataset, DicomDir],
                           *args, **kwargs) -> Union[Dict[str,Any],Any]:
         pass
 

@@ -28,7 +28,7 @@ from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import utils
 from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
 from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest,StudyModelRequest
-from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskInstanceRequest
+from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest
 from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder
 from code_ai import load_dotenv
@@ -78,86 +78,68 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
         })
         return CMBMaskInstanceRequest.model_validate(mask_instance_dict)
 
+    # def build_mask_series(self, source_images: List[Union[FileDataset, DicomDir]],
+    #                       dcm_seg: Union[FileDataset, DicomDir], *args,
+    #                       **kwargs) -> Dict[str,Any]:
+    def build_mask_series(self,
+                          source_images: List[Union[FileDataset, DicomDir]],
+                          reslut_list: List[Dict[str, Any]],
+                          pred_json_list: List[Dict[str, Any]],
+                          # dcm_seg: Union[FileDataset, DicomDir],
+                          *args, **kwargs) -> Union[Dict[str,Any],Any]:
 
-    def build_mask_series(self, source_images: List[Union[FileDataset, DicomDir]],
-                          dcm_seg: Union[FileDataset, DicomDir], *args,
-                          **kwargs) -> Dict[str,Any]:
         """
             one cmb lesion is one mask series
 
         """
-        mask_series_dict = dict()
-        mask_instance_list = []
-        # Get the series UID and type from the source images
         series_instance_uid = source_images[0].get((0x0020, 0x000E)).value
-
-        # Update the series dictionary with basic information
-        mask_series_dict.update({
+        mask_series_dict = {
             'series_instance_uid': series_instance_uid,
             'series_type': self.series_type,
             'model_type' : self.model_type
-        })
-
+        }
+        mask_instance_list = []
         # diameter -> pred_diameter = kwargs.get('diameter', '0.0')
         # type     -> class_name
         # location -> type_name
         # sub_location = kwargs.get('sub_location', '2')
         # prob_max -> CMB_prob
-
-        kwargs.update({'diameter': kwargs['pred_diameter'],
-                       'type': kwargs['class_name'],
-                       'location': kwargs['type_name'],
-                       'prob_max': kwargs['CMB_prob'],
-                       })
-
-        # Create a mask instance for this series
-        mask_instance_list.append(self.build_mask_instance(source_images,
-                                                           dcm_seg, *args, **kwargs))
-
-        # Add the instances to the series dictionary
-        mask_series_dict.update({'instances': mask_instance_list})
-
-        return mask_series_dict
-
-    def set_mask(self, source_images: List[Union[FileDataset, DicomDir]],
-                 result_list: List[Dict[str, Any]],
-                 pred_json_list: List[Dict[str, Any]], group_id: int) -> Self:
-
-        mask_dict = dict()
-        mask_series_list = []
-        # Process each result in the result list
-        for index, result in enumerate(result_list):
-            filter_cmd_data = list(filter(lambda x: x['label#'] == result['mask_index'], pred_json_list))
+        for index, reslut in enumerate(reslut_list):
+            filter_cmd_data = list(filter(lambda x: x['label#'] == reslut['mask_index'], pred_json_list))
             if filter_cmd_data:
                 pass
                 filter_cmd: Dict[str, Any] = filter_cmd_data[0]
             else:
                 continue
-            dcm_seg_path = result['dcm_seg_path']
-
-            filter_cmd.update({'main_seg_slice': result['main_seg_slice'],
-                               'mask_index': result['mask_index']})
-
-            # Read the DICOM-SEG file
+            dcm_seg_path = reslut['dcm_seg_path']
             with open(dcm_seg_path, 'rb') as f:
                 dcm_seg = pydicom.read_file(f)
+            kwargs.update({'diameter': filter_cmd['pred_diameter'],
+                           'type': filter_cmd['class_name'],
+                           'location': filter_cmd['type_name'],
+                           'prob_max': filter_cmd['CMB_prob'],
+                           'main_seg_slice' : reslut['main_seg_slice'],
+                           'mask_index' : reslut['mask_index']
+                           })
+            # Create a mask instance for this series
+            mask_instance_list.append(self.build_mask_instance(source_images,
+                                                               dcm_seg, *args, **kwargs))
 
-            filter_cmd.update(dict(source_images=source_images,
-                                   dcm_seg = dcm_seg,))
+        # Add the instances to the series dictionary
+        mask_series_dict.update({'instances': mask_instance_list})
+        return CMBMaskSeriesRequest.model_validate(mask_series_dict)
 
-            # Create mask series JSON for this result
-            mask_series = self.build_mask_series(**filter_cmd)
-            mask_series_list.append(mask_series)
-            # If this is the first result, add study information to the mask dictionary
-            if index == 0:
-                study_instance_uid = source_images[0].get((0x0020, 0x000D)).value
-                mask_dict.update({
-                    'study_instance_uid': study_instance_uid,
-                    'group_id': group_id
-                })
+    def set_mask(self, source_images: List[Union[FileDataset, DicomDir]],
+                 result_list: List[Dict[str, Any]],
+                 pred_json_list: List[Dict[str, Any]], group_id: int) -> Self:
 
-        # Add the series list to the mask dictionary
-        mask_dict.update({'series': mask_series_list})
+        study_instance_uid = source_images[0].get((0x0020, 0x000D)).value
+        mask_dict = {
+            'study_instance_uid': study_instance_uid,
+            'group_id': group_id
+        }
+        mask_series = self.build_mask_series(source_images=source_images,reslut_list=result_list,pred_json_list=pred_json_list)
+        mask_dict.update({'series':[mask_series]})
         self._mask_request = CMBMaskRequest.model_validate(mask_dict)
         return self
 
