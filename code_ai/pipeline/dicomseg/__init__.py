@@ -40,7 +40,7 @@ def dicom_seg_cmb_file(ID:str,
                          nii_path_str:str,
                          path_output:str):
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/dicomseg/cmd.py '
+               '{} code_ai/pipeline/dicomseg/cmd_old.py '
                '--ID {} '
                '--InputsDicomDir {} '
                '--Inputs {} '
