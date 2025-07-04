@@ -9,15 +9,10 @@ import re
 
 import aiofiles.os
 import httpx
-from advanced_alchemy.extensions.fastapi import (
-    repository,
-    service,
-)
+from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.filters import LimitOffset
-from funboost import AsyncResult
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from backend.app.sync.model import DCOPEventModel
 from backend.app.sync.schemas import DCOPStatus, OrthancID
 from backend.app.sync.service import DCOPEventDicomService
