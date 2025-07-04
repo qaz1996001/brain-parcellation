@@ -6,9 +6,12 @@ import traceback
 from typing import List, Optional, Tuple, Dict, Any
 import re
 import httpx
+import pandas as pd
+import pydicom
 from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.service import OffsetPagination
 from funboost import AsyncResult
+from pyorthanc import Study, Orthanc
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,8 +157,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                                  series_uid=None,
                                                                  status=DCOPStatus.STUDY_NEW.name,
                                                                  session=session, )
+                    print(DCOPEventRequest.model_validate(new_data).model_dump())
                     session.add(new_data)
-                    # new_data_obj = await self.create(data=new_data)
                     task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
                                                   output_dicom_path=rename_dicom_path,
                                                   output_nifti_path=rename_nifti_path, )
@@ -165,8 +168,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                                           session=session, )
                     data_transferring.params_data = task_params.get_str_dict()
                     session.add(data_transferring)
-                    session.commit()
-                    session.flush()
+                    await session.commit()
+
                     # obj = await self.create_many(data=[new_data_obj,data_transferring],auto_commit=True)
                     result_list.append(new_data)
                     result_list.append(data_transferring)
@@ -381,6 +384,48 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         finally:
             pass
 
+    @staticmethod
+    def get_orthanc_study_uid_series_uid(instance_path_str: str):
+        instance_path = pathlib.Path(instance_path_str)
+        UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+        # raw_dicom\ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30\10089413 GUO HSIOU HUA\21002010079 MRI Stroke Wall C C\MR 3D Ax SWAN\*.dcm
+        with open(instance_path_str, mode='rb') as f:
+            dicom_ds = pydicom.dcmread(f)
+
+        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+        study_uid = instance_path.parent.parent.parent.parent.name
+        # (0020,000E)	Series Instance UID	1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703
+        series_sop_uid = dicom_ds[0x0020, 0x000E].value
+        # series_description = " ".join(instance_path.parent.name.split(" ")[1:]).strip()
+        study = Study(study_uid, client=client)
+        series_filter = list(filter(lambda series: series.uid == series_sop_uid, study.series))
+        if series_filter:
+            return str(study_uid), str(series_filter[0].id_)
+        else:
+            return None
+
+    @staticmethod
+    def get_orthanc_series_uid(study_uid: str,
+                               series_dir_set: set):
+        UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+        series_sop_uid_list = []
+        for series_dir in series_dir_set:
+            series_path_list = list(series_dir.rglob('*.dcm'))
+            instance_path_str = series_path_list[0]
+            with open(instance_path_str, mode='rb') as f:
+                dicom_ds = pydicom.dcmread(f)
+            series_sop_uid = dicom_ds[0x0020, 0x000E].value
+            series_sop_uid_list.append(series_sop_uid)
+        study = Study(study_uid, client=client)
+        series_dict_list = list(map(lambda x: {'series_sop_uid': x.uid,
+                                               'uid': x.id_,
+                                               'description': x.description, }, study.series))
+        df  = pd.DataFrame(series_sop_uid_list, columns=['file_series_sop_uid'])
+        df1 = pd.DataFrame(series_dict_list)
+        df2 = pd.merge(df, df1, left_on='file_series_sop_uid', right_on='series_sop_uid')
+        return df2
+
     async def dicom_tool_get_series_info(self, data: List[DCOPEventModel]):
         from code_ai.task.task_dicom2nii import dicom_to_nii
         from code_ai.task.schema.intput_params import Dicom2NiiParams
@@ -395,34 +440,39 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             logger.info(f'dicom_tool_get_series_info dcop_event {dcop_event}')
             study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
             if study_uid_raw_dicom_path.exists():
-                async with self.session_manager.get_session() as session:
-                    series_uid_path_list = sorted(study_uid_raw_dicom_path.iterdir())
+                dcm_path_list = sorted(study_uid_raw_dicom_path.rglob('*.dcm'))
+                series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
+                df = self.get_orthanc_series_uid(study_uid, series_dir_set)
+                series_uid_list = df['uid'].to_list()
+                task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
+                                              output_dicom_path=rename_dicom_path,
+                                              output_nifti_path=rename_nifti_path, )
+                flage = True
+                for series_uid in series_uid_list:
                     new_data_list = []
-                    task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
-                                                  output_dicom_path=rename_dicom_path,
-                                                  output_nifti_path=rename_nifti_path, )
+                    async with self.session_manager.get_session() as session:
+                        try:
+                            series_new_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                                                series_uid=series_uid,
+                                                                                status=DCOPStatus.SERIES_NEW.name,
+                                                                                session=session, )
+                            series_transferring_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                                                                                         series_uid=series_uid,
+                                                                                         status=DCOPStatus.SERIES_TRANSFERRING.name,
+                                                                                         session=session, )
+                            series_transferring_data.params_data = task_params.get_str_dict()
+                            new_data_list.append(series_new_data)
+                            new_data_list.append(series_transferring_data)
 
-                    for series_uid_path in series_uid_path_list:
-                        series_new_data = await DCOPEventModel.create_event(study_uid=study_uid,
-                                                                            series_uid=series_uid_path.name,
-                                                                            status=DCOPStatus.SERIES_NEW.name,
-                                                                            session=session, )
-                        series_transferring_data = await DCOPEventModel.create_event(study_uid=study_uid,
-                                                                                     series_uid=series_uid_path.name,
-                                                                                     status=DCOPStatus.SERIES_TRANSFERRING.name,
-                                                                                     session=session, )
-                        series_transferring_data.params_data = task_params.get_str_dict()
-                        new_data_list.append(series_new_data)
-                        new_data_list.append(series_transferring_data)
-                    try:
-                        session.add_all(new_data_list)
-                        await session.commit()
-                        await session.flush()
-                        task = dicom_to_nii.push(task_params.get_str_dict())
-                        logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
-                    except:
-                        await session.rollback()
-                        logger.error(traceback.print_exc())
+                            session.add_all(new_data_list)
+                            await session.commit()
+                            logger.info(f'dicom_tool_get_series_info {new_data_list}')
+                        except:
+                            flage = False
+                            await session.rollback()
+                            logger.error(traceback.print_exc())
+                if flage:
+                    task = dicom_to_nii.push(task_params.get_str_dict())
         return None
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):
