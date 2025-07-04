@@ -9,8 +9,11 @@ from typing import List, Dict
 
 import httpx
 import orjson
+import pandas as pd
+import pydicom
 from funboost import BrokerEnum, Booster
 from pydicom import dcmread
+from pyorthanc import Orthanc, Study
 
 from code_ai.dicom2nii.convert import ModalityProcessingStrategy, MRAcquisitionTypeProcessingStrategy, \
     MRRenameSeriesProcessingStrategy
@@ -329,6 +332,48 @@ def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
     return dicom_study_folder_path
 
 
+def get_orthanc_study_uid_series_uid(instance_path_str:str):
+    instance_path = pathlib.Path(instance_path_str)
+    with open(instance_path_str,mode='rb') as f:
+        dicom_ds = pydicom.dcmread(f)
+
+    # (0020,000E)	Series Instance UID	1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703
+    series_sop_uid = dicom_ds[0x0020, 0x000E].value
+
+    UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+    # ./raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/10089413 GUO HSIOU HUA/21002010079 MRI Stroke Wall C C/MR 3D Ax SWAN/*.dcm
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    study_uid = instance_path.parent.parent.parent.parent.name
+    study = Study(study_uid,client=client)
+    series_filter = list(filter(lambda series: series.uid == series_sop_uid , study.series))
+    if series_filter:
+        return str(study_uid),str(series_filter[0].id_)
+    else:
+        return None
+
+
+def get_orthanc_series_uid(study_uid: str,
+                           series_dir_set: set):
+    UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    series_sop_uid_list = []
+    for series_dir in series_dir_set:
+        series_path_list = list(series_dir.rglob('*.dcm'))
+        instance_path_str = series_path_list[0]
+        with open(instance_path_str, mode='rb') as f:
+            dicom_ds = pydicom.dcmread(f)
+        series_sop_uid = dicom_ds[0x0020, 0x000E].value
+        series_sop_uid_list.append(series_sop_uid)
+    study = Study(study_uid, client=client)
+    series_dict_list = list(map(lambda x: {'series_sop_uid': x.uid,
+                                           'uid': x.id_,
+                                           'description': x.description, }, study.series))
+    df  = pd.DataFrame(series_sop_uid_list, columns=['file_series_sop_uid'])
+    df1 = pd.DataFrame(series_dict_list)
+    df2 = pd.merge(df, df1, left_on='file_series_sop_uid', right_on='series_sop_uid')
+    return df2
+
+
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10,))
@@ -356,20 +401,23 @@ def process_dir(func_params: Dict[str, any]):
 
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
 
-    result_parent_set = set()
+    result_dict_list = list(map(lambda x:json.loads(x),result_list))
+    df = pd.DataFrame(result_dict_list,columns=['instance_path_str','rename_dicom_path'])
+    df['instance_dir_path'] = df['instance_path_str'](lambda x:os.path.dirname(x))
+    df.drop_duplicates(subset=['instance_dir_path','rename_dicom_path'],inplace=True)
+    df['instance_dir_path'] = df['instance_dir_path'](lambda x: pathlib.Path(x))
+    df['series_sop_uid'] = df['instance_path_str'].map(lambda x:pydicom.dcmread(x)[0x0020, 0x000E].value)
+    df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
+    df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
+
+    study_uid_unique = df['study_uid'].unique()
     dcop_event_list = []
-    for result in result_list:
-        if result is not None:
-            result_dict = json.loads(result)
-            # result_dict[0] instance_path result_dict[1] output_study_instance
-            # '/mnt/e/raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/7343d7a3-dbd8985b-83cb9baf-a6a82f09-b81c0a0f', '/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/ADC')
-            dir_result = (os.path.dirname(result_dict[0]),os.path.dirname(result_dict[1]))
-            if dir_result in result_parent_set:
-                continue
-            result_parent_set.add(dir_result)
-            series_uid = os.path.basename(os.path.dirname(result_dict[0]))
-            study_uid  = os.path.basename(os.path.dirname(os.path.dirname(result_dict[0])))
-            study_id   = os.path.basename(os.path.dirname(os.path.dirname(result_dict[1])))
+    for study_uid in study_uid_unique:
+        series_dir_set = set(df.loc()[df['study_uid'] == study_uid, 'instance_dir_path'].to_list())
+        df2 = get_orthanc_series_uid(study_uid=study_uid,series_dir_set=series_dir_set)
+        for result in df2.to_dict(orient='records'):
+            series_uid = result['uid']
+            study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'][0].values
             dcop_event = DCOPEventRequest(study_uid   = study_uid,
                                           series_uid  = series_uid,
                                           ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
@@ -379,15 +427,82 @@ def process_dir(func_params: Dict[str, any]):
                                                          f'rename_dicom_path':os.path.dirname( result_dict[1]),}
                                           )
             dcop_event_list.append(dcop_event.model_dump_json())
-    call_post_httpx.push({'url' :"{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+    call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
                           'data':dcop_event_list
                           })
-    # print('dcop_event_list',dcop_event_list_json)
-    # with httpx.Client(timeout=300) as clinet:
-    #     clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
-    #                 data=dcop_event_list_json)
-
     return dicom_study_folder_path
+
+    # for result in df.to_dict(orient='records'):
+
+    # result_parent_set = set()
+    # dcop_event_list = []
+    # raw_parent_set = set()
+    # for result in result_list:
+    #     if result is not None:
+    #         result_dict = json.loads(result)
+    #         # result_dict[0] instance_path result_dict[1] output_study_instance
+    #         # '/mnt/e/raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/7343d7a3-dbd8985b-83cb9baf-a6a82f09-b81c0a0f', '/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/ADC')
+    #         # dir_result = (os.path.dirname(result_dict[0]),os.path.dirname(result_dict[1]))
+    #         raw_series_path_dir_str = os.path.dirname(result_dict[0])
+    #         if raw_series_path_dir_str in raw_parent_set:
+    #             pass
+    #         else:
+    #             print('raw_series_path_dir_str', raw_series_path_dir_str)
+    #             raw_parent_set.add(raw_series_path_dir_str)
+    #             print('raw',result_dict[0])
+    #             dir_result = get_orthanc_study_uid_series_uid(result_dict[0])
+    #             print('dir_result', dir_result)
+    #             if dir_result:
+    #                 pass
+    #             else:
+    #                 continue
+    #             if dir_result in result_parent_set:
+    #                 continue
+    #             result_parent_set.add(dir_result)
+    #             study_uid  = dir_result[0]
+    #             series_uid = dir_result[1]
+    #
+    #             # series_uid = os.path.basename(os.path.dirname(result_dict[0]))
+    #             # study_uid  = os.path.basename(os.path.dirname(os.path.dirname(result_dict[0])))
+    #             study_id   = os.path.basename(os.path.dirname(os.path.dirname(result_dict[1])))
+    #             dcop_event = DCOPEventRequest(study_uid   = study_uid,
+    #                                           series_uid  = series_uid,
+    #                                           ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+    #                                           study_id    = study_id,
+    #                                           tool_id     = 'DICOM_TOOL',
+    #                                           result_data = {f'raw_dicom_path':os.path.dirname(result_dict[0]),
+    #                                                          f'rename_dicom_path':os.path.dirname( result_dict[1]),}
+    #                                           )
+    #             dcop_event_list.append(dcop_event.model_dump_json())
+    #
+    #
+    #         # dir_result = get_orthanc_study_uid_series_uid(result_dict[0])
+    #         # if dir_result in result_parent_set:
+    #         #     continue
+    #         # result_parent_set.add(dir_result)
+    #         # study_uid  = dir_result[0]
+    #         # series_uid = dir_result[1]
+    #         # # series_uid = os.path.basename(os.path.dirname(result_dict[0]))
+    #         # # study_uid  = os.path.basename(os.path.dirname(os.path.dirname(result_dict[0])))
+    #         # study_id   = os.path.basename(os.path.dirname(os.path.dirname(result_dict[1])))
+    #         # dcop_event = DCOPEventRequest(study_uid   = study_uid,
+    #         #                               series_uid  = series_uid,
+    #         #                               ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+    #         #                               study_id    = study_id,
+    #         #                               tool_id     = 'DICOM_TOOL',
+    #         #                               result_data = {f'raw_dicom_path':os.path.dirname(result_dict[0]),
+    #         #                                              f'rename_dicom_path':os.path.dirname( result_dict[1]),}
+    #         #                               )
+    #         # dcop_event_list.append(dcop_event.model_dump_json())
+    # call_post_httpx.push({'url' :"{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+    #                       'data':dcop_event_list
+    #                       })
+    # # print('dcop_event_list',dcop_event_list_json)
+    # # with httpx.Client(timeout=300) as clinet:
+    # #     clinet.post(url="{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
+    # #                 data=dcop_event_list_json)
+    #
+    # return dicom_study_folder_path
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
