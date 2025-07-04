@@ -31,9 +31,10 @@ from pydicom.dicomdir import DicomDir
 
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import DCM_EXAMPLE
-from code_ai.pipeline.dicomseg.schema import MaskRequest, MaskSeriesRequest, MaskInstanceRequest
-from code_ai.pipeline.dicomseg.schema import StudyRequest,StudySeriesRequest , SortedRequest
-from code_ai.pipeline.dicomseg.schema import AITeamRequest
+from code_ai.pipeline.dicomseg.schema import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
+from code_ai.pipeline.dicomseg.schema import CMBStudyRequest,CMBStudySeriesRequest,CMBAITeamRequest
+from code_ai.pipeline.dicomseg.schema import SortedRequest,StudyModelRequest
+# from code_ai.pipeline.dicomseg.schema import AITeamRequest
 from code_ai import load_dotenv
 load_dotenv()
 GROUP_ID = os.getenv("GROUP_ID_CMB",44)
@@ -45,7 +46,7 @@ def make_mask_instance_json(source_images: List[Union[FileDataset, DicomDir]],
                             dcm_seg: Union[FileDataset, DicomDir],
                             mask_index: int,
                             main_seg_slice: int,
-                            *args, **kwargs) -> MaskInstanceRequest:
+                            *args, **kwargs) -> CMBMaskInstanceRequest:
     """
     Create a JSON representation of a single mask instance.
 
@@ -66,7 +67,6 @@ def make_mask_instance_json(source_images: List[Union[FileDataset, DicomDir]],
     dicom_sop_instance_uid = source_images[main_seg_slice].get((0x008, 0x0018)).value
     # Extract mask name from DICOM-SEG Series Description
     # e.g. (0008,103E) Series Description: synthseg_SWAN_original_CMB_from_T1BRAVO_AXI_original_CMB
-    mask_name = dcm_seg.get((0x0008, 0x103E)).value
 
     # Get additional mask parameters from kwargs or use defaults
     diameter = kwargs.get('diameter', '0.0')
@@ -78,11 +78,10 @@ def make_mask_instance_json(source_images: List[Union[FileDataset, DicomDir]],
     # Create mask instance dictionary with all required metadata
     mask_instance_dict.update({
         'mask_index': mask_index,
-        'mask_name': mask_name,
+        'mask_name': "A{}".format(mask_index),
         'diameter': diameter,
         'type': type,
         'location': location,
-        'sub_location': sub_location,
         'prob_max': prob_max,
         'checked': "1",
         'is_ai': "1",
@@ -93,14 +92,14 @@ def make_mask_instance_json(source_images: List[Union[FileDataset, DicomDir]],
         'is_main_seg': "1"
     })
     # Validate and return the mask instance request
-    return MaskInstanceRequest.model_validate(mask_instance_dict)
+    return CMBMaskInstanceRequest.model_validate(mask_instance_dict)
 
 
 def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
                           sorted_dcms: List[Union[str, pathlib.Path]],
                           dcm_seg: Union[FileDataset, DicomDir],
                           filter_cmd : Dict[str, Any],
-                          *args, **kwargs) -> MaskSeriesRequest:
+                          *args, **kwargs) -> CMBMaskSeriesRequest:
     """
     Create a JSON representation of a mask series, which contains one or more mask instances.
 
@@ -141,7 +140,6 @@ def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
                    'type': filter_cmd['class_name'],
                    'location': filter_cmd['type_name'],
                    'prob_max': filter_cmd['CMB_prob'],
-                   'sub_location':"",
                    })
 
     # Create a mask instance for this series
@@ -156,7 +154,7 @@ def make_mask_series_json(source_images: List[Union[FileDataset, DicomDir]],
     mask_series_dict.update({'instances': mask_instance_list})
 
     # Validate and return the mask series request
-    return MaskSeriesRequest.model_validate(mask_series_dict)
+    return CMBMaskSeriesRequest.model_validate(mask_series_dict)
 
 
 def make_mask_json(source_images: List[Union[FileDataset, DicomDir]],
@@ -164,7 +162,7 @@ def make_mask_json(source_images: List[Union[FileDataset, DicomDir]],
                    reslut_list: List[Dict[str, Any]],
                    pred_json_list : List[Dict[str, Any]],
                    group_id: int = GROUP_ID,
-                   *args, **kwargs) -> MaskRequest:
+                   *args, **kwargs) -> CMBMaskRequest:
     """
     Create a JSON representation of all masks for a study.
 
@@ -219,7 +217,8 @@ def make_mask_json(source_images: List[Union[FileDataset, DicomDir]],
     mask_dict.update({'series': mask_series_list})
 
     # Validate and return the mask request
-    return MaskRequest.model_validate(mask_dict)
+    return CMBMaskRequest.model_validate(mask_dict)
+
 
 
 def make_sorted_json(source_images: List[Union[FileDataset, DicomDir]]) -> SortedRequest:
@@ -271,7 +270,7 @@ def make_sorted_json(source_images: List[Union[FileDataset, DicomDir]]) -> Sorte
 
 
 def make_study_series_json(source_images : List[Union[FileDataset, DicomDir]],
-                           sorted_dcms   : List[Union[pathlib.Path, str]]) -> List[StudySeriesRequest]:
+                           sorted_dcms   : List[Union[pathlib.Path, str]]) -> List[CMBStudySeriesRequest]:
     """
     Create a JSON representation of sorted DICOM instances for a study.
 
@@ -287,27 +286,79 @@ def make_study_series_json(source_images : List[Union[FileDataset, DicomDir]],
         series_instance_uid = dicom_ds.get((0x0020, 0x000E)).value
         if series_instance_uid_dict.get(series_instance_uid) is None:
             series_type = os.path.basename(os.path.dirname(sorted_dcms[index]))
-            series_instance_uid_dict.update({series_instance_uid:series_type})
+
+            # 取得影像解析度
+            resolution_x = dicom_ds.get((0x0028, 0x0010)).value
+            resolution_y = dicom_ds.get((0x0028, 0x0011)).value
+
+
+            series_instance_uid_dict.update({series_instance_uid:{
+                'series_type': series_type,
+                'resolution_x': resolution_x,
+                'resolution_y': resolution_y
+            }})
         else:
             continue
 
-    for series_instance_uid, series_type in series_instance_uid_dict.items():
+    for series_instance_uid, series_info in series_instance_uid_dict.items():
         instance_dict = dict()
 
         # Update instance dictionary
         instance_dict.update(dict(
-            series_type=series_type,
-            series_instance_uid=series_instance_uid
+            series_type=series_info['series_type'],
+            series_instance_uid=series_instance_uid,
+            resolution_x=series_info['resolution_x'],
+            resolution_y=series_info['resolution_y']
         ))
-        instance_list.append(StudySeriesRequest.model_validate(instance_dict))
+        instance_list.append(CMBStudySeriesRequest.model_validate(instance_dict))
+
+    # Validate and return the sorted request
+    return instance_list
+
+
+
+def make_study_model_json(source_images : List[Union[FileDataset, DicomDir]],
+                          study_series  : List[CMBStudySeriesRequest],
+                          pred_json     : Dict[str,Any],
+                          model_type:str = "2") -> List[StudyModelRequest]:
+    instance_list = []
+    series_instance_uid_dict = {}
+    for index, dicom_ds in enumerate(source_images):
+        series_instance_uid = dicom_ds.get((0x0020, 0x000E)).value
+        if series_instance_uid_dict.get(series_instance_uid) is None:
+            series_type = os.path.basename(os.path.dirname(sorted_dcms[index]))
+
+            # 取得影像解析度
+            resolution_x = dicom_ds.get((0x0028, 0x0010)).value
+            resolution_y = dicom_ds.get((0x0028, 0x0011)).value
+
+            series_instance_uid_dict.update({series_instance_uid: {
+                'series_type': series_type,
+                'resolution_x': resolution_x,
+                'resolution_y': resolution_y
+            }})
+        else:
+            continue
+
+    for series_instance_uid, series_info in series_instance_uid_dict.items():
+        instance_dict = dict()
+
+        # Update instance dictionary
+        instance_dict.update(dict(
+            series_type=series_info['series_type'],
+            series_instance_uid=series_instance_uid,
+            resolution_x=series_info['resolution_x'],
+            resolution_y=series_info['resolution_y']
+        ))
+        instance_list.append(CMBStudySeriesRequest.model_validate(instance_dict))
 
     # Validate and return the sorted request
     return instance_list
 
 
 def make_study_json(source_images: List[Union[FileDataset, DicomDir]],
-                    study_series_request_list:List[StudySeriesRequest],
-                    group_id: int = GROUP_ID,) -> StudyRequest:
+                    study_series_request_list:List[CMBStudySeriesRequest],
+                    group_id: int = GROUP_ID,) -> CMBStudyRequest:
     """
     Create a JSON representation of a study.
 
@@ -351,7 +402,7 @@ def make_study_json(source_images: List[Union[FileDataset, DicomDir]],
     ))
 
     # Validate and return the study request
-    return StudyRequest.model_validate(study_dict)
+    return CMBStudyRequest.model_validate(study_dict)
 
 
 def compute_orientation(init_axcodes, final_axcodes):
@@ -660,7 +711,7 @@ def create_dicom_seg_file(pred_data_unique: np.ndarray,
 def process_prediction_mask(path_nii :pathlib.Path,
                             path_dcms: str,
                             output_folder: pathlib.Path,
-                            ) -> Optional[AITeamRequest]:
+                            ) -> Optional[CMBAITeamRequest]:
     """
     Process prediction mask and generate DICOM-SEG files with metadata.
 
@@ -690,7 +741,9 @@ def process_prediction_mask(path_nii :pathlib.Path,
                                                                     '.json'))
 
     # Load DICOM files (only once)
-    sorted_dcms, image, first_dcm, source_images = load_and_sort_dicom_files(path_dcms)
+    sorted_dcms, image, first_dcm, source_images = load_and_sort_dicom_files(
+
+    )
 
     # Create study and sorted JSON data
     study_series_request = make_study_series_json(source_images=source_images,sorted_dcms=sorted_dcms)
@@ -739,7 +792,7 @@ def process_prediction_mask(path_nii :pathlib.Path,
     )
 
     # Create and update AI team request
-    at_team_request = AITeamRequest.model_validate(at_team_dict)
+    at_team_request = CMBAITeamRequest.model_validate(at_team_dict)
     at_team_request.mask = mask_request
     at_team_request.study.aneurysm_lession = pred_data_unique.shape[0]
 
@@ -777,7 +830,7 @@ def main():
         series_folder.parent.mkdir(parents=True, exist_ok=True)
 
     # Process prediction mask and create DICOM-SEG files
-    at_team_request: AITeamRequest = process_prediction_mask(path_nii,
+    at_team_request: CMBAITeamRequest = process_prediction_mask(path_nii,
                                                              str(path_dcms),
                                                              series_folder,)
 

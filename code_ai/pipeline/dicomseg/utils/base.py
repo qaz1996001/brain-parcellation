@@ -237,7 +237,7 @@ def create_dicom_seg_file(pred_data_unique: np.ndarray,
             dcm_seg_filename = f'{series_name}_{label_dict[1]["SegmentLabel"]}.dcm'
 
             dcm_seg_path = output_folder.joinpath(dcm_seg_filename)
-            # dcm_seg.save_as(dcm_seg_path)
+            dcm_seg.save_as(dcm_seg_path)
 
             # Clear console line and show progress
             print(f" " * 100, end='\r')

@@ -3,7 +3,7 @@ import enum
 import os
 from typing import  List,  Union,  Optional
 import numpy as np
-from pydantic import BaseModel, PositiveInt, field_validator
+from pydantic import BaseModel, PositiveInt, field_validator, field_serializer
 from code_ai import load_dotenv
 load_dotenv()
 
@@ -29,6 +29,16 @@ class SeriesTypeEnum(enum.Enum):
         return list(map(lambda c: c, cls))
 
 
+class ModelTypeEnum(enum.Enum):
+    Aneurysm = '1'
+    CMB      = '2'
+    Infarct  = '3'
+    WMH      = '4'
+    Lacune   = '5'
+
+    @classmethod
+    def to_list(cls) -> List[Union[enum.Enum]]:
+        return list(map(lambda c: c, cls))
 
 
 class InstanceRequest(BaseModel):
@@ -77,6 +87,7 @@ class StudySeriesRequest(BaseModel):
                 if value == series_type_enum.name:
                     return series_type_enum.value
         return value
+
 
 
 class StudyRequest(BaseModel):
@@ -215,3 +226,54 @@ class AITeamRequest(BaseModel):
     study   : Optional[StudyRequest]  = None
     sorted  : Optional[SortedRequest] = None
     mask    : Optional[MaskRequest]   = None
+
+
+class StudyModelRequest(BaseModel):
+    model_type:str
+    lession: str = ""
+    status: str = "1"
+    report: str = ""
+    series:List[StudySeriesRequest]
+
+
+    @field_validator('series')
+    @classmethod
+    def validate_series_list(cls, value):
+        """驗證 series 列表"""
+        if not value:
+            raise ValueError('At least one series is required')
+
+        # 驗證每個 series 項目的必要字段
+        for i, series_item in enumerate(value):
+            if not hasattr(series_item, 'series_type') or not series_item.series_type:
+                raise ValueError(f'series[{i}]: series_type is required')
+            if not hasattr(series_item, 'series_instance_uid') or not series_item.series_instance_uid:
+                raise ValueError(f'series[{i}]: series_instance_uid is required')
+
+        return value
+
+    @field_serializer('series')
+    def serialize_series(self, series_list: List[StudySeriesRequest]) -> List[dict]:
+        """自定義 series 的序列化邏輯"""
+        return [
+            {
+                'series_type': series.series_type,
+                'series_instance_uid': series.series_instance_uid,
+                'resolution_x': getattr(series, 'resolution_x', None),
+                'resolution_y': getattr(series, 'resolution_y', None)
+            }
+            for series in series_list
+        ]
+
+
+    @field_validator('model_type', mode='before')
+    @classmethod
+    def extract_model_type(cls, value):
+        if value is None:
+            return '1'
+        if isinstance(value, str):
+            model_type_enum_list: List[ModelTypeEnum] = ModelTypeEnum.to_list()
+            for model_type_enum in model_type_enum_list:
+                if value == model_type_enum.name:
+                    return model_type_enum.value
+        return value
