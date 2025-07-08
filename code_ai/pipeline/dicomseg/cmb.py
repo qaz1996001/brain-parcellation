@@ -268,7 +268,7 @@ def main():
                                                   .build())
     print('cmb_platform_json',cmb_platform_json)
     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
-                                                                             'cmb_platform_json_builder.json'))
+                                                                             'cmb_platform_json.json'))
     print('platform_json_path', platform_json_path)
     with open(platform_json_path, 'w') as f:
         f.write(cmb_platform_json.model_dump_json())
