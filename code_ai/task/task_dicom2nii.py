@@ -403,9 +403,9 @@ def process_dir(func_params: Dict[str, any]):
 
     result_dict_list = list(map(lambda x:json.loads(x),result_list))
     df = pd.DataFrame(result_dict_list,columns=['instance_path_str','rename_dicom_path'])
-    df['instance_dir_path'] = df['instance_path_str'](lambda x:os.path.dirname(x))
+    df['instance_dir_path'] = df['instance_path_str'].map(lambda x:os.path.dirname(x))
     df.drop_duplicates(subset=['instance_dir_path','rename_dicom_path'],inplace=True)
-    df['instance_dir_path'] = df['instance_dir_path'](lambda x: pathlib.Path(x))
+    df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x:pydicom.dcmread(x)[0x0020, 0x000E].value)
     df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
@@ -417,14 +417,16 @@ def process_dir(func_params: Dict[str, any]):
         df2 = get_orthanc_series_uid(study_uid=study_uid,series_dir_set=series_dir_set)
         for result in df2.to_dict(orient='records'):
             series_uid = result['uid']
-            study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'][0].values
+            study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'].iloc()[0]
+            raw_dicom_path    = df[df['series_sop_uid'] == result['file_series_sop_uid']]['instance_dir_path'].iloc()[0]
+            rename_dicom_path = df[df['series_sop_uid'] == result['file_series_sop_uid']]['rename_dicom_path'].iloc()[0]
             dcop_event = DCOPEventRequest(study_uid   = study_uid,
                                           series_uid  = series_uid,
                                           ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
                                           study_id    = study_id,
                                           tool_id     = 'DICOM_TOOL',
-                                          result_data = {f'raw_dicom_path':os.path.dirname(result_dict[0]),
-                                                         f'rename_dicom_path':os.path.dirname( result_dict[1]),}
+                                          result_data = {f'raw_dicom_path':str(os.path.dirname(raw_dicom_path)),
+                                                         f'rename_dicom_path':str(os.path.dirname(rename_dicom_path)),}
                                           )
             dcop_event_list.append(dcop_event.model_dump_json())
     call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
