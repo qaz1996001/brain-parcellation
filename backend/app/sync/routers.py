@@ -46,7 +46,7 @@ async def post_study_uuid(request:PostStudyRequest,
 
     result_list = await dcop_event_service.add_study_new(data_list=request.ids)
     logger.info(f'1000000000 result_list {result_list}')
-    # background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
+    background_tasks.add_task(dcop_event_service.dicom_tool_get_series_info,result_list)
     return result_list
 
 
