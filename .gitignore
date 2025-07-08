@@ -1,3 +1,9 @@
+assets/external/
+.web
+*.py[cod]
+__pycache__/
+.states
+*.db
 /.idea/
 /.ipynb_checkpoints/
 *.h5
