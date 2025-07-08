@@ -41,6 +41,7 @@ def main():
                     data = orjson.loads(f.read())
                 print('platform_json GROUP_ID', data['study']['group_id'])
                 response = client.post(UPLOAD_DATA_JSON_URL, json=data)
+                print(f"Uploaded single file: Status {response.status_code}")
 
 
 if __name__ == '__main__':
