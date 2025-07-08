@@ -6,7 +6,6 @@ from .base import AITeamRequest, StudyRequest,SortedRequest
 
 
 class CMBMaskInstanceRequest(MaskInstanceRequest):
-    # sub_location: Optional[str] = None  # 覆蓋父類字段
     sub_location: Optional[str] = Field(None, exclude=True)  # 標記為排除
 
 

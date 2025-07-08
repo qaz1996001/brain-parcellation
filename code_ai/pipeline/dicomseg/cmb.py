@@ -178,6 +178,7 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
                 }})
             else:
                 continue
+
         for series_instance_uid, series_info in series_instance_uid_dict.items():
             instance_dict = dict()
 
