@@ -400,8 +400,8 @@ def process_dir(func_params: Dict[str, any]):
     result_list = [async_result.result for async_result in async_result_list]
 
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
-
-    result_dict_list = list(map(lambda x:json.loads(x),result_list))
+    result_filter_list = list(filter(lambda x: x is not None,result_list))
+    result_dict_list = list(map(lambda x:json.loads(x),result_filter_list))
     df = pd.DataFrame(result_dict_list,columns=['instance_path_str','rename_dicom_path'])
     df['instance_dir_path'] = df['instance_path_str'].map(lambda x:os.path.dirname(x))
     df.drop_duplicates(subset=['instance_dir_path','rename_dicom_path'],inplace=True)
