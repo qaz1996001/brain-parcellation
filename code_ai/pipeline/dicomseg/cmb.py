@@ -16,6 +16,7 @@ This module handles:
 @author: sean
 """
 import json
+import os
 import pathlib
 from typing import Dict, List, Any, Union
 from typing_extensions import Self
@@ -221,6 +222,8 @@ def main():
     path_nii = pathlib.Path(args.Inputs[0])
     path_dcmseg = pathlib.Path(args.Output_folder)
 
+    group_id = os.getenv("GROUP_ID_CMB",44)
+
     # Create output directory
     output_series_folder = path_dcmseg.joinpath(f'{_id}')
     if output_series_folder.is_dir():
@@ -256,12 +259,12 @@ def main():
     cmb_platform_json = (cmb_platform_json_builder.set_mask(source_images=source_images,
                                                             result_list =result_list,
                                                             pred_json_list=pred_json,
-                                                            group_id = 44)
+                                                            group_id = group_id)
                                                   .set_sorted(source_images=source_images)
                                                   .set_study(source_images=source_images,
                                                              result_list =result_list,
                                                              pred_json_list=pred_json,
-                                                             group_id = 44)
+                                                             group_id = group_id)
                                                   .build())
     print('cmb_platform_json',cmb_platform_json)
     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
