@@ -58,13 +58,15 @@ def do_reorientation(data_array, init_axcodes, final_axcodes):
     return nib.orientations.apply_orientation(data_array, ornt_transf)
 
 
-def get_array_to_dcm_axcodes(path_nii :pathlib.Path) -> np.ndarray:
+def get_array_to_dcm_axcodes(path_nii :Union[pathlib.Path,str]) -> np.ndarray:
     pred_nii = nib.load(path_nii)
     pred_data = np.array(pred_nii.dataobj)
     # Reorient prediction data to standard orientation
     pred_nii_obj_axcodes = tuple(nib.aff2axcodes(pred_nii.affine))
     new_nifti_array = do_reorientation(pred_data, pred_nii_obj_axcodes,
-                                       ('S', 'P', 'L'))
+                                       ('I', 'P', 'L')
+                                       # ('S', 'P', 'L')
+                                       )
     return new_nifti_array
 
 

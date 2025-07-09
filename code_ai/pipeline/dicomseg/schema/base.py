@@ -121,7 +121,7 @@ class StudySeriesRequest(BaseModel):
     series_type         : str
     series_instance_uid : str
     resolution_x        : PositiveInt = 512
-    resolution_Y        : PositiveInt = 512
+    resolution_y        : PositiveInt = 512
 
 
     @field_validator('series_type', mode='before')
@@ -162,6 +162,18 @@ class StudyModelRequest(BaseModel):
             for model_type_enum in model_type_enum_list:
                 if value == model_type_enum.name:
                     return model_type_enum.value
+        return value
+
+    @field_validator('series_type', mode='before')
+    @classmethod
+    def extract_series_type(cls, value):
+        if value is None:
+            return '1'
+        if isinstance(value, str):
+            series_type_enum_list: List[SeriesTypeEnum] = SeriesTypeEnum.to_list()
+            for series_type_enum in series_type_enum_list:
+                if value == series_type_enum.name:
+                    return series_type_enum.value
         return value
 
 

@@ -139,7 +139,9 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
             'study_instance_uid': study_instance_uid,
             'group_id': group_id
         }
-        mask_series = self.build_mask_series(source_images=source_images,reslut_list=result_list,pred_json_list=pred_json_list)
+        mask_series = self.build_mask_series(source_images=source_images,
+                                             reslut_list=result_list,
+                                             pred_json_list=pred_json_list)
         mask_dict.update({'series':[mask_series]})
         self._mask_request = CMBMaskRequest.model_validate(mask_dict)
         return self

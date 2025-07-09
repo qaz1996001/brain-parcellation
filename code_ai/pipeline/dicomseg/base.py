@@ -61,7 +61,7 @@ class PlatformJSONBuilder(Generic[T], metaclass=abc.ABCMeta):
                  group_id: int) -> Self:
         pass
 
-    def set_sorted(self, source_images: List[Union[FileDataset, DicomDir]]):
+    def set_sorted(self, source_images: List[Union[FileDataset, DicomDir]]) -> Self:
         instance_list = []
         series_list = []
         series_dict = dict()
@@ -137,8 +137,8 @@ class PlatformJSONBuilder(Generic[T], metaclass=abc.ABCMeta):
 
 
     @abc.abstractmethod
-    def set_study(self,source_images: List[Union[FileDataset, DicomDir]],
-                  reslut_list: List[Dict[str, Any]],
+    def set_study(self, source_images: List[Union[FileDataset, DicomDir]],
+                  result_list: List[Dict[str, Any]],
                   pred_json_list: List[Dict[str, Any]],
                   group_id: int) -> Self:
         pass
