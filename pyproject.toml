@@ -36,6 +36,7 @@ dependencies = [
     "advanced-alchemy>=1.4.4",
     "scikit-image>=0.25.2",
     "pynvml>=11.5.3",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
