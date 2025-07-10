@@ -28,9 +28,9 @@ from pydicom.dicomdir import DicomDir
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import utils
 from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
-from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest,StudyModelRequest
+from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
-from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest
+from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest, CMBStudyModelRequest, CMBStudyRequest
 from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder
 from code_ai import load_dotenv
 load_dotenv()
@@ -156,7 +156,7 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
         study_model  = self.build_study_model(pred_json_list=pred_json_list)
         study_dict.update({'series':study_series,
                            'model':study_model})
-        self._study_request = StudyRequest.model_validate(study_dict)
+        self._study_request = CMBStudyRequest.model_validate(study_dict)
 
         return self
 
@@ -204,7 +204,7 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
                            model_type  = self.model_type,
                            status = "1",
                            report = "",)
-        return [StudyModelRequest.model_validate(study_model)]
+        return [CMBStudyModelRequest.model_validate(study_model)]
 
 
 
@@ -270,7 +270,7 @@ def main():
                                                   .build())
     print('cmb_platform_json',cmb_platform_json)
     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
-                                                                             'platform_json.json'))
+                                                                             '_platform_json.json'))
     print('platform_json_path', platform_json_path)
     with open(platform_json_path, 'w') as f:
         f.write(cmb_platform_json.model_dump_json())
