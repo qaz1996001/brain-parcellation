@@ -64,8 +64,8 @@ def get_array_to_dcm_axcodes(path_nii :Union[pathlib.Path,str]) -> np.ndarray:
     # Reorient prediction data to standard orientation
     pred_nii_obj_axcodes = tuple(nib.aff2axcodes(pred_nii.affine))
     new_nifti_array = do_reorientation(pred_data, pred_nii_obj_axcodes,
-                                       ('I', 'P', 'L')
-                                       # ('S', 'P', 'L')
+                                       # ('I', 'P', 'L')
+                                       ('S', 'P', 'L')
                                        )
     return new_nifti_array
 
@@ -239,6 +239,9 @@ def create_dicom_seg_file(pred_data_unique: np.ndarray,
             dcm_seg_filename = f'{series_name}_{label_dict[1]["SegmentLabel"]}.dcm'
 
             dcm_seg_path = output_folder.joinpath(dcm_seg_filename)
+            if dcm_seg_path.exists():
+                dcm_seg_path.unlink()
+
             dcm_seg.save_as(dcm_seg_path)
 
             # Clear console line and show progress
