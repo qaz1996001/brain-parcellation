@@ -57,10 +57,10 @@ if __name__ == '__main__':
     # 先立即执行一次
     aps_job_adder.add_push_job(trigger='date')
 
-    # 然后设置 cron 任务每 5 分钟执行一次
+    # 然后设置 cron 任务每 30 分钟执行一次
     aps_job_adder.add_push_job(
         trigger='cron',
-        minute='*/5'  # 每 5 分钟执行一次
+        minute='*/30'  # 每 30 分钟执行一次
     )
     BoostersManager.multi_process_consume_all_queues(1)
 
