@@ -435,7 +435,6 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
             raise ValueError('self._series_dict or self.group_id is None')
         model_list = []
         for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-            print('series_source_images', len(series_source_images), series_name)
             mask_model_series = self.get_mask_model(source_images    = series_source_images,
                                                     dicom_seg_result = dicom_seg_result_list[index],
                                                     pred_json        = pred_json_list[index],
@@ -445,8 +444,6 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
 
 
         mask_dict.update({'model': model_list})
-
-        print('build_mask',mask_dict)
         self._mask_request = self.MaskClass.model_validate(mask_dict)
         return self
 

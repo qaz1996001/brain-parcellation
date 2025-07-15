@@ -345,7 +345,6 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
 
         mask_dict.update({'model': model_list})
 
-        print('build_mask',mask_dict)
         self._mask_request = self.MaskClass.model_validate(mask_dict)
         return self
 
@@ -415,81 +414,10 @@ def main_review_cmd():
                                                   .build())
     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
                                                                              '_platform_json.json'))
-    print('platform_json_path', platform_json_path)
     with open(platform_json_path, 'w') as f:
         f.write(cmb_platform_json.model_dump_json())
     print("Processing complete!")
     return None
-
-
-# def main():
-#     """
-#     Main function to process command line arguments and execute the pipeline.
-#
-#     This function:
-#     """
-#     # Parse command line arguments
-#     parser = pipeline_parser()
-#     args = parser.parse_args()
-#
-#     # Extract arguments
-#     _id = args.ID
-#     path_dcms = pathlib.Path(args.InputsDicomDir)
-#     path_nii = pathlib.Path(args.Inputs[0])
-#     path_dcmseg = pathlib.Path(args.Output_folder)
-#
-#     group_id = os.getenv("GROUP_ID_CMB",44)
-#
-#     # Create output directory
-#     output_series_folder = path_dcmseg.joinpath(f'{_id}')
-#     if output_series_folder.is_dir():
-#         output_series_folder.mkdir(exist_ok=True, parents=True)
-#     else:
-#         output_series_folder.parent.mkdir(parents=True, exist_ok=True)
-#
-#     series_name = path_nii.name.split('.')[0]
-#     # Load prediction data from NIfTI file
-#     new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii)
-#     pred_json_path = path_nii.parent.joinpath(path_nii.name.replace('.nii.gz',
-#                                                                     '.json'))
-#
-#     sorted_dcms, image, first_dcm, source_images = utils.load_and_sort_dicom_files(str(path_dcms))
-#     pred_data_unique = np.unique(new_nifti_array)
-#     if len(pred_data_unique) < 1:
-#         return None
-#     else:
-#         pred_data_unique = pred_data_unique[1:]  # Exclude background value (0)
-#
-#     # Create DICOM-SEG files for each unique region
-#     result_list = utils.create_dicom_seg_file(pred_data_unique,
-#                                               new_nifti_array,
-#                                               series_name,
-#                                               output_series_folder,
-#                                               image,
-#                                               first_dcm,
-#                                               source_images)
-#     # Create platform JSON
-#     with open(pred_json_path) as f:
-#         pred_json = json.load(f)
-#     cmb_platform_json_builder = CMBPlatformJSONBuilder()
-#     cmb_platform_json = (cmb_platform_json_builder.set_mask(source_images=source_images,
-#                                                             result_list =result_list,
-#                                                             pred_json_list=pred_json,
-#                                                             group_id = group_id)
-#                                                   .set_sorted(source_images=source_images)
-#                                                   .set_study(source_images=source_images,
-#                                                              result_list =result_list,
-#                                                              pred_json_list=pred_json,
-#                                                              group_id = group_id)
-#                                                   .build())
-#     print('cmb_platform_json',cmb_platform_json)
-#     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
-#                                                                              '_platform_json.json'))
-#     print('platform_json_path', platform_json_path)
-#     with open(platform_json_path, 'w') as f:
-#         f.write(cmb_platform_json.model_dump_json())
-#     print("Processing complete!")
-#     return None
 
 
 if __name__ == '__main__':
