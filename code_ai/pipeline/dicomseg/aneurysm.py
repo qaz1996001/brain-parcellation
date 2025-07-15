@@ -189,11 +189,11 @@ class AneurysmPlatformJSONBuilder(PlatformJSONBuilder[AneurysmAITeamRequest]):
     def set_sorted(self, source_images: List[Union[FileDataset, DicomDir]]) -> Self:
         sorted_dict = dict()
         series_list = []
-        for series_name,source_images in self._series_dict.items():
+        for series_name,series_source_images in self._series_dict.items():
             instance_list = []
             series_dict = dict()
             # Process each DICOM image
-            for index, dicom_ds in enumerate(source_images):
+            for index, dicom_ds in enumerate(series_source_images):
                 instance_dict = dict()
                 # Extract SOP Instance UID and Image Position Patient
                 sop_instance_uid = dicom_ds.get((0x0008, 0x0018)).value

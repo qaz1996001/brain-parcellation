@@ -1,7 +1,8 @@
 
 from typing import List,  Optional
-from pydantic import Field
+from pydantic import Field, BaseModel, ConfigDict
 from pydantic import field_validator
+
 
 from .base import MaskRequest,MaskSeriesRequest, MaskInstanceRequest, SeriesTypeEnum
 from .base import AITeamRequest, StudyRequest,SortedRequest,StudyModelRequest
@@ -47,3 +48,28 @@ class CMBAITeamRequest(AITeamRequest):
     study   : Optional[StudyRequest]   = Field(None)
     sorted  : Optional[SortedRequest]  = Field(None)
     mask    : Optional[CMBMaskRequest] = Field(None)
+
+
+
+class CMBMaskSeries2Request(MaskSeriesRequest):
+    model_type   : Optional[str] = Field(None, exclude=True)
+    model_config = ConfigDict(from_attributes=True)
+
+
+
+class CMBMaskModel2Request(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    model_type : Optional[str] = Field(None, exclude=True)
+    series     : Optional[List[CMBMaskSeries2Request]] = Field(None)
+
+
+
+class CMBMask2Request(MaskRequest):
+    model_config = ConfigDict(from_attributes=True)
+    model  : Optional[List[CMBMaskModel2Request]] = Field(None)
+    # 排除 series
+    series : Optional[List[CMBMaskSeriesRequest]] = Field(None,exclude=True)
+
+
+class CMBAITeam2Request(AITeamRequest):
+    mask    : Optional[CMBMask2Request] = Field(None)

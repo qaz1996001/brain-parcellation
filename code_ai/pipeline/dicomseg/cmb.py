@@ -31,7 +31,10 @@ from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
 from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest, CMBStudyModelRequest, CMBStudyRequest
-from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder
+from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeam2Request,CMBMask2Request,CMBMaskModel2Request,CMBMaskSeries2Request
+
+
+from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
 from code_ai import load_dotenv
 load_dotenv()
 
@@ -208,7 +211,149 @@ class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
 
 
 
-def main():
+class ReviewCMBPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
+    model_type  = ModelTypeEnum.CMB.value
+    MaskInstanceClass = CMBMaskInstanceRequest
+
+    def get_mask_instance(self, source_images: List[Union[FileDataset, DicomDir]],
+                          series_type: SeriesTypeEnum,
+                          dicom_seg_result:Dict[str,Any],
+                          pred_json :Dict[str,Any],
+                          *args, **kwargs) -> List["MaskInstanceClass"]:
+        result_data_list    = dicom_seg_result['data']
+        pred_json_data_list = pred_json['data']
+        mask_instance_list = []
+        for index, result in enumerate(result_data_list):
+            mask_instance_dict = dict()
+            filter_cmd_data = list(filter(lambda x: str(x['label#']) == str(result['mask_index']), pred_json_data_list))
+            if filter_cmd_data :
+                filter_cmd = filter_cmd_data[0]
+            else:
+                continue
+            dcm_seg_path = result['dcm_seg_path']
+            with open(dcm_seg_path, 'rb') as f:
+                dcm_seg = pydicom.read_file(f)
+            # Extract UIDs from the DICOM-SEG and source images
+            seg_sop_instance_uid = dcm_seg.get((0x008, 0x0018)).value
+            seg_series_instance_uid = dcm_seg.get((0x020, 0x000E)).value
+            dicom_sop_instance_uid = source_images[int(result['main_seg_slice'])].get((0x008, 0x0018)).value
+
+            mask_instance_dict.update({'diameter'       : filter_cmd['pred_diameter'],
+                                       'type'           : filter_cmd['class_name'],
+                                       'location'       : filter_cmd['type_name'],
+                                       'prob_max'       : filter_cmd['CMB_prob'],
+                                       'main_seg_slice' : result['main_seg_slice'],
+                                       'mask_index'     : result['mask_index'],
+                                       'mask_name': "A{}".format(result['mask_index']),
+                                       'seg_sop_instance_uid': seg_sop_instance_uid,
+                                       'seg_series_instance_uid': seg_series_instance_uid,
+                                       'dicom_sop_instance_uid': dicom_sop_instance_uid,
+                                       'is_main_seg': "1",
+                                       'checked': "1",
+                                       'is_ai': "1",
+                                       })
+            mask_instance_list.append(self.MaskInstanceClass.model_validate(mask_instance_dict))
+        return mask_instance_list
+
+
+    def get_study_model(self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any],
+                        *args, **kwargs) -> "StudyModelClass":
+        pred_json_list = pred_data['data']
+        study_model = dict(lession=len(pred_json_list),
+                           series_type=series_type.value,
+                           model_type=self.model_type,
+                           status="1",
+                           report="", )
+        return self.StudyModelClass.model_validate(study_model)
+
+
+
+
+
+class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
+    # CMBMask2Request,CMBMaskModel2Request,CMBMaskSeries2Request
+    AITeamClass     = CMBAITeam2Request
+    MaskClass       = CMBMask2Request
+    MaskSeriesClass = CMBMaskSeries2Request
+    MaskModelClass  = CMBMaskModel2Request
+    # model_type      = ModelTypeEnum.CMB.value
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+
+    def get_mask_series(self,source_images:List[Union[FileDataset, DicomDir]],
+                             series_type: SeriesTypeEnum,
+                             dicom_seg_result,
+                             pred_json,
+                            *args, **kwargs) -> "MaskSeriesClass":
+        """
+            dicom_seg_result : {"series_type": {}, "data":{} }
+            dicom_seg_result : {"series_type": {}, "data":{} }
+        """
+        series_instance_uid = source_images[0].get((0x0020, 0x000E)).value
+        mask_series_dict = {
+            'series_instance_uid': series_instance_uid,
+            'series_type': series_type,
+        }
+        mask_instance = self.get_mask_instance(source_images = source_images,
+                                               series_type = series_type,
+                                               dicom_seg_result = dicom_seg_result,
+                                               pred_json = pred_json,
+                                               *args, **kwargs)
+        mask_series_dict.update({'instances': mask_instance})
+
+
+        return self.MaskSeriesClass.model_validate(mask_series_dict)
+
+
+    def get_mask_model(self, source_images: List[Union[FileDataset, DicomDir]], series_type: SeriesTypeEnum,
+                          dicom_seg_result: Dict[str, Any], pred_json: Dict[str, Any], *args, **kwargs) -> MaskModelClass:
+        mask_model_dict = {}
+        mask_series = self.get_mask_series(source_images=source_images,
+                                           series_type=series_type,
+                                           dicom_seg_result=dicom_seg_result,
+                                           pred_json=pred_json)
+        mask_model_dict.update({"series":[mask_series],
+                                "model_type":self.model_type
+                                })
+        return self.MaskModelClass.model_validate(mask_model_dict)
+
+
+    def build_mask(self,dicom_seg_result_list,pred_json_list,*args, **kwargs) -> Self:
+        mask_dict = {}
+        if all((self._series_dict is not None,self.group_id is not None)):
+            for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+                if index == 0:
+                    study_instance_uid = series_source_images[0].get((0x0020, 0x000D)).value
+                    mask_dict.update( {
+                        'study_instance_uid': study_instance_uid,
+                        'group_id': self.group_id
+                    })
+                    break
+        else:
+            raise ValueError('self._series_dict or self.group_id is None')
+        model_list = []
+        for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+
+            for index, dicom_seg_result in enumerate(dicom_seg_result_list):
+                mask_model_series = self.get_mask_model(source_images    = series_source_images,
+                                                        dicom_seg_result = dicom_seg_result,
+                                                        pred_json        = pred_json_list[index],
+                                                        series_type      = series_name,
+                                                        *args, **kwargs)
+                model_list.append(mask_model_series)
+
+        mask_dict.update({'model': model_list})
+
+        print('build_mask',mask_dict)
+        self._mask_request = self.MaskClass.model_validate(mask_dict)
+        return self
+
+
+
+def main_review_cmd():
     """
     Main function to process command line arguments and execute the pipeline.
 
@@ -257,18 +402,19 @@ def main():
     # Create platform JSON
     with open(pred_json_path) as f:
         pred_json = json.load(f)
-    cmb_platform_json_builder = CMBPlatformJSONBuilder()
-    cmb_platform_json = (cmb_platform_json_builder.set_mask(source_images=source_images,
-                                                            result_list =result_list,
-                                                            pred_json_list=pred_json,
-                                                            group_id = group_id)
-                                                  .set_sorted(source_images=source_images)
-                                                  .set_study(source_images=source_images,
-                                                             result_list =result_list,
-                                                             pred_json_list=pred_json,
-                                                             group_id = group_id)
+    dicom_seg_result_list = [{"series_type":SeriesTypeEnum.SWAN,
+                              "data":result_list}]
+    pred_json_list =        [{"series_type": SeriesTypeEnum.SWAN,
+                              "data": pred_json},]
+    # cmb_platform_json_builder = ReviewCMBPlatformJSONBuilder()
+    cmb_platform_json_builder = NewReviewCMBPlatformJSONBuilder()
+    cmb_platform_json = (cmb_platform_json_builder.set_series_type(SeriesTypeEnum.SWAN,source_images=source_images)
+                                                  .set_group_id(44)
+                                                  .build_sorted()
+                                                  .build_study(pred_json_list=pred_json_list)
+                                                  .build_mask(dicom_seg_result_list=dicom_seg_result_list,
+                                                              pred_json_list=pred_json_list)
                                                   .build())
-    print('cmb_platform_json',cmb_platform_json)
     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
                                                                              '_platform_json.json'))
     print('platform_json_path', platform_json_path)
@@ -278,5 +424,75 @@ def main():
     return None
 
 
+# def main():
+#     """
+#     Main function to process command line arguments and execute the pipeline.
+#
+#     This function:
+#     """
+#     # Parse command line arguments
+#     parser = pipeline_parser()
+#     args = parser.parse_args()
+#
+#     # Extract arguments
+#     _id = args.ID
+#     path_dcms = pathlib.Path(args.InputsDicomDir)
+#     path_nii = pathlib.Path(args.Inputs[0])
+#     path_dcmseg = pathlib.Path(args.Output_folder)
+#
+#     group_id = os.getenv("GROUP_ID_CMB",44)
+#
+#     # Create output directory
+#     output_series_folder = path_dcmseg.joinpath(f'{_id}')
+#     if output_series_folder.is_dir():
+#         output_series_folder.mkdir(exist_ok=True, parents=True)
+#     else:
+#         output_series_folder.parent.mkdir(parents=True, exist_ok=True)
+#
+#     series_name = path_nii.name.split('.')[0]
+#     # Load prediction data from NIfTI file
+#     new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii)
+#     pred_json_path = path_nii.parent.joinpath(path_nii.name.replace('.nii.gz',
+#                                                                     '.json'))
+#
+#     sorted_dcms, image, first_dcm, source_images = utils.load_and_sort_dicom_files(str(path_dcms))
+#     pred_data_unique = np.unique(new_nifti_array)
+#     if len(pred_data_unique) < 1:
+#         return None
+#     else:
+#         pred_data_unique = pred_data_unique[1:]  # Exclude background value (0)
+#
+#     # Create DICOM-SEG files for each unique region
+#     result_list = utils.create_dicom_seg_file(pred_data_unique,
+#                                               new_nifti_array,
+#                                               series_name,
+#                                               output_series_folder,
+#                                               image,
+#                                               first_dcm,
+#                                               source_images)
+#     # Create platform JSON
+#     with open(pred_json_path) as f:
+#         pred_json = json.load(f)
+#     cmb_platform_json_builder = CMBPlatformJSONBuilder()
+#     cmb_platform_json = (cmb_platform_json_builder.set_mask(source_images=source_images,
+#                                                             result_list =result_list,
+#                                                             pred_json_list=pred_json,
+#                                                             group_id = group_id)
+#                                                   .set_sorted(source_images=source_images)
+#                                                   .set_study(source_images=source_images,
+#                                                              result_list =result_list,
+#                                                              pred_json_list=pred_json,
+#                                                              group_id = group_id)
+#                                                   .build())
+#     print('cmb_platform_json',cmb_platform_json)
+#     platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
+#                                                                              '_platform_json.json'))
+#     print('platform_json_path', platform_json_path)
+#     with open(platform_json_path, 'w') as f:
+#         f.write(cmb_platform_json.model_dump_json())
+#     print("Processing complete!")
+#     return None
+
+
 if __name__ == '__main__':
-    main()
+    main_review_cmd()
