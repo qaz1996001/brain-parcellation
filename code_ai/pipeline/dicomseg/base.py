@@ -385,14 +385,11 @@ class ReviewPlatformJSONBuilder(Generic[AITeamT,
             raise ValueError('self._series_dict or self.group_id is None')
         series_list = []
         for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-
-            for index, dicom_seg_result in enumerate(dicom_seg_result_list):
-                mask_series = self.get_mask_series(source_images    = series_source_images,
-                                                   series_type      = series_name,
-                                                   dicom_seg_result = dicom_seg_result,
-                                                   pred_json        = pred_json_list[index],
-                                                   *args, **kwargs)
-
+            mask_series = self.get_mask_series(source_images    = series_source_images,
+                                               series_type      = series_name,
+                                               dicom_seg_result = dicom_seg_result_list[index],
+                                               pred_json        = pred_json_list[index],
+                                               *args, **kwargs)
             series_list.append(mask_series)
 
         mask_dict.update({'series': series_list})
