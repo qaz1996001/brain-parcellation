@@ -540,17 +540,6 @@ def dicom_rename(func_params: Dict[str, any]):
     return process_dir_result
 
 
-# @Booster('nii_file_processing_queue',
-#          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-@Booster(BoosterParamsMyRABBITMQ(queue_name='nii_file_processing_queue',
-                                 qps=10,))
-def nii_file_processing(func_params: Dict[str, any]):
-    print('nii_file_processing', func_params)
-    study_folder_path = func_params.get('study_folder_path')
-    if study_folder_path is None:
-        return
-    ConvertManager.nifti_post_process_manager.post_process(pathlib.Path(study_folder_path))
-
 
 class ConvertManager:
     modality_processing_strategy: ModalityProcessingStrategy = ModalityProcessingStrategy()
