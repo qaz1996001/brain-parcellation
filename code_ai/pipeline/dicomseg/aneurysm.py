@@ -33,7 +33,11 @@ from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
 from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest,StudyModelRequest
 from code_ai.pipeline.dicomseg.schema.aneurysm import AneurysmMaskRequest, AneurysmMaskSeriesRequest, AneurysmMaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema.aneurysm import AneurysmAITeamRequest, SortedRequest
-from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder
+from code_ai.pipeline.dicomseg.schema.aneurysm import AneurysmAITeam2Request, AneurysmMask2Request
+from code_ai.pipeline.dicomseg.schema.aneurysm import AneurysmMaskSeries2Request, AneurysmMaskModel2Request
+
+
+from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
 from code_ai import load_dotenv
 load_dotenv()
 
@@ -305,6 +309,152 @@ class AneurysmPlatformJSONBuilder(PlatformJSONBuilder[AneurysmAITeamRequest]):
         return [StudyModelRequest.model_validate(study_model)]
 
 
+
+class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
+    model_type  = ModelTypeEnum.Aneurysm.value
+    MaskInstanceClass = AneurysmMaskInstanceRequest
+    AITeamClass     = AneurysmAITeam2Request
+    MaskClass       = AneurysmMask2Request
+    MaskSeriesClass = AneurysmMaskSeries2Request
+    MaskModelClass  = AneurysmMaskModel2Request
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.group_id = kwargs.get('group_id',51)
+
+    def get_mask_instance(self, source_images: List[Union[FileDataset, DicomDir]],
+                          series_type: SeriesTypeEnum,
+                          dicom_seg_result:Dict[str,Any],
+                          pred_json :Dict[str,Any],
+                          *args, **kwargs) -> List["MaskInstanceClass"]:
+        result_data_list    = dicom_seg_result['data']
+        pred_json_data_list = pred_json['data']
+        mask_instance_list = []
+        for index, result in enumerate(result_data_list):
+            mask_instance_dict = dict()
+            filter_cmd_data = list(filter(lambda x: str(x['mask_index']) == str(result['mask_index']), pred_json_data_list))
+            if filter_cmd_data :
+                filter_cmd = filter_cmd_data[0]
+            else:
+                continue
+            dcm_seg_path = result['dcm_seg_path']
+            with open(dcm_seg_path, 'rb') as f:
+                dcm_seg = pydicom.read_file(f)
+            # Extract UIDs from the DICOM-SEG and source images
+            seg_sop_instance_uid = dcm_seg.get((0x008, 0x0018)).value
+            seg_series_instance_uid = dcm_seg.get((0x020, 0x000E)).value
+            dicom_sop_instance_uid = source_images[int(result['main_seg_slice'])].get((0x008, 0x0018)).value
+            # mask_index = kwargs.get('mask_index', 1)
+            # main_seg_slice = kwargs.get('main_seg_slice', "")
+            # diameter = kwargs.get('diameter', '0.0')
+            # _type = kwargs.get('type', '')
+            # location = kwargs.get('location', 'M')
+            # sub_location = kwargs.get('sub_location', '')
+            # prob_max = kwargs.get('prob_max', '1.0')
+            mask_instance_dict.update({'diameter'       : filter_cmd['diameter'],
+                                       'type'           : filter_cmd['type'],
+                                       'location'       : filter_cmd['location'],
+                                       'sub_location'   : filter_cmd['sub_location'],
+                                       'prob_max'       : filter_cmd['prob_max'],
+                                       'main_seg_slice' : result['main_seg_slice'],
+                                       'mask_index'     : result['mask_index'],
+                                       'mask_name': "A{}".format(result['mask_index']),
+                                       'seg_sop_instance_uid': seg_sop_instance_uid,
+                                       'seg_series_instance_uid': seg_series_instance_uid,
+                                       'dicom_sop_instance_uid': dicom_sop_instance_uid,
+                                       'is_main_seg': "1",
+                                       'checked': "1",
+                                       'is_ai': "1",
+                                       })
+            mask_instance_list.append(self.MaskInstanceClass.model_validate(mask_instance_dict))
+        return mask_instance_list
+
+
+    def get_study_model(self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any],
+                        *args, **kwargs) -> "StudyModelClass":
+        pred_json_list = pred_data['data']
+        study_model = dict(lession=len(pred_json_list),
+                           series_type=series_type.value,
+                           model_type=self.model_type,
+                           status="1",
+                           report="", )
+        return self.StudyModelClass.model_validate(study_model)
+
+
+
+    def get_mask_series(self,source_images:List[Union[FileDataset, DicomDir]],
+                             series_type: SeriesTypeEnum,
+                             dicom_seg_result,
+                             pred_json,
+                            *args, **kwargs) -> "MaskSeriesClass":
+        """
+            dicom_seg_result : {"series_type": {}, "data":{} }
+            dicom_seg_result : {"series_type": {}, "data":{} }
+        """
+        series_instance_uid = source_images[0].get((0x0020, 0x000E)).value
+        mask_series_dict = {
+            'series_instance_uid': series_instance_uid,
+            'series_type': series_type,
+        }
+        mask_instance = self.get_mask_instance(source_images = source_images,
+                                               series_type = series_type,
+                                               dicom_seg_result = dicom_seg_result,
+                                               pred_json = pred_json,
+                                               *args, **kwargs)
+        mask_series_dict.update({'instances': mask_instance})
+
+
+        return self.MaskSeriesClass.model_validate(mask_series_dict)
+
+
+    def get_mask_model(self, source_images: List[Union[FileDataset, DicomDir]], series_type: SeriesTypeEnum,
+                          dicom_seg_result: Dict[str, Any], pred_json: Dict[str, Any], *args, **kwargs) -> MaskModelClass:
+        mask_model_dict = {}
+        mask_series = self.get_mask_series(source_images=source_images,
+                                           series_type=series_type,
+                                           dicom_seg_result=dicom_seg_result,
+                                           pred_json=pred_json)
+        mask_model_dict.update({"series":[mask_series],
+                                "model_type":self.model_type
+                                })
+        return self.MaskModelClass.model_validate(mask_model_dict)
+
+
+    def build_mask(self,dicom_seg_result_list,pred_json_list,*args, **kwargs) -> Self:
+        mask_dict = {}
+        if all((self._series_dict is not None,self.group_id is not None)):
+            for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+                if index == 0:
+                    study_instance_uid = series_source_images[0].get((0x0020, 0x000D)).value
+                    mask_dict.update( {
+                        'study_instance_uid': study_instance_uid,
+                        'group_id': self.group_id
+                    })
+                    break
+        else:
+            raise ValueError('self._series_dict or self.group_id is None')
+        model_list = []
+        for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+            print('series_source_images', len(series_source_images), series_name)
+            mask_model_series = self.get_mask_model(source_images    = series_source_images,
+                                                    dicom_seg_result = dicom_seg_result_list[index],
+                                                    pred_json        = pred_json_list[index],
+                                                    series_type      = series_name,
+                                                    *args, **kwargs)
+            model_list.append(mask_model_series)
+
+
+        mask_dict.update({'model': model_list})
+
+        print('build_mask',mask_dict)
+        self._mask_request = self.MaskClass.model_validate(mask_dict)
+        return self
+
+
+
+
+
+
 def use_create_dicom_seg_file(path_nii:pathlib.Path,
                               series_name: str,
                               output_folder: pathlib.Path,
@@ -363,14 +513,14 @@ def get_excel_to_pred_json(excel_file_path:str,
                 "location": str(df[f"{aneurysm_number}_Location"].iloc()[0]),
                 "sub_location": sub_location if pd.notna(sub_location) else "",
                 "checked": "1",
-                "prob_max": str(round(df[f"{aneurysm_number}_Prob_max"].iloc()[0], 2)),
+                "prob_max": round(df[f"{aneurysm_number}_Prob_max"].iloc()[0], 2),
                 "is_ai": "1",
                 "main_seg_slice": int(np.median(have_labels) + 1),
                 "is_main_seg": "1"
             }
             series_name_pred.append(segment_attribute)
         pred_json_list.append({"series_name":intput_dict['series_name'],
-                               "pred_json":series_name_pred
+                               "data":series_name_pred
                                })
             # break
         # break
@@ -446,11 +596,11 @@ def main():
                                                       mip_yaw_first_dcm,
                                                       mip_yaw_source_images)
     result_list = [{"series_name": "MRA_BRAIN",
-                    "result_list":mar_brain_result_list},
+                    "data":mar_brain_result_list},
                    {"series_name": "MIP_Pitch",
-                    "result_list": mip_pitch_result_list},
+                    "data": mip_pitch_result_list},
                    {"series_name": "MIP_Yaw",
-                    "result_list": mip_yaw_result_list},
+                    "data": mip_yaw_result_list},
                    ]
     # pred_json_list = [{"series_name": "MRA_BRAIN",
     #                    "pred_json":pred_json},
@@ -460,22 +610,34 @@ def main():
     #                    "pred_json": pred_json},
     #                   ]
     # # Create platform JSON
-    aneurysm_platform_json_builder = AneurysmPlatformJSONBuilder()
-    aneurysm_platform_json = (aneurysm_platform_json_builder.set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
+    # aneurysm_platform_json_builder = AneurysmPlatformJSONBuilder()
+    # aneurysm_platform_json = (aneurysm_platform_json_builder.set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
+    #                                                         .set_series_type(SeriesTypeEnum.MIP_Pitch, mip_pitch_source_images)
+    #                                                         .set_series_type(SeriesTypeEnum.MIP_Yaw, mip_yaw_source_images)
+    #                                                         .set_mask(source_images=mar_brain_source_images,
+    #                                                                   result_list =result_list,
+    #                                                                   pred_json_list=pred_json_list,
+    #                                                                   group_id = group_id)
+    #                                                         .set_sorted(source_images=mar_brain_source_images)
+    #                                                         .set_study(source_images=mar_brain_source_images,
+    #                                                                    result_list =result_list,
+    #                                                                    pred_json_list=pred_json_list,
+    #                                                                    group_id = group_id)
+    #                                                         .build())
+
+    aneurysm_platform_json_builder = ReviewAneurysmPlatformJSONBuilder()
+    aneurysm_platform_json = (aneurysm_platform_json_builder.set_group_id(group_id=group_id)
+                                                            .set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
                                                             .set_series_type(SeriesTypeEnum.MIP_Pitch, mip_pitch_source_images)
                                                             .set_series_type(SeriesTypeEnum.MIP_Yaw, mip_yaw_source_images)
-                                                            .set_mask(source_images=mar_brain_source_images,
-                                                                      result_list =result_list,
-                                                                      pred_json_list=pred_json_list,
-                                                                      group_id = group_id)
-                                                            .set_sorted(source_images=mar_brain_source_images)
-                                                            .set_study(source_images=mar_brain_source_images,
-                                                                       result_list =result_list,
-                                                                       pred_json_list=pred_json_list,
-                                                                       group_id = group_id)
+                                                            .build_mask(dicom_seg_result_list =result_list,
+                                                                        pred_json_list=pred_json_list)
+                                                            .build_sorted()
+                                                            .build_study(pred_json_list=pred_json_list,)
                                                             .build())
 
-    platform_json_path = output_series_folder.joinpath(path_root.joinpath('aneurysm_platform_json_new.json'))
+
+    platform_json_path = output_series_folder.joinpath(path_root.joinpath('aneurysm_platform_json.json'))
     with open(platform_json_path, 'w') as f:
         f.write(aneurysm_platform_json.model_dump_json())
     print("Processing complete!")
