@@ -36,6 +36,7 @@ from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeam2Request,CMBMask2Reque
 
 from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
 from code_ai import load_dotenv
+
 load_dotenv()
 
 
@@ -276,11 +277,9 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
     MaskClass       = CMBMask2Request
     MaskSeriesClass = CMBMaskSeries2Request
     MaskModelClass  = CMBMaskModel2Request
-    # model_type      = ModelTypeEnum.CMB.value
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
 
 
     def get_mask_series(self,source_images:List[Union[FileDataset, DicomDir]],
@@ -334,20 +333,24 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
                     break
         else:
             raise ValueError('self._series_dict or self.group_id is None')
-        model_list = []
+        model_series_list = []
+        mask_model_dict = {}
         for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-            mask_model_series = self.get_mask_model(source_images    = series_source_images,
-                                                    dicom_seg_result = dicom_seg_result_list[index],
-                                                    pred_json        = pred_json_list[index],
-                                                    series_type      = series_name,
-                                                    *args, **kwargs)
-            model_list.append(mask_model_series)
 
-        mask_dict.update({'model': model_list})
+            mask_model_series:CMBMaskModel2Request = self.get_mask_model(source_images    = series_source_images,
+                                                                         dicom_seg_result = dicom_seg_result_list[index],
+                                                                         pred_json        = pred_json_list[index],
+                                                                         series_type      = series_name,
+                                                                         *args, **kwargs)
+            model_series_list.extend(mask_model_series.series)
+            if index == 0:
+                mask_model_dict.update({"model_type":mask_model_series.model_type})
 
+
+        mask_model_dict.update({'series': model_series_list})
+        mask_dict.update({'model': [mask_model_dict]})
         self._mask_request = self.MaskClass.model_validate(mask_dict)
         return self
-
 
 
 def main_review_cmd():

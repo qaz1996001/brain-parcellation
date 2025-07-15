@@ -59,7 +59,7 @@ class CMBMaskSeries2Request(MaskSeriesRequest):
 
 class CMBMaskModel2Request(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    model_type : Optional[str] = Field(None, exclude=True)
+    model_type : Optional[str] = Field(None)
     series     : Optional[List[CMBMaskSeries2Request]] = Field(None)
 
 
