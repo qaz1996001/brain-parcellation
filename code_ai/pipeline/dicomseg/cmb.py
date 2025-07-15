@@ -336,14 +336,12 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             raise ValueError('self._series_dict or self.group_id is None')
         model_list = []
         for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-
-            for index, dicom_seg_result in enumerate(dicom_seg_result_list):
-                mask_model_series = self.get_mask_model(source_images    = series_source_images,
-                                                        dicom_seg_result = dicom_seg_result,
-                                                        pred_json        = pred_json_list[index],
-                                                        series_type      = series_name,
-                                                        *args, **kwargs)
-                model_list.append(mask_model_series)
+            mask_model_series = self.get_mask_model(source_images    = series_source_images,
+                                                    dicom_seg_result = dicom_seg_result_list[index],
+                                                    pred_json        = pred_json_list[index],
+                                                    series_type      = series_name,
+                                                    *args, **kwargs)
+            model_list.append(mask_model_series)
 
         mask_dict.update({'model': model_list})
 
