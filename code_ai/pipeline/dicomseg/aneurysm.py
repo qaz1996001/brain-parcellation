@@ -15,6 +15,7 @@ This module handles:
 
 @author: sean
 """
+import argparse
 import json
 import os
 import pathlib
@@ -433,17 +434,20 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
                     break
         else:
             raise ValueError('self._series_dict or self.group_id is None')
-        model_list = []
+        mask_model_series_list = []
+        mask_model_dict = {}
         for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-            mask_model_series = self.get_mask_model(source_images    = series_source_images,
+            mask_model_series:AneurysmMaskModel2Request = self.get_mask_model(source_images    = series_source_images,
                                                     dicom_seg_result = dicom_seg_result_list[index],
                                                     pred_json        = pred_json_list[index],
                                                     series_type      = series_name,
                                                     *args, **kwargs)
-            model_list.append(mask_model_series)
+            mask_model_series_list.extend(mask_model_series.series)
+            if index == 0:
+                mask_model_dict.update({"model_type":mask_model_series.model_type})
 
-
-        mask_dict.update({'model': model_list})
+        mask_model_dict.update({"series":mask_model_series_list})
+        mask_dict.update({'model': [mask_model_dict]})
         self._mask_request = self.MaskClass.model_validate(mask_dict)
         return self
 
@@ -525,25 +529,12 @@ def get_excel_to_pred_json(excel_file_path:str,
 
 
 
-
-def main():
-    """
-    Main function to process command line arguments and execute the pipeline.
-
-    This function:
-    """
-    # Parse command line arguments
-    # parser = pipeline_parser()
-    # args = parser.parse_args()
-
-    _id = "01901124_20250617_MR_21404020048"
-    path_root = pathlib.Path("/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048")
+def execute_dicomseg_platform_json(_id:int,root_path:str,group_id:int):
+    path_root = pathlib.Path(root_path)
     path_dcms = path_root.joinpath("Dicom")
     path_nii = path_root.joinpath("Image_nii")
     path_reslice_nii = path_root.joinpath("Image_reslice")
     path_dcmseg = path_dcms.joinpath("Dicom-Seg")
-
-    group_id = os.getenv("GROUP_ID_ANEURYSM",51)
 
     # Create output directory
     output_series_folder = path_root
@@ -554,17 +545,17 @@ def main():
 
     mar_brain_path_dcms = path_dcms.joinpath("MRA_BRAIN")
     mip_pitch_path_dcms = path_dcms.joinpath("MIP_Pitch")
-    mip_yaw_path_dcms   = path_dcms.joinpath("MIP_Yaw")
+    mip_yaw_path_dcms = path_dcms.joinpath("MIP_Yaw")
 
-    pred_nii_path_list =  [{"series_name":"MRA_BRAIN",
-                            "pred_nii_path":str(path_nii.joinpath("Pred.nii.gz"))},
-                           {"series_name": "MIP_Pitch",
-                            "pred_nii_path": str(path_reslice_nii.joinpath("MIP_Pitch_pred.nii.gz"))},
-                           {"series_name": "MIP_Yaw",
-                            "pred_nii_path": str(path_reslice_nii.joinpath("MIP_Yaw_pred.nii.gz"))}
-                           ]
-    pred_json_list = get_excel_to_pred_json(excel_file_path = str(path_nii.parent.joinpath("excel",
-                                                                                      "Aneurysm_Pred_list.xlsx")),
+    pred_nii_path_list = [{"series_name": "MRA_BRAIN",
+                           "pred_nii_path": str(path_nii.joinpath("Pred.nii.gz"))},
+                          {"series_name": "MIP_Pitch",
+                           "pred_nii_path": str(path_reslice_nii.joinpath("MIP_Pitch_pred.nii.gz"))},
+                          {"series_name": "MIP_Yaw",
+                           "pred_nii_path": str(path_reslice_nii.joinpath("MIP_Yaw_pred.nii.gz"))}
+                          ]
+    pred_json_list = get_excel_to_pred_json(excel_file_path=str(path_nii.parent.joinpath("excel",
+                                                                                         "Aneurysm_Pred_list.xlsx")),
                                             intput_list=pred_nii_path_list)
 
     mar_brain_sorted_dcms, mar_brain_image, mar_brain_first_dcm, mar_brain_source_images = utils.load_and_sort_dicom_files(
@@ -577,7 +568,8 @@ def main():
                                                       mar_brain_first_dcm,
                                                       mar_brain_source_images)
     #
-    mip_pitch_sorted_dcms, mip_pitch_image, mip_pitch_first_dcm, mip_pitch_source_images = utils.load_and_sort_dicom_files(str(mip_pitch_path_dcms))
+    mip_pitch_sorted_dcms, mip_pitch_image, mip_pitch_first_dcm, mip_pitch_source_images = utils.load_and_sort_dicom_files(
+        str(mip_pitch_path_dcms))
     mip_pitch_result_list = use_create_dicom_seg_file(path_reslice_nii,
                                                       "MIP_Pitch",
                                                       path_dcmseg,
@@ -585,15 +577,16 @@ def main():
                                                       mip_pitch_first_dcm,
                                                       mip_pitch_source_images)
 
-    mip_yaw_sorted_dcms, mip_yaw_image, mip_yaw_first_dcm, mip_yaw_source_images = utils.load_and_sort_dicom_files(str(mip_yaw_path_dcms))
+    mip_yaw_sorted_dcms, mip_yaw_image, mip_yaw_first_dcm, mip_yaw_source_images = utils.load_and_sort_dicom_files(
+        str(mip_yaw_path_dcms))
     mip_yaw_result_list = use_create_dicom_seg_file(path_reslice_nii,
-                                                      "MIP_Yaw",
-                                                      path_dcmseg,
-                                                      mip_yaw_image,
-                                                      mip_yaw_first_dcm,
-                                                      mip_yaw_source_images)
+                                                    "MIP_Yaw",
+                                                    path_dcmseg,
+                                                    mip_yaw_image,
+                                                    mip_yaw_first_dcm,
+                                                    mip_yaw_source_images)
     result_list = [{"series_name": "MRA_BRAIN",
-                    "data":mar_brain_result_list},
+                    "data": mar_brain_result_list},
                    {"series_name": "MIP_Pitch",
                     "data": mip_pitch_result_list},
                    {"series_name": "MIP_Yaw",
@@ -624,21 +617,49 @@ def main():
 
     aneurysm_platform_json_builder = ReviewAneurysmPlatformJSONBuilder()
     aneurysm_platform_json = (aneurysm_platform_json_builder.set_group_id(group_id=group_id)
-                                                            .set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
-                                                            .set_series_type(SeriesTypeEnum.MIP_Pitch, mip_pitch_source_images)
-                                                            .set_series_type(SeriesTypeEnum.MIP_Yaw, mip_yaw_source_images)
-                                                            .build_mask(dicom_seg_result_list =result_list,
-                                                                        pred_json_list=pred_json_list)
-                                                            .build_sorted()
-                                                            .build_study(pred_json_list=pred_json_list,)
-                                                            .build())
-
+                              .set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
+                              .set_series_type(SeriesTypeEnum.MIP_Pitch, mip_pitch_source_images)
+                              .set_series_type(SeriesTypeEnum.MIP_Yaw, mip_yaw_source_images)
+                              .build_mask(dicom_seg_result_list=result_list,
+                                          pred_json_list=pred_json_list)
+                              .build_sorted()
+                              .build_study(pred_json_list=pred_json_list, )
+                              .build())
 
     platform_json_path = output_series_folder.joinpath(path_root.joinpath('aneurysm_platform_json.json'))
     with open(platform_json_path, 'w') as f:
         f.write(aneurysm_platform_json.model_dump_json())
     print("Processing complete!")
-    return None
+
+
+
+
+def main():
+    """
+    Main function to process command line arguments and execute the pipeline.
+
+    This function:
+    """
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--ID', type=str, default='01901124_20250617_MR_21404020048',
+                        help='目前執行的case的patient_id or study id')
+
+    parser.add_argument('--Inputs', type=str, nargs='+',
+                        default=['/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048/Image_nii/Pred.nii.gz '],
+                        help='用於輸入的檔案')
+    parser.add_argument('--Output_folder', type=str, default='/mnt/e/pipeline/新增資料夾/',
+                        help='用於輸出結果的資料夾')
+    parser.add_argument('--InputsDicomDir', type=str,
+                        default='/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048/Dicom/MRA_BRAIN',
+                        help='用於輸入的檔案')
+    args = parser.parse_args()
+    # path_process      = os.getenv("PATH_PROCESS")
+    # path_processModel = os.path.join(path_process, 'Deep_Aneurysm')
+    path_processModel = "/mnt/e/pipeline/新增資料夾"
+    path_processID = os.path.join(path_processModel, args.ID)
+    execute_dicomseg_platform_json(_id=args.ID,root_path=path_processID,group_id=44)
+
 
 
 if __name__ == '__main__':
