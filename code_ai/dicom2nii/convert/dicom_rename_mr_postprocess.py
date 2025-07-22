@@ -4,7 +4,7 @@ import re
 import traceback
 from abc import ABCMeta, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Union
+from typing import List, Union,Tuple
 from tqdm.auto import tqdm
 from pydicom import dcmread, FileDataset, Dataset,DataElement
 import orjson
@@ -260,16 +260,109 @@ class MRDicomProcessingStrategy(ProcessingStrategy):
 
 
 
-class ADCProcessingStrategy(ProcessingStrategy):
+class ADCProcessingStrategy(MRDicomProcessingStrategy):
+
+    @staticmethod
+    def has_image_position_patient_with_dicom(dicom_ds:FileDataset) -> bool:
+        image_position_patient = dicom_ds.get((0x20, 0x32))
+        image_type             = dicom_ds.get((0x08, 0x08))
+        # (0008,0008)	Image Type	DERIVED\SECONDARY\COMBINED
+        if image_position_patient and image_type[2] == 'ADC':
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def read_dicom(dicom_path: Union[pathlib.Path, str]) -> FileDataset:
+        with open(dicom_path, mode='rb') as dcm:
+            dicom_ds: FileDataset = dcmread(dcm, force=True)
+        return dicom_ds
+
 
     def process(self, study_path: pathlib.Path, *args, **kwargs):
-        pass
+        series_folder_list = self.get_series_folder_list(study_path=study_path)
+
+        #
+        filter_series_folder_list = sorted(filter(lambda x: (x.name == MRSeriesRenameEnum.ADC.value) \
+                                                  or        (x.name == MRSeriesRenameEnum.DWI1000.value),
+                                                  series_folder_list))
+
+        if filter_series_folder_list and len(filter_series_folder_list) >= 2:
+            adc_series_folder = study_path.joinpath(MRSeriesRenameEnum.ADC.value)
+            dwi_1000_series_folder = study_path.joinpath(MRSeriesRenameEnum.DWI1000.value)
+
+            adc_series_dicom_list      = sorted(adc_series_folder.glob('*.dcm'))
+            dwi_1000_series_dicom_list = sorted(dwi_1000_series_folder.glob('*.dcm'))
+
+            adc_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = []
+            dwi_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = []
+            if len(adc_series_dicom_list) == len(dwi_1000_series_dicom_list):
+
+                for index,dicom_path in enumerate(adc_series_dicom_list) :
+                    # read ADC
+                    dicom_ds : FileDataset = self.read_dicom(dicom_path=dicom_path)
+                    # get  (0020,0032)	Image Position Patient	-111.946\-124.966\-98.7531
+                    if self.has_image_position_patient_with_dicom(dicom_ds):
+                        break
+                    else:
+                        adc_dicom_list.append((dicom_ds, dicom_path))
+                # read DWI1000
+                temp_dwi_list: List[Tuple[FileDataset, pathlib.Path]] = [(self.read_dicom(dicom_path),dicom_path)
+                                                                         for dicom_path in dwi_1000_series_dicom_list]
+                dwi_dicom_list.extend(temp_dwi_list)
+
+            elif len(adc_series_dicom_list)//2 == len(dwi_1000_series_dicom_list):
+                dicom_list = [(dcmread(x, force=True), x) for x in adc_series_dicom_list]
+                adc_dicom_list = list(filter(lambda x: not self.has_image_position_patient_with_dicom(x[0]),dicom_list))
+                # read DWI1000
+                temp_dwi_list = [(self.read_dicom(dicom_path), dicom_path) for dicom_path in dwi_1000_series_dicom_list]
+                dwi_dicom_list.extend(temp_dwi_list)
+            # Sort slices by Instance Number
+            try:
+                # (0020,0013)	Instance Number	4
+                sorted_adc_dicom_list: List[Tuple[FileDataset, pathlib.Path]]      = sorted(adc_dicom_list,
+                                                                                            key=lambda x: x[0][0x20, 0x13].value)
+                sorted_dwi_1000_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = sorted(dwi_dicom_list,
+                                                                                            key=lambda x: x[0][0x20, 0x13].value)
+            except:
+                # (0027,1041)	Unknown  Tag &  Data  -73.76799 (Image location (0027,1041) FL
+                sorted_adc_dicom_list: List[Tuple[FileDataset, pathlib.Path]]      = sorted(adc_dicom_list,
+                                                                                            key=lambda x: x[0][0x27, 0x1041].value)
+                sorted_dwi_1000_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = sorted(dwi_dicom_list,
+                                                                                            key=lambda x: x[0][0x27, 0x1041].value)
+
+            for index, (dwi_1000_dicom_ds, dwi_1000_dicom_path) in enumerate(sorted_dwi_1000_dicom_list):
+                try:
+                    adc_dicom_ds = sorted_adc_dicom_list[index][0]
+                    adc_dicom_path = sorted_adc_dicom_list[index][1]
+
+                    # (0028,0030)	Pixel Spacing	0.8984\0.8984
+                    # (0018,0050)	Slice Thickness	4
+                    # (0018,0088)	Spacing Between Slices	4
+                    # (0020,1041)	Slice Location	-85.72914886
+                    # (0020,0032)	Image Position Patient	-111.946\-124.966\-98.7531
+                    # (0020,0037)	Image Orientation Patient	0.997335\-0.0447198\0.057639\0.0414903\0.997565\0.0560564
+
+                    adc_dicom_ds[0x28, 0x30] = dwi_1000_dicom_ds[0x28, 0x30]
+                    adc_dicom_ds[0x18, 0x50] = dwi_1000_dicom_ds[0x18, 0x50]
+                    adc_dicom_ds[0x18, 0x88] = dwi_1000_dicom_ds[0x18, 0x88]
+                    adc_dicom_ds[0x20, 0x1041] = dwi_1000_dicom_ds[0x20, 0x1041]
+                    adc_dicom_ds[0x20, 0x32] = dwi_1000_dicom_ds[0x20, 0x32]
+                    adc_dicom_ds[0x20, 0x37] = dwi_1000_dicom_ds[0x20, 0x37]
+                    adc_dicom_ds.save_as(str(adc_dicom_path), )
+                except:
+                    traceback.print_exc()
+                    continue
+        else:
+            pass
+
 
 
 class PostProcessManager:
     processing_strategy_list: List[ProcessingStrategy] = [MRDicomProcessingStrategy(),
                                                           # DWI ADC acquisition_time
                                                           # MRProcessingStrategy()
+                                                          ADCProcessingStrategy()
                                                           ]
 
     def __init__(self, *args, **kwargs):
