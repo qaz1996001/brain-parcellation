@@ -38,6 +38,8 @@ def pipeline_parser():
 class PipelineConfig:
     base_path = pathlib.Path(__file__).parent.parent.parent.absolute()
     python3 = os.getenv("PYTHON3")
+    conda = "conda"
+    conda_env = "tf_2_14"
 
     def __init__(self, script_name, data_key):
         self.script_name = script_name
@@ -56,15 +58,29 @@ class PipelineConfig:
             #                                        [--Inputs INPUTS [INPUTS ...]]
             #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
             #                                        [--Output_folder OUTPUT_FOLDE
+            # if input_dicom_dir is None:
+            #     return (f'cd {str(chuan_code)}  && '
+            #             f'{self.python3} {self.script_name} '
+            #             f'--ID {study_id} '
+            #             f'--Inputs {" ".join(input_path_list)} '
+            #             f'--Output_folder {task.output_path} ')
+            # else:
+            #     return (f'cd {str(chuan_code)}  && '
+            #             f'{self.python3} {self.script_name} '
+            #             f'--ID {study_id} '
+            #             f'--Inputs {" ".join(input_path_list)} '
+            #             f'--Output_folder {task.output_path} '
+            #             f'--DicomDir {input_dicom_dir} '
+            #             )
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
-                        f'{self.python3} {self.script_name} '
+                        f'{self.conda} run -n {self.conda_env} python {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {task.output_path} ')
             else:
                 return (f'cd {str(chuan_code)}  && '
-                        f'{self.python3} {self.script_name} '
+                        f'{self.conda} run -n {self.conda_env} python {self.script_name} '
                         f'--ID {study_id} '
                         f'--Inputs {" ".join(input_path_list)} '
                         f'--Output_folder {task.output_path} '
@@ -88,7 +104,8 @@ class PipelineConfig:
 
 
 pipelines = {
-    InferenceEnum.Aneurysm: PipelineConfig('pipeline_aneurysm_tensorflow.py', 'Aneurysm'),
+    # InferenceEnum.Aneurysm: PipelineConfig('pipeline_aneurysm_tensorflow.py', 'Aneurysm'),
+    InferenceEnum.Aneurysm: PipelineConfig('script.py', 'Aneurysm'),
     # InferenceEnum.Area: PipelineConfig('pipeline_synthseg_tensorflow.py', 'Area'),
     InferenceEnum.CMB: PipelineConfig('pipeline_cmb_tensorflow.py', 'CMB'),
     # InferenceEnum.DWI: PipelineConfig('pipeline_synthseg_dwi_tensorflow.py', 'DWI'),
