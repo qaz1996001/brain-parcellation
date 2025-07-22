@@ -74,14 +74,14 @@ class PipelineConfig:
             #             )
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
-                        f'bash {str(chuan_code)} {self.script_name} '
+                        f'bash {str(chuan_code)}/{self.script_name} '
                         f'{study_id} '
                         f'{" ".join(input_path_list)} '
                         f'{task.output_path} '
                         )
             else:
                 return (f'cd {str(chuan_code)}  && '
-                        f'bash {str(chuan_code)} {self.script_name} '
+                        f'bash {str(chuan_code)}/{self.script_name} '
                         f'{study_id} '
                         f'{" ".join(input_path_list)} '
                         f'{task.output_path} '
