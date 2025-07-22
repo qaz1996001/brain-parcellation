@@ -10,6 +10,7 @@ from pydicom import dcmread, FileDataset, Dataset,DataElement
 import orjson
 from .config import MRSeriesRenameEnum,DSCSeriesRenameEnum,ASLSEQSeriesRenameEnum
 
+
 class ProcessingStrategy(metaclass=ABCMeta):
 
     @abstractmethod
@@ -231,19 +232,6 @@ class MRDicomProcessingStrategy(ProcessingStrategy):
                 flag_list.append(flag)
         return any(flag_list),dicom_ds
 
-    # def revise_date(self, dicom_ds: FileDataset):
-    #     # (0008,0020)	Study Date 20220920
-    #     # (0008,0021)	Series Date 20220920
-    #     # (0008,0022)	Acquisition Date 20220920
-    #     # (0008,0023)	Content Date 20220920
-    #     # (0010,0030)	Patient Birth Date 19641228
-    #
-    #     study_date       = dicom_ds.get((0x08, 0x20))
-    #     series_date      = dicom_ds.get((0x08, 0x21))
-    #     acquisition_date = dicom_ds.get((0x08, 0x22))
-    #     content_date     = dicom_ds.get((0x08, 0x23))
-    #     birth_date       = dicom_ds.get((0x10, 0x30))
-    #     pass
 
     def get_series_folder_list(self, study_path: pathlib.Path) -> List[pathlib.Path]:
         # series_folder_list = list(study_path.iterdir())
@@ -271,6 +259,11 @@ class MRDicomProcessingStrategy(ProcessingStrategy):
                     dicom.save_as(str(file_name),)
 
 
+
+class ADCProcessingStrategy(ProcessingStrategy):
+
+    def process(self, study_path: pathlib.Path, *args, **kwargs):
+        pass
 
 
 class PostProcessManager:

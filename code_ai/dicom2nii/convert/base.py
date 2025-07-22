@@ -119,6 +119,35 @@ class ImageOrientationProcessingStrategy(SeriesProcessingStrategy):
     def process(self, dicom_ds: FileDataset) -> Union[BaseEnum, ImageOrientationEnum]:
         """
         Process the DICOM dataset based on image orientation.
+            [1, 0, 0, 0, 0, -1] with Coronal view
+            [0, 1, 0, 0, 0, -1] with Sagittal view
+            [1, 0, 0, 0, 1, 0]  with Axial view
+            Coronal view
+                x = np.array([0.995468,0.0942863,-0.0124098,-0.0259137,0.143382,-0.989328])
+                x = np.round(x)
+                x = x.astype(int)
+                x_abs = np.abs(x)
+                >> (array([1, 0, 0, 0, 1, 0])
+                np.argsort(x_abs)
+                >> array([1, 2, 3, 5, 0, 4])
+
+            Sagittal view
+                x = np.array([-0.040429,0.999051,-0.016181,-0.002553,-0.016298,-0.99986])
+                x = np.round(x)
+                x = x.astype(int)
+                x_abs = np.abs(x)
+                >> array([0, 1, 0, 0, 0, 1])
+                np.argsort(x_abs)
+                >> array([0, 2, 3, 4, 1, 5])
+
+            Axial view
+                x = np.array([0.998550,0.053739,-0.003123,-0.053507,0.997237,0.051531,])
+                x = np.round(x)
+                x = x.astype(int)
+                x_abs = np.abs(x)
+                >> array([1, 0, 0, 0, 1, 0])
+                np.argsort(x_abs)
+                >> array([1, 2, 3, 5, 0, 4])
 
         Parameters
         ----------
