@@ -3,7 +3,7 @@ import enum
 import os
 from typing import List,  Union,  Optional
 import numpy as np
-from pydantic import BaseModel, PositiveInt, field_validator, field_serializer
+from pydantic import BaseModel, PositiveInt, field_validator, field_serializer, ConfigDict
 from code_ai import load_dotenv
 
 from code_ai.pipeline.dicomseg.schema.enum import SeriesTypeEnum, ModelTypeEnum
@@ -15,6 +15,7 @@ GROUP_ID = os.getenv("GROUP_ID",44)
 
 
 class InstanceRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     # dicom id
     sop_instance_uid :str
     # 應與 ImageOrientationPatient 和 ImagePositionPatient 有關
@@ -33,17 +34,20 @@ class InstanceRequest(BaseModel):
 
 
 class SortedSeriesRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     # dicom
     series_instance_uid :str
     instance            : List[InstanceRequest]
 
 
 class SortedRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     study_instance_uid: str
     series            : List[SortedSeriesRequest]
 
 
 class MaskInstanceRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     mask_index   : PositiveInt = 1
     mask_name    : str
     # diameter,type,location,sub_location,checked 在第一次上傳後寫入 db , 之後可從前端介面手動更改
@@ -89,6 +93,7 @@ class MaskInstanceRequest(BaseModel):
 
 
 class MaskSeriesRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     # dicom image uid
     series_instance_uid : str
     # 目前僅 Aneu 的 TOF_MRA:1 , Pitch: 2 , Yaw: 3 , 未來有其他 Series 再加
@@ -111,12 +116,14 @@ class MaskSeriesRequest(BaseModel):
 
 
 class MaskRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     study_instance_uid : str
     group_id           : PositiveInt = 44
     series             : List[MaskSeriesRequest]
 
 
 class StudySeriesRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     # dicom
     series_type         : str
     series_instance_uid : str
@@ -138,6 +145,7 @@ class StudySeriesRequest(BaseModel):
 
 
 class StudyModelRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     series_type : str
     model_type  : str
     lession     : str = "0"
@@ -179,6 +187,7 @@ class StudyModelRequest(BaseModel):
 
 
 class StudyRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     group_id           :int = GROUP_ID
     # "2017-12-25"
     study_date         :datetime.date
@@ -235,6 +244,7 @@ class StudyRequest(BaseModel):
 
 
 class AITeamRequest(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     study   : Optional[StudyRequest]  = None
     sorted  : Optional[SortedRequest] = None
     mask    : Optional[MaskRequest]   = None
