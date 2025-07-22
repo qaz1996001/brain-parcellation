@@ -74,17 +74,18 @@ class PipelineConfig:
             #             )
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
-                        f'{self.conda} run -n {self.conda_env} python {self.script_name} '
-                        f'--ID {study_id} '
-                        f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {task.output_path} ')
+                        f'bash {str(chuan_code)} {self.script_name} '
+                        f'{study_id} '
+                        f'{" ".join(input_path_list)} '
+                        f'{task.output_path} '
+                        )
             else:
                 return (f'cd {str(chuan_code)}  && '
-                        f'{self.conda} run -n {self.conda_env} python {self.script_name} '
-                        f'--ID {study_id} '
-                        f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {task.output_path} '
-                        f'--DicomDir {input_dicom_dir} '
+                        f'bash {str(chuan_code)} {self.script_name} '
+                        f'{study_id} '
+                        f'{" ".join(input_path_list)} '
+                        f'{task.output_path} '
+                        f'{input_dicom_dir} '
                         )
         else:
             if input_dicom_dir is None:
@@ -105,7 +106,7 @@ class PipelineConfig:
 
 pipelines = {
     # InferenceEnum.Aneurysm: PipelineConfig('pipeline_aneurysm_tensorflow.py', 'Aneurysm'),
-    InferenceEnum.Aneurysm: PipelineConfig('script.py', 'Aneurysm'),
+    InferenceEnum.Aneurysm: PipelineConfig('pipeline_aneurysm.sh', 'Aneurysm'),
     # InferenceEnum.Area: PipelineConfig('pipeline_synthseg_tensorflow.py', 'Area'),
     InferenceEnum.CMB: PipelineConfig('pipeline_cmb_tensorflow.py', 'CMB'),
     # InferenceEnum.DWI: PipelineConfig('pipeline_synthseg_dwi_tensorflow.py', 'DWI'),
