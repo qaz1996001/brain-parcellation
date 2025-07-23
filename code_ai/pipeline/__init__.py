@@ -84,8 +84,8 @@ class PipelineConfig:
                         f'bash {str(chuan_code)}/{self.script_name} '
                         f'{study_id} '
                         f'{" ".join(input_path_list)} '
-                        f'{task.output_path} '
                         f'{input_dicom_dir} '
+                        f'{task.output_path} '
                         )
         else:
             if input_dicom_dir is None:
