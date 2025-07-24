@@ -146,7 +146,7 @@ class StudySeriesRequest(BaseModel):
 
 class StudyModelRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    series_type : str
+    series_type : List[str]
     model_type  : str
     lession     : str = "0"
     status      : str = "1"
@@ -176,13 +176,13 @@ class StudyModelRequest(BaseModel):
     @classmethod
     def extract_series_type(cls, value):
         if value is None:
-            return '1'
+            return ['1']
         if isinstance(value, str):
             series_type_enum_list: List[SeriesTypeEnum] = SeriesTypeEnum.to_list()
             for series_type_enum in series_type_enum_list:
                 if value == series_type_enum.name:
-                    return series_type_enum.value
-        return value
+                    return [series_type_enum.value]
+        return [value]
 
 
 
