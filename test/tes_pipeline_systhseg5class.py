@@ -4,7 +4,7 @@ def test_pipeline_synthseg5class_tensorflow():
     from code_ai.task.schema.intput_params import TaskInferenceParams
     from code_ai.task.task_synthseg import call_pipeline_synthseg5class_tensorflow
 
-
+    # export CUDA_VISIBLE_DEVICES=0 &&
     task_params = TaskInferenceParams(
         input_study_nifti_path=Path(
             '/mnt/d/wsl_ubuntu/pipeline/sean/example_input'),
