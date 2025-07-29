@@ -5,6 +5,7 @@ import shutil
 import os
 import pathlib
 import subprocess
+import traceback
 from typing import List, Dict
 
 import httpx
