@@ -409,7 +409,7 @@ def main_review_cmd():
     # cmb_platform_json_builder = ReviewCMBPlatformJSONBuilder()
     cmb_platform_json_builder = NewReviewCMBPlatformJSONBuilder()
     cmb_platform_json = (cmb_platform_json_builder.set_series_type(SeriesTypeEnum.SWAN,source_images=source_images)
-                                                  .set_group_id(44)
+                                                  .set_group_id(group_id)
                                                   .build_sorted()
                                                   .build_study(pred_json_list=pred_json_list)
                                                   .build_mask(dicom_seg_result_list=dicom_seg_result_list,
