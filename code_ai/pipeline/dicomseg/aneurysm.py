@@ -451,6 +451,32 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
         self._mask_request = self.MaskClass.model_validate(mask_dict)
         return self
 
+    def build_study(self, *args, **kwargs) -> Self:
+        study_series_list = []
+        study_model_list = []
+        study_dict = {}
+        pred_json_list = kwargs.get('pred_json_list')
+        for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+            if index==0:
+                study_dict.update(self.get_study_basic_info(source_images=series_source_images,
+                                                            group_id=self.group_id))
+                study_model = self.get_study_model(series_type=series_name, pred_data=pred_json_list[index],
+                                                   *args, **kwargs)
+                study_model_list.append(study_model)
+            else:
+                study_model:StudyModelRequest = study_model_list[0]
+                new_study_model = self.get_study_model(series_type=series_name, pred_data=pred_json_list[index],
+                                                   *args, **kwargs)
+                study_model.series_type.extend(new_study_model.series_type)
+
+            study_series = self.get_study_series(source_images=series_source_images, series_type=series_name)
+            study_series_list.append(study_series)
+
+        study_dict.update({'series': study_series_list,
+                           'model': study_model_list})
+        self._study_request = self.StudyClass.model_validate(study_dict)
+        return self
+
 
 
 
@@ -656,7 +682,7 @@ def main():
     args = parser.parse_args()
     # path_process      = os.getenv("PATH_PROCESS")
     # path_processModel = os.path.join(path_process, 'Deep_Aneurysm')
-    path_processModel = "/mnt/e/pipeline/新增資料夾"
+    path_processModel = "/mnt/e/pipeline/p1"
     path_processID = os.path.join(path_processModel, args.ID)
     execute_dicomseg_platform_json(_id=args.ID,root_path=path_processID,group_id=44)
 

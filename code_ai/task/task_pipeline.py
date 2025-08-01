@@ -74,7 +74,6 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
         result_list.append((inference_item.cmd_str,stdout.decode(), stderr.decode()))
-        print('stdout.decode()',stdout.decode())
         # logger.info("{}".format(stdout.decode()))
         # logger.warn("{}".format(stderr.decode()))
     result = Serialization.to_json_str(result_list)
@@ -86,8 +85,7 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
                                                    'func_params': func_params,
                                                    'task': fct.function_result_status.get_status_dict()
                                                    },
-                                      result_data = {'result':result,
-                                                })
+                                      result_data = {'result':result,})
         call_post_httpx.push({'url': api_url,
                               'data': dcop_event.model_dump_json(),
                               })

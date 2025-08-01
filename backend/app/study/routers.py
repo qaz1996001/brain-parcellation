@@ -1,21 +1,18 @@
 # app/study/routers.py
 import logging
 from datetime import datetime
-from typing import Annotated, Tuple, List, Optional, Any, Coroutine
-
+from typing import Annotated
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
-from advanced_alchemy.service import OffsetPagination
-from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
+from fastapi import APIRouter, Depends
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import service, filters
-from sqlalchemy import Select
 
 from backend.app.study import urls
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.model import DCOPEventModel
-from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest, OrthancID
-from .deps import provide_filters
-from ..database import alchemy
+from backend.app.sync.schemas import DCOPEventRequest, OrthancID
+from backend.app.config.deps import provide_filters
+from backend.app.database import alchemy
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +40,9 @@ async def get_events_complex(
                          FieldNameType(name='series_uid',type_hint=str),
                          ],
             # BeforeAfter 日期時間過濾器
+            # FieldNameType(name='update_time', type_hint=datetime)
             "before_after_fields": [
                 FieldNameType(name='create_time', type_hint=datetime),
-                FieldNameType(name='update_time', type_hint=datetime),
             ],
 
             # 排序配置
