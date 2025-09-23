@@ -1,0 +1,9 @@
+{
+	"HttpError" : "Not Found",
+	"HttpStatus" : 404,
+	"Message" : "Unknown resource",
+	"Method" : "POST",
+	"OrthancError" : "Unknown resource",
+	"OrthancStatus" : 17,
+	"Uri" : "/study/3d0093d6-ca6b1308-a72f3691-ea03fe87-abc24224/archive"
+}

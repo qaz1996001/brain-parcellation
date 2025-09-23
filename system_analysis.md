@@ -360,34 +360,154 @@ The system uses a message queue architecture to handle asynchronous processing:
 | code_ai   | pipeline/upload_dicom_seg.py | ✅ Analyzed |
 | code_ai   | pipeline/dicomseg/base.py | ✅ Analyzed |
 
+## Code Quality Analysis Based on Cursor Rules
+
+### Linus Style Code Review (🔴 Critical Issues)
+
+#### 1. **Deep Nesting Violations**
+- `code_ai/pipeline/main.py`: 380+ lines with 6+ levels of nesting in validation logic
+- `code_ai/pipeline/pipeline_aneurysm_tensorflow.py`: Complex nested try-except blocks
+- **Violation**: "If you need more than 3 levels of indentation, you're screwed"
+
+#### 2. **Special Case Hell**
+```python
+# Found in code_ai/pipeline/__init__.py
+if self.data_key == 'Aneurysm':
+    # Special case processing
+elif self.data_key == 'CMB':
+    # Another special case
+elif self.data_key == 'DWI':
+    # Yet another special case
+```
+- **Violation**: "Good code has no special cases"
+- **Fix**: Use data structure mapping instead of if-elif chains
+
+#### 3. **Over-Abstraction**
+- `backend/app/service.py`: SessionManager with unnecessary complexity
+- **Violation**: "Theory and practice sometimes clash, and when they do, theory loses"
+
+### FastAPI Best Practices Violations
+
+#### 1. **Configuration Management**
+- Database connection string hardcoded in `backend/app/database.py`
+- Missing environment-based configuration
+- No Pydantic BaseSettings usage
+
+#### 2. **Error Handling**
+- Missing global error handling middleware
+- No consistent error response format
+- Lack of guard clauses and early returns
+
+#### 3. **Async/Sync Mixing**
+- Synchronous operations in async context (subprocess calls)
+- Missing async database operations in some modules
+- No proper connection pooling
+
+#### 4. **API Structure**
+- Missing proper dependency injection in many routes
+- No response models for consistent API responses
+- Lack of proper validation using Pydantic v2
+
+### Python General Principles Violations
+
+#### 1. **Excessive Class Usage**
+- Many classes that should be functions
+- Violation of functional programming principles
+- Example: `PipelineConfig` class could be a simple function
+
+#### 2. **Poor Naming Conventions**
+- Mixed naming styles (camelCase, snake_case)
+- Non-descriptive variable names (`f`, `ss`, `df2`)
+- Files not following lowercase_with_underscores
+
+#### 3. **Missing Type Hints**
+- Most functions lack proper type annotations
+- No return type hints
+- Missing generic types for containers
+
+### UV Project Management Violations
+
+#### 1. **Package Management**
+- Still using pip-based dependencies
+- Missing `[tool.uv]` section in pyproject.toml
+- No uv.lock file in version control
+
+#### 2. **Development Dependencies**
+- Dev dependencies mixed with production dependencies
+- Missing proper dependency grouping
+- No use of UV's dependency groups feature
+
+### Performance Optimization Issues
+
+#### 1. **Blocking I/O Operations**
+- Subprocess calls without async wrappers
+- File I/O operations not using aiofiles
+- Synchronous database operations
+
+#### 2. **Missing Caching**
+- No Redis caching for expensive operations
+- Model loading happens on every request
+- No in-memory caching for static data
+
+#### 3. **Inefficient Database Usage**
+- No batch operations for bulk inserts
+- Missing query optimization
+- No connection pooling configuration
+
 ## Recommendations
 
-1. **Code Modularization**: Some components (especially in the pipeline directory) could benefit from further modularization to improve maintainability. The parcellation code in particular contains long, complex functions that should be broken down into smaller, more focused units.
+### Immediate Actions (🔴 Critical)
 
-2. **Test Coverage**: Implement comprehensive unit and integration tests for core functionalities to ensure reliability during updates and changes.
+1. **Refactor Deep Nesting**
+   - Apply early return pattern
+   - Extract complex logic into separate functions
+   - Use guard clauses for validation
 
-3. **Error Handling**: Enhance error handling and reporting throughout the codebase, particularly in the preprocessing and inference stages where failures might be difficult to diagnose.
+2. **Eliminate Special Cases**
+   - Replace if-elif chains with dictionary mappings
+   - Use strategy pattern for different processing types
+   - Implement data-driven architecture
 
-4. **Documentation**: Add detailed docstrings and API documentation for all modules, especially the core processing pipelines and utilities.
+3. **Fix UV Configuration**
+   - Add `[tool.uv]` section to pyproject.toml
+   - Separate dev dependencies properly
+   - Remove all pip-related configurations
 
-5. **Monitoring**: Implement system monitoring and logging for better observability of the processing pipeline and task execution.
+4. **Implement FastAPI Best Practices**
+   - Add global error handling middleware
+   - Use Pydantic v2 for all models
+   - Implement proper dependency injection
 
-6. **Consistent Design Patterns**: Standardize the design patterns used across different modules. The system currently mixes several patterns (strategy, processor, etc.) which could be harmonized for better consistency.
+### Short-term Improvements (🟡 Important)
 
-7. **GPU Resource Management**: Implement more sophisticated GPU resource management to handle multiple concurrent inference tasks efficiently.
+5. **Add Type Safety**
+   - Add type hints to all functions
+   - Use mypy for static type checking
+   - Implement runtime validation
 
-8. **Parameter Validation**: Enhance parameter validation in preprocessing steps to prevent potential issues with invalid inputs.
+6. **Optimize Performance**
+   - Wrap blocking operations in executors
+   - Implement Redis caching
+   - Use connection pooling
 
-9. **Progress Tracking**: Add more comprehensive progress tracking for long-running tasks to provide better feedback to users.
+7. **Improve Code Organization**
+   - Follow consistent naming conventions
+   - Modularize large files
+   - Implement proper package structure
 
-10. **Caching Strategy**: Optimize the caching strategy for frequently used models and preprocessing parameters to reduce memory usage and improve inference speed.
+### Long-term Enhancements (🟢 Nice to Have)
 
-11. **Concurrency Control**: The system's asynchronous nature requires careful consideration of concurrency issues. Implementing more robust locking mechanisms and transaction management would enhance reliability.
+8. **Testing Strategy**
+   - Implement comprehensive unit tests
+   - Add integration tests
+   - Set up CI/CD with UV
 
-12. **Type Safety**: While the system already uses type hints in many places, extending this coverage and adding runtime type checking would help prevent certain classes of bugs.
+9. **Documentation**
+   - Add detailed docstrings
+   - Create API documentation
+   - Document design decisions
 
-13. **API Versioning Strategy**: Implement a formal API versioning strategy to ensure backward compatibility as the system evolves.
-
-14. **Configuration Management**: Centralize configuration management with validation to prevent misconfigurations across different components.
-
-15. **Performance Profiling**: Implement systematic performance profiling to identify bottlenecks in the processing pipeline, particularly in the parcellation and segmentation modules.
+10. **Monitoring and Observability**
+    - Add structured logging
+    - Implement metrics collection
+    - Set up performance profiling

@@ -1,0 +1,61 @@
+CREATE DATABASE  IF NOT EXISTS `mes_omi` /*!40100 DEFAULT CHARACTER SET utf8 */;
+USE `mes_omi`;
+-- MySQL dump 10.13  Distrib 5.7.12, for Win32 (AMD64)
+--
+-- Host: 127.0.0.1    Database: mes_omi
+-- ------------------------------------------------------
+-- Server version	5.5.5-10.2.7-MariaDB
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Table structure for table `sys_job_log_bth`
+--
+
+DROP TABLE IF EXISTS `sys_job_log_bth`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sys_job_log_bth` (
+  `job_name` varchar(64) NOT NULL,
+  `time_start` datetime NOT NULL,
+  `timer_end` datetime DEFAULT NULL,
+  `timer_error` datetime DEFAULT NULL,
+  `elp` int(11) DEFAULT NULL,
+  `elp_spec` int(11) DEFAULT NULL,
+  `job_status` int(11) NOT NULL COMMENT '1: under execute 2:compelete job -3: over spec -9:error ',
+  `note` varchar(128) DEFAULT NULL,
+  `node_id` varchar(16) DEFAULT NULL,
+  `node_time` timestamp(6) NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  PRIMARY KEY (`job_name`,`time_start`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='2018/04/11 lkchena: only keep 3 days log, then move to history table';
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `sys_job_log_bth`
+--
+
+LOCK TABLES `sys_job_log_bth` WRITE;
+/*!40000 ALTER TABLE `sys_job_log_bth` DISABLE KEYS */;
+INSERT INTO `sys_job_log_bth` VALUES ('mes_omi_db_backup','2020-02-17 16:30:14','2020-02-17 16:31:00',NULL,46,3600,9,'',NULL,'2020-02-17 08:31:00.142259'),('mes_omi_db_backup','2020-02-19 10:08:23','2020-02-19 10:08:24',NULL,1,3600,9,'',NULL,'2020-02-19 02:08:24.844930'),('mes_omi_db_backup','2020-02-19 10:12:51','2020-02-19 10:12:53',NULL,2,3600,9,'',NULL,'2020-02-19 02:12:53.844378'),('mes_omi_db_backup','2020-02-19 10:13:29','2020-02-19 10:13:29',NULL,0,3600,9,'',NULL,'2020-02-19 02:13:29.545074'),('mes_omi_db_backup','2020-02-19 10:16:12','2020-02-19 10:16:15',NULL,3,3600,9,'',NULL,'2020-02-19 02:16:15.379635'),('mes_omi_db_backup','2020-02-19 10:17:04','2020-02-19 10:17:06',NULL,2,3600,9,'',NULL,'2020-02-19 02:17:06.461981'),('mes_omi_db_backup','2020-02-19 10:18:11','2020-02-19 10:18:14',NULL,3,3600,9,'',NULL,'2020-02-19 02:18:14.061266'),('mes_omi_db_backup','2020-02-19 10:18:57','2020-02-19 10:19:00',NULL,3,3600,9,'',NULL,'2020-02-19 02:19:00.222407'),('mes_omi_db_backup','2020-02-19 10:36:20','2020-02-19 10:37:04',NULL,44,3600,9,'',NULL,'2020-02-19 02:37:04.445935'),('mes_omi_db_backup','2020-02-20 13:47:30',NULL,NULL,NULL,3600,1,'',NULL,'2020-02-20 05:47:31.102833'),('mes_omi_db_backup','2020-02-20 13:54:14','2020-02-20 13:54:18',NULL,4,3600,9,'',NULL,'2020-02-20 05:54:18.445854'),('mes_omi_db_backup','2020-02-20 13:54:25',NULL,NULL,NULL,3600,1,'',NULL,'2020-02-20 05:54:25.118083'),('mes_omi_db_backup','2020-02-20 14:02:29',NULL,NULL,NULL,3600,1,'',NULL,'2020-02-20 06:02:29.644428'),('mes_omi_db_backup','2020-02-21 14:13:20','2020-02-21 14:14:00',NULL,40,3600,9,'',NULL,'2020-02-21 06:14:00.648004'),('mes_omi_db_backup','2020-02-21 15:02:20',NULL,NULL,NULL,3600,1,'',NULL,'2020-02-21 07:02:20.999872'),('mes_omi_db_backup','2020-02-22 13:48:21','2020-02-22 13:49:28',NULL,67,3600,9,'',NULL,'2020-02-22 05:49:28.035589'),('mes_omi_db_backup','2020-02-22 16:54:41','2020-02-22 16:55:44',NULL,63,3600,9,'',NULL,'2020-02-22 08:55:44.896773'),('mes_omi_db_backup','2020-02-25 08:41:42','2020-02-25 08:42:23',NULL,41,3600,9,'',NULL,'2020-02-25 00:42:23.558892'),('mes_omi_db_restore','2020-02-25 08:52:55','2020-02-25 08:56:58',NULL,243,3600,9,'',NULL,'2020-02-25 00:56:58.762168'),('tcs_tool_status_sp','2020-02-25 13:07:27','2020-02-25 13:07:27',NULL,0,30,9,'',NULL,'2020-02-25 05:07:27.873205'),('tcs_tool_status_sp','2020-02-25 13:07:41','2020-02-25 13:07:41',NULL,0,30,9,'',NULL,'2020-02-25 05:07:41.830334'),('tcs_tool_status_sp','2020-02-25 13:14:23','2020-02-25 13:14:23',NULL,0,30,9,'',NULL,'2020-02-25 05:14:23.364965'),('tcs_tool_status_sp','2020-02-25 13:16:16','2020-02-25 13:16:16',NULL,0,30,9,'',NULL,'2020-02-25 05:16:16.426891'),('tcs_tool_status_sp','2020-02-25 13:24:34','2020-02-25 13:24:34',NULL,0,30,9,'',NULL,'2020-02-25 05:24:34.449389'),('tcs_tool_status_sp','2020-02-25 15:25:14','2020-02-25 15:25:14',NULL,0,30,9,'',NULL,'2020-02-25 07:25:14.716458'),('tcs_tool_status_sp','2020-02-25 15:30:17','2020-02-25 15:30:17',NULL,0,30,9,'',NULL,'2020-02-25 07:30:17.875844'),('tcs_tool_status_sp','2020-02-25 15:30:29','2020-02-25 15:30:30',NULL,1,30,9,'',NULL,'2020-02-25 07:30:30.120943'),('tcs_tool_status_sp','2020-02-25 16:16:26','2020-02-25 16:16:26',NULL,0,30,9,'',NULL,'2020-02-25 08:16:26.991542'),('tcs_tool_status_sp','2020-02-25 16:16:37','2020-02-25 16:16:37',NULL,0,30,9,'',NULL,'2020-02-25 08:16:37.325164'),('tcs_tool_status_sp','2020-02-25 16:30:21','2020-02-25 16:30:22',NULL,1,30,9,'',NULL,'2020-02-25 08:30:22.084865'),('tcs_tool_status_sp','2020-02-25 16:36:56','2020-02-25 16:36:56',NULL,0,30,9,'',NULL,'2020-02-25 08:36:56.238628'),('tcs_tool_status_sp','2020-02-25 16:45:20','2020-02-25 16:45:22',NULL,2,30,9,'',NULL,'2020-02-25 08:45:22.224988'),('tcs_tool_status_sp','2020-02-25 16:45:49','2020-02-25 16:45:49',NULL,0,30,9,'',NULL,'2020-02-25 08:45:49.758959'),('tcs_tool_status_sp','2020-02-25 21:38:58','2020-02-25 21:38:58',NULL,0,30,9,'',NULL,'2020-02-25 13:38:58.866207'),('tcs_tool_status_sp','2020-02-25 21:39:07','2020-02-25 21:39:07',NULL,0,30,9,'',NULL,'2020-02-25 13:39:07.478193'),('tcs_tool_status_sp','2020-02-25 21:39:14','2020-02-25 21:39:14',NULL,0,30,9,'',NULL,'2020-02-25 13:39:14.278632'),('tcs_tool_status_sp','2020-02-25 21:39:24','2020-02-25 21:39:24',NULL,0,30,9,'',NULL,'2020-02-25 13:39:24.501111'),('tcs_tool_status_sp','2020-02-25 21:40:01','2020-02-25 21:40:02',NULL,1,30,9,'',NULL,'2020-02-25 13:40:02.346915'),('tcs_tool_status_sp','2020-02-25 21:40:12','2020-02-25 21:40:12',NULL,0,30,9,'',NULL,'2020-02-25 13:40:12.859153'),('tcs_tool_status_sp','2020-02-25 21:40:22','2020-02-25 21:40:22',NULL,0,30,9,'',NULL,'2020-02-25 13:40:22.992615'),('tcs_tool_status_sp','2020-02-26 08:13:36','2020-02-26 08:13:36',NULL,0,30,9,'',NULL,'2020-02-26 00:13:36.883816'),('tcs_tool_status_sp','2020-02-26 08:15:17','2020-02-26 08:15:19',NULL,2,30,9,'',NULL,'2020-02-26 00:15:19.021264'),('tcs_tool_status_sp','2020-02-26 08:16:16','2020-02-26 08:16:18',NULL,2,30,9,'',NULL,'2020-02-26 00:16:18.137813'),('tcs_tool_status_sp','2020-02-26 08:16:21','2020-02-26 08:16:21',NULL,0,30,9,'',NULL,'2020-02-26 00:16:21.938062'),('tcs_tool_status_sp','2020-02-26 08:16:52','2020-02-26 08:16:52',NULL,0,30,9,'',NULL,'2020-02-26 00:16:52.906591'),('tcs_tool_status_sp','2020-02-26 08:56:38','2020-02-26 08:56:38',NULL,0,30,9,'',NULL,'2020-02-26 00:56:38.233103'),('tcs_tool_status_sp','2020-02-26 08:56:57','2020-02-26 08:56:57',NULL,0,30,9,'',NULL,'2020-02-26 00:56:57.678214'),('tcs_tool_status_sp','2020-02-26 08:57:06','2020-02-26 08:57:06',NULL,0,30,9,'',NULL,'2020-02-26 00:57:06.600800');
+/*!40000 ALTER TABLE `sys_job_log_bth` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2020-05-12  8:16:27
