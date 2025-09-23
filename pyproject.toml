@@ -44,22 +44,9 @@ dependencies = [
 ai = [
     # AI and GPU related packages
     "brainextractor>=0.2.2",
-    "nvidia-cublas-cu11==11.*",
-    "nvidia-cuda-cupti-cu11==11.*",
-    "nvidia-cuda-nvcc-cu11==11.*",
-    "nvidia-cuda-nvrtc-cu11==11.*",
-    "nvidia-cuda-runtime-cu11==11.8.*",
-    "nvidia-cudnn-cu11==8.8.*",
-    "nvidia-cufft-cu11>=10.9.0.58",
-    "nvidia-curand-cu11==10.*",
-    "nvidia-cusolver-cu11==11.*",
-    "nvidia-cusparse-cu11==11.*",
-    "nvidia-ml-py==11.*",
-    "nvidia-nccl-cu11==2.*",
-    "nvidia-nvtx-cu11==11.*",
-    "opencv-python==4.7.0.72",
     "scikit-image==0.25.2",
     "scikit-learn>=1.6.1",
+    "opencv-python-headless==4.9.0.80"
 ]
 
 all = [
