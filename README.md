@@ -120,3 +120,5 @@ EOF
 4. pipeline_inference -> upload 
    1. DCOPEventDicomService.check_study_upload_complete 
 
+
+/sc:design 請分析現有相關的功能@backend 、@code_ai 、@pyproject.toml 、@System_Design.md、@system_analysis.md、@README.md，重新規劃並設計，讓其可以 devops-architect (infrastructure), performance-engineer (optimization), security-engineer (compliance) --introspect --ultrathink --sequential	 
