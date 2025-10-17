@@ -1,5 +1,5 @@
 from pydantic import field_validator, field_serializer, ConfigDict, Field, PositiveFloat, PositiveInt, confloat
-from . import DetectionsBaseResponse, PredictionBaseResponse
+from .base import DetectionsBaseResponse, PredictionBaseResponse
 
 
 
@@ -8,7 +8,7 @@ class AneurysmDetectionItem(DetectionsBaseResponse):
     location       : str = Field(...)
     diameter       : PositiveFloat = Field(...)
     main_seg_slice : PositiveInt   = Field(...)
-    probability    : confloat      = Field(...,ge=0.0,le=1.0,allow_inf_nan=True)
+    probability    : confloat(ge=0.0, le=1.0, allow_inf_nan=True) = Field(...)
     pitch_angle    : int           = Field(...)
     yaw_angle      : int           = Field(...)
     mask_index     : int           = Field(...)
