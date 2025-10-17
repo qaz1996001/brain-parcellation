@@ -122,3 +122,156 @@ EOF
 
 
 /sc:design 請分析現有相關的功能@backend 、@code_ai 、@pyproject.toml 、@System_Design.md、@system_analysis.md、@README.md，重新規劃並設計，讓其可以 devops-architect (infrastructure), performance-engineer (optimization), security-engineer (compliance) --introspect --ultrathink --sequential	 
+
+# 如何執行單元測試
+
+本專案包含多個單元測試，以下說明不同的執行方式：
+
+## 1. 執行所有測試
+
+### 使用 UV（推薦，但需要所有依賴）
+```bash
+# 安裝所有依賴（包括開發依賴）
+uv sync --dev
+
+# 執行所有測試
+uv run pytest -v
+
+# 執行測試並生成覆蓋率報告
+uv run pytest --cov=code_ai --cov=backend --cov-report=html
+uv run pytest  --cov=backend --cov-report=html
+```
+
+### 直接使用 pytest
+```bash
+# 如果 pytest 已安裝在虛擬環境中
+.venv\Scripts\pytest -v
+```
+
+## 2. 執行特定測試文件
+
+```bash
+# 執行單一測試文件
+uv run pytest tests/code_ai/test_pipeline_base.py -v
+
+# 執行多個測試文件
+uv run pytest tests/code_ai/test_pipeline_base.py tests/code_ai/test_task_base.py -v
+```
+
+## 3. 執行特定測試函數
+
+```bash
+# 執行特定類別的測試
+uv run pytest tests/code_ai/test_pipeline_base.py::TestPipelineInput -v
+
+# 執行特定測試函數
+uv run pytest tests/code_ai/test_pipeline_base.py::TestPipelineInput::test_pipeline_input_validation -v
+```
+
+## 4. 使用測試執行腳本（避開依賴問題）
+
+我建立了一個 `run_tests.py` 腳本，可以更簡單地執行測試：
+
+```bash
+# 執行預設的安全測試（避開有依賴問題的測試）
+python run_tests.py
+
+# 執行特定測試文件
+python run_tests.py tests/code_ai/test_pipeline_base.py
+
+# 詳細輸出
+python run_tests.py -v
+
+# 執行所有測試
+python run_tests.py --all
+```
+
+## 5. 測試選項說明
+
+### 常用 pytest 參數：
+- `-v` 或 `--verbose`：詳細輸出
+- `-x`：第一個失敗就停止
+- `-k EXPRESSION`：只執行符合表達式的測試
+- `--tb=short`：簡短的錯誤追蹤
+- `--no-cov`：不計算覆蓋率（加快執行速度）
+- `-s`：顯示 print 輸出
+
+### 範例：
+```bash
+# 執行名稱包含 "pipeline" 的測試
+uv run pytest -k pipeline -v
+
+# 執行測試但跳過慢速測試
+uv run pytest -m "not slow" -v
+
+# 顯示前 10 個最慢的測試
+uv run pytest --durations=10
+```
+
+## 6. 測試結構說明
+
+我們的測試結構如下：
+```
+tests/
+├── conftest.py                          # 全域測試配置和 fixtures
+├── code_ai/
+│   ├── test_pipeline_base.py           # Pipeline 基礎功能測試
+│   ├── test_pipeline_main_refactored.py # 重構後的 pipeline 測試
+│   ├── test_task_base.py               # Task 基礎功能測試
+│   └── test_utils_database.py          # 資料庫工具測試
+├── backend/
+│   └── test_server.py                   # FastAPI 伺服器測試
+└── test_performance_comparison.py       # 效能比較測試
+```
+
+## 7. 解決常見問題
+
+### 問題：ModuleNotFoundError
+如果遇到模組找不到的錯誤，可能是因為：
+1. 依賴未安裝：執行 `uv sync --dev`
+2. 路徑問題：確保在專案根目錄執行測試
+
+### 問題：測試執行太慢
+使用以下方式加速：
+```bash
+# 不計算覆蓋率
+uv run pytest --no-cov
+
+# 並行執行測試（需要安裝 pytest-xdist）
+uv run pytest -n auto
+```
+
+### 問題：特定測試失敗
+可以單獨執行該測試來調試：
+```bash
+# 執行單一測試並顯示詳細輸出
+uv run pytest path/to/test.py::test_function -vvs
+```
+
+## 8. 測試範例執行
+
+讓我們執行一個簡單的測試來驗證環境：
+
+```bash
+# 執行 pipeline 基礎測試
+python -m pytest tests/code_ai/test_pipeline_base.py::TestPipelineType -v
+```
+
+這個測試不依賴外部模組，應該可以順利執行。py
+
+## 9. 生成測試報告
+
+### HTML 覆蓋率報告
+```bash
+uv run pytest --cov=code_ai --cov=backend --cov-report=html
+# 報告會生成在 htmlcov/index.html
+```
+
+### 終端機覆蓋率報告
+```bash
+uv run pytest --cov=code_ai --cov=backend --cov-report=term-missing
+```
+
+## 10. 持續整合（CI）
+
+專案包含 GitHub Actions 配置（`.github/workflows/test.yml`），會在每次推送時自動執行測試。
