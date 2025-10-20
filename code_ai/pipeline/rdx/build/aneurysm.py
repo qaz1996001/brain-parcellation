@@ -144,3 +144,89 @@ class AneurysmDetectionBuilder(PredictionBaseBuilder[AneurysmDetectionItem, Aneu
 
         return AneurysmDetectionItem.model_validate(detection_dict)
 
+    @classmethod
+    def execute_rdx_platform_json(cls,
+                                  _id: int, path_root: pathlib.Path,
+                                  model_id: str = '5d7b5e3a-9c1f-4a2b-8d6e-3f9a1c2b4e5f'):
+        """
+        執行 RDX 平台 JSON 生成流程，處理動脈瘤檢測的 DICOM 和預測結果
+
+        Args:
+            _id: 患者或案例 ID
+            path_root: 資料根目錄路徑
+            model_id: 模型識別碼，預設為動脈瘤檢測模型 ID
+        """
+        import pydicom
+
+        # 定義所有必要的資料夾路徑
+        path_dict = dict(
+            path_dcms=path_root.joinpath("Dicom"),  # DICOM 原始檔案目錄
+            path_nii=path_root.joinpath("Image_nii"),  # NIfTI 格式影像目錄
+            path_reslice_nii=path_root.joinpath("Image_reslice"),  # 重切影像目錄
+            path_excel=path_root.joinpath("excel"),  # Excel 結果目錄
+            path_dcmseg=path_root.joinpath("Dicom", "Dicom-Seg")  # DICOM-SEG 輸出目錄
+        )
+
+        # 初始化動脈瘤檢測 JSON 建構器
+        platform_json_builder = cls()
+
+        # 定義三個序列名稱：腦部 MRA、俯仰角 MIP、偏航角 MIP
+        series_name_list = ['MRA_BRAIN', 'MIP_Pitch', 'MIP_Yaw']
+
+        # 讀取每個序列的 DICOM 資料夾路徑列表
+        path_dcms_folder_path_list = [path_dict['path_dcms'].joinpath(x) for x in series_name_list]
+
+        # 建立預測 NIfTI 檔案路徑列表
+        # MRA_BRAIN 使用 Image_nii 目錄，其他使用 Image_reslice 目錄
+        pred_nii_path_list = [{"series_name": x,
+                               "pred_nii_path": str(path_dict['path_nii'].joinpath("Pred.nii.gz"))
+                               if x == 'MRA_BRAIN'
+                               else str(path_dict['path_reslice_nii'].joinpath("{}_pred.nii.gz".format(x)))
+                               }
+                              for x in series_name_list]
+
+        # 載入並排序每個序列的 DICOM 檔案
+        dicom_data_list = [utils.load_and_sort_dicom_files(x) for x in path_dcms_folder_path_list]
+        series_first_dcm_data_list = [x[2] for x in dicom_data_list]
+
+        # 從 Excel 檔案讀取動脈瘤檢測結果
+        excel_file_path = str(path_dict['path_excel'].joinpath('Aneurysm_Pred_list.xlsx'))
+        pred_json_list = cls.get_excel_to_pred_json(excel_file_path, pred_nii_path_list)
+
+        # 為每個序列創建 DICOM-SEG 檔案
+        pred_result_list = [{"series_name": x[0],
+                             "data": cls.use_create_dicom_seg_file(
+                                 path_dict['path_nii'] if x[0] == 'MRA_BRAIN' else path_dict['path_reslice_nii'],
+                                 x[0],
+                                 path_dict['path_dcmseg'],
+                                 *x[1][1:]  # 解包 DICOM 資料（跳過第一個元素）
+                             )}
+                            for x in zip(series_name_list, dicom_data_list)]
+
+        # 合併 pitch 和 yaw 角度資訊到 MRA_BRAIN 序列
+        merged_pred_json = cls.merge_pitch_yaw_angle(pred_json_list, series_name='MRA_BRAIN')
+
+        # 讀取所有生成的 DICOM-SEG 檔案
+        dcm_seg_path_list = [list(map(lambda xx: pydicom.read_file(xx['dcm_seg_path']), x['data']))
+                             for x in pred_result_list if x['data'] is not None]
+
+        # 使用建構器模式組裝最終的平台 JSON
+        platform_json = (platform_json_builder
+                         .set_patient_info(series_first_dcm_data_list)  # 設定患者資訊
+                         .set_model_id(model_id)  # 設定模型 ID
+                         .set_detections(dcm_seg_path_list[0] if dcm_seg_path_list else [], merged_pred_json['data'])  # 設定檢測結果
+                         .build()  # 建構最終 JSON
+                                  )
+
+        # 確保輸出目錄存在
+        output_series_folder = path_root
+        if not output_series_folder.is_dir():
+            output_series_folder.mkdir(exist_ok=True, parents=True)
+
+        # 儲存平台 JSON 檔案
+        platform_json_path = output_series_folder.joinpath('rdx_aneurysm_json.json')
+        with open(platform_json_path, 'w') as f:
+            f.write(platform_json.model_dump_json())
+
+        return platform_json
+
