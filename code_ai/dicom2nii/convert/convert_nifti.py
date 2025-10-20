@@ -8,6 +8,7 @@ import subprocess
 from concurrent.futures import ProcessPoolExecutor, Executor
 from .config import MRSeriesRenameEnum,DSCSeriesRenameEnum,ASLSEQSeriesRenameEnum
 
+import dcm2niix
 
 class Dicm2NiixConverter:
     def __init__(self, input_path, output_path):
