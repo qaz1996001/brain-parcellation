@@ -51,7 +51,8 @@ export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_aneurysm_tensorfl
 #### WMH
 
 ```bash 
-export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_synthseg_wmh_tensorflow.py \
+
+ &&  python3 code_ai/pipeline/pipeline_synthseg_wmh_tensorflow.py \
  --ID 14914694_20220905_MR_21109050071 \
   --Inputs /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/T2FLAIR_AXI.nii.gz \
    --Output_folder /mnt/e/pipeline/sean/rename_nifti \
