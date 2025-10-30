@@ -107,7 +107,7 @@ class AneurysmDetectionBuilder(PredictionBaseBuilder[AneurysmDetectionItem, Aneu
         構建單個動脈瘤檢測項目
 
         Args:
-            source_image: DICOM 影像
+            source_image: DICOM seg
             prediction_result: 包含以下鍵值的字典:
                 - type: 動脈瘤類型
                 - location: 位置
