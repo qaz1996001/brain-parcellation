@@ -1,0 +1,1053 @@
+---
+alwaysApply: true
+---
+
+# 雙開發者結對編程規則
+
+## 核心原則
+- **需求優先**: 在開始編碼前必須完全理解和確認需求
+- **雙重驗證**: 透過 Generator 和 Discriminator 角色確保程式碼品質
+- **文檔驅動**: 記錄所有技術決策和假設前提
+- **回歸預防**: 每次變更都必須檢查是否引入新問題
+
+## 雙開發者角色定義
+
+### Developer 1 (Generator) 職責
+
+#### 需求分析階段
+```python
+# ✅ Generator 需求分析檢查清單
+def analyze_requirements(requirements: str) -> RequirementAnalysis:
+    """需求分析流程"""
+    analysis = RequirementAnalysis()
+    
+    # 1. 識別模糊需求
+    unclear_points = identify_ambiguous_requirements(requirements)
+    if unclear_points:
+        analysis.questions = generate_clarification_questions(unclear_points)
+        analysis.status = "needs_clarification"
+        return analysis
+    
+    # 2. 列出假設前提
+    analysis.assumptions = list_all_assumptions(requirements)
+    
+    # 3. 等待確認
+    analysis.status = "awaiting_confirmation"
+    return analysis
+```
+
+#### 實作前驗證
+```python
+# ✅ 實作前必須檢查的項目
+class PreImplementationChecklist:
+    """實作前檢查清單"""
+    
+    def verify_existing_files(self, project_path: Path) -> FileVerification:
+        """驗證現有檔案結構"""
+        return {
+            "exists": self._check_file_existence(),
+            "structure": self._analyze_directory_structure(),
+            "dependencies": self._map_file_dependencies()
+        }
+    
+    def analyze_dependencies(self) -> DependencyAnalysis:
+        """分析所需依賴"""
+        return {
+            "required_packages": self._identify_required_packages(),
+            "version_conflicts": self._check_version_conflicts(),
+            "missing_dependencies": self._find_missing_dependencies()
+        }
+    
+    def plan_implementation(self) -> ImplementationPlan:
+        """規劃實作步驟"""
+        return {
+            "ui_components": self._separate_ui_logic(),
+            "business_logic": self._identify_business_logic(),
+            "integration_points": self._map_integration_points(),
+            "error_handling": self._plan_error_scenarios()
+        }
+```
+
+#### 解決方案提案
+```python
+# ✅ 解決方案提案格式
+@dataclass
+class SolutionProposal:
+    """解決方案提案"""
+    
+    # DRY 和 KISS 原則應用
+    dry_applications: List[str]
+    kiss_simplifications: List[str]
+    
+    # 清晰文檔
+    technical_decisions: Dict[str, str]
+    implementation_rationale: str
+    
+    # 錯誤處理策略
+    error_scenarios: List[ErrorScenario]
+    handling_strategies: Dict[str, str]
+    
+    # 架構分離
+    ui_components: List[ComponentSpec]
+    business_logic: List[LogicSpec]
+    integration_layer: List[IntegrationSpec]
+```
+
+### Developer 2 (Discriminator) 職責
+
+#### 需求驗證
+```python
+# ✅ Discriminator 需求驗證流程
+class RequirementValidator:
+    """需求驗證器"""
+    
+    def validate_clarity(self, requirements: str) -> ValidationResult:
+        """驗證需求清晰度"""
+        issues = []
+        
+        # 檢查模糊用詞
+        ambiguous_terms = self._find_ambiguous_terms(requirements)
+        if ambiguous_terms:
+            issues.append(f"發現模糊用詞: {', '.join(ambiguous_terms)}")
+        
+        # 檢查缺失資訊
+        missing_info = self._identify_missing_information(requirements)
+        if missing_info:
+            issues.append(f"缺失必要資訊: {', '.join(missing_info)}")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+    
+    def request_clarification(self, unclear_points: List[str]) -> List[str]:
+        """生成澄清問題"""
+        questions = []
+        for point in unclear_points:
+            questions.extend(self._generate_specific_questions(point))
+        return questions
+```
+
+#### 提案驗證
+```python
+# ✅ 提案驗證檢查清單
+class ProposalValidator:
+    """提案驗證器"""
+    
+    def validate_file_structure(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證檔案結構"""
+        checks = [
+            self._verify_file_existence(),
+            self._validate_directory_structure(),
+            self._check_import_paths()
+        ]
+        return self._combine_validation_results(checks)
+    
+    def validate_dependencies(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證依賴關係"""
+        checks = [
+            self._check_dependency_versions(),
+            self._verify_package_availability(),
+            self._validate_compatibility()
+        ]
+        return self._combine_validation_results(checks)
+    
+    def validate_principles(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證設計原則"""
+        violations = []
+        
+        # SOLID 原則檢查
+        solid_violations = self._check_solid_principles(proposal)
+        violations.extend(solid_violations)
+        
+        # DRY 原則檢查
+        dry_violations = self._check_dry_principle(proposal)
+        violations.extend(dry_violations)
+        
+        # KISS 原則檢查
+        kiss_violations = self._check_kiss_principle(proposal)
+        violations.extend(kiss_violations)
+        
+        return ValidationResult(
+            is_valid=len(violations) == 0,
+            issues=violations
+        )
+    
+    def validate_separation_of_concerns(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證關注點分離"""
+        ui_logic_mixed = self._check_ui_logic_separation(proposal)
+        business_logic_mixed = self._check_business_logic_separation(proposal)
+        
+        issues = []
+        if ui_logic_mixed:
+            issues.append("UI 邏輯與業務邏輯混合")
+        if business_logic_mixed:
+            issues.append("業務邏輯分離不當")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+```
+
+#### 安全性和最佳實踐檢查
+```python
+# ✅ 安全性檢查
+class SecurityValidator:
+    """安全性驗證器"""
+    
+    def validate_security_practices(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證安全實踐"""
+        security_issues = []
+        
+        # 輸入驗證檢查
+        if not self._has_input_validation(proposal):
+            security_issues.append("缺少輸入驗證")
+        
+        # 錯誤處理檢查
+        if not self._has_proper_error_handling(proposal):
+            security_issues.append("錯誤處理不當，可能洩露敏感資訊")
+        
+        # 權限檢查
+        if not self._has_authorization_checks(proposal):
+            security_issues.append("缺少權限驗證")
+        
+        return ValidationResult(
+            is_valid=len(security_issues) == 0,
+            issues=security_issues
+        )
+    
+    def validate_best_practices(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證最佳實踐"""
+        best_practice_issues = []
+        
+        # 非同步操作檢查
+        if not self._uses_async_properly(proposal):
+            best_practice_issues.append("未正確使用非同步操作")
+        
+        # 錯誤處理檢查
+        if not self._has_comprehensive_error_handling(proposal):
+            best_practice_issues.append("錯誤處理不全面")
+        
+        # 效能考量檢查
+        if not self._considers_performance(proposal):
+            best_practice_issues.append("未考慮效能影響")
+        
+        return ValidationResult(
+            is_valid=len(best_practice_issues) == 0,
+            issues=best_practice_issues
+        )
+```
+
+#### 回歸檢查
+```python
+# ✅ 回歸檢查流程
+class RegressionChecker:
+    """回歸檢查器"""
+    
+    def check_potential_regressions(self, 
+                                   proposal: SolutionProposal, 
+                                   existing_code: CodeBase) -> RegressionReport:
+        """檢查潛在的回歸問題"""
+        
+        potential_issues = []
+        
+        # API 相容性檢查
+        api_changes = self._analyze_api_changes(proposal, existing_code)
+        if api_changes.has_breaking_changes:
+            potential_issues.extend(api_changes.breaking_changes)
+        
+        # 資料庫遷移檢查
+        db_changes = self._analyze_database_changes(proposal, existing_code)
+        if db_changes.requires_migration:
+            potential_issues.extend(db_changes.migration_risks)
+        
+        # 依賴變更檢查
+        dep_changes = self._analyze_dependency_changes(proposal, existing_code)
+        if dep_changes.has_conflicts:
+            potential_issues.extend(dep_changes.conflict_details)
+        
+        return RegressionReport(
+            has_risks=len(potential_issues) > 0,
+            potential_issues=potential_issues,
+            mitigation_strategies=self._suggest_mitigations(potential_issues)
+        )
+```
+
+## 工作流程
+
+### 標準開發流程
+```python
+# ✅ 雙開發者工作流程
+async def dual_developer_workflow(task: DevelopmentTask) -> DevelopmentResult:
+    """雙開發者工作流程"""
+    
+    # 階段 1: Generator 分析需求
+    generator = DeveloperGenerator()
+    requirement_analysis = await generator.analyze_requirements(task.requirements)
+    
+    # 階段 2: Discriminator 驗證需求
+    discriminator = DeveloperDiscriminator()
+    requirement_validation = await discriminator.validate_requirements(requirement_analysis)
+    
+    if not requirement_validation.is_clear:
+        # 需要澄清需求
+        clarification_needed = await discriminator.request_clarification(
+            requirement_validation.unclear_points
+        )
+        return DevelopmentResult(
+            status="needs_clarification",
+            questions=clarification_needed
+        )
+    
+    # 階段 3: Generator 提出解決方案
+    solution_proposal = await generator.propose_solution(requirement_analysis)
+    
+    # 階段 4: Discriminator 驗證提案
+    validation_result = await discriminator.validate_proposal(solution_proposal)
+    
+    if not validation_result.approved:
+        # 提供詳細回饋
+        feedback = await discriminator.provide_detailed_feedback(validation_result)
+        return DevelopmentResult(
+            status="needs_revision",
+            feedback=feedback
+        )
+    
+    # 階段 5: 回歸檢查
+    regression_check = await discriminator.check_regressions(solution_proposal)
+    
+    if regression_check.has_risks:
+        return DevelopmentResult(
+            status="regression_risks_identified",
+            risks=regression_check.potential_issues,
+            mitigations=regression_check.mitigation_strategies
+        )
+    
+    # 所有檢查通過，批准實作
+    return DevelopmentResult(
+        status="approved",
+        implementation_plan=solution_proposal
+    )
+```
+
+## 適用場景判斷
+
+### 何時使用雙開發者模式
+```python
+# ✅ 場景判斷邏輯
+def should_use_dual_developer_mode(task: DevelopmentTask) -> bool:
+    """判斷是否應該使用雙開發者模式"""
+    
+    # 高複雜度場景
+    high_complexity_scenarios = [
+        "new_medical_pipeline",        # 新醫學影像處理管線
+        "critical_algorithm_change",   # 關鍵算法變更
+        "api_architecture_change",     # API 架構變更
+        "security_implementation",     # 安全功能實作
+        "database_schema_migration",   # 資料庫結構遷移
+        "external_api_integration",    # 外部 API 整合
+        "performance_critical_code",   # 效能關鍵程式碼
+    ]
+    
+    # 高風險場景
+    high_risk_scenarios = [
+        "production_hotfix",          # 生產環境熱修復
+        "data_migration",             # 資料遷移
+        "authentication_changes",     # 認證系統變更
+        "payment_processing",         # 付款處理
+        "medical_data_handling",      # 醫學資料處理
+    ]
+    
+    # 複雜需求場景
+    complex_requirement_scenarios = [
+        "unclear_requirements",       # 需求不明確
+        "multiple_stakeholders",      # 多個利害關係人
+        "regulatory_compliance",      # 法規合規要求
+        "cross_team_coordination",    # 跨團隊協調
+    ]
+    
+    return (task.complexity in high_complexity_scenarios or 
+            task.risk_level in high_risk_scenarios or
+            task.requirement_clarity in complex_requirement_scenarios)
+```
+
+### 簡化場景處理
+```python
+# ✅ 簡化場景直接處理
+def handle_simple_tasks(task: DevelopmentTask) -> DevelopmentResult:
+    """處理簡單任務"""
+    
+    simple_scenarios = [
+        "bug_fix",                    # 錯誤修復
+        "minor_feature_update",       # 小功能更新
+        "documentation_update",       # 文檔更新
+        "config_change",             # 配置變更
+        "dependency_update",         # 依賴更新
+        "log_message_update",        # 日誌訊息更新
+    ]
+    
+    if task.type in simple_scenarios:
+        # 直接實作，跳過雙開發者流程
+        return implement_directly(task)
+    
+    # 其他情況使用雙開發者模式
+    return dual_developer_workflow(task)
+```
+
+## 與既有規則整合
+
+### 與 Linus 風格審查整合
+```python
+# ✅ 整合 Linus 風格檢查
+class IntegratedValidator(DeveloperDiscriminator):
+    """整合驗證器"""
+    
+    def validate_code_taste(self, proposal: SolutionProposal) -> ValidationResult:
+        """整合 Linus 風格的 Good Taste 檢查"""
+        
+        # 使用既有的 Linus 風格檢查
+        linus_check = LinusStyleChecker()
+        taste_result = linus_check.evaluate_code_taste(proposal.code)
+        
+        # 結合雙開發者驗證
+        dual_dev_result = self.validate_principles(proposal)
+        
+        # 合併結果
+        combined_issues = taste_result.issues + dual_dev_result.issues
+        
+        return ValidationResult(
+            is_valid=len(combined_issues) == 0,
+            issues=combined_issues,
+            recommendations=self._generate_combined_recommendations(
+                taste_result, dual_dev_result
+            )
+        )
+```
+
+## 醫學影像專案特定應用
+
+### DICOM 處理專用檢查
+```python
+# ✅ 醫學影像特定驗證
+class MedicalImageValidator:
+    """醫學影像驗證器"""
+    
+    def validate_dicom_handling(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證 DICOM 處理邏輯"""
+        issues = []
+        
+        # 檢查 DICOM 標籤安全存取
+        if not self._uses_safe_dicom_access(proposal):
+            issues.append("未使用安全的 DICOM 標籤存取方法")
+        
+        # 檢查 REFORMATTED 檢測
+        if not self._has_reformatted_detection(proposal):
+            issues.append("缺少 REFORMATTED 序列檢測")
+        
+        # 檢查資料驗證
+        if not self._has_medical_data_validation(proposal):
+            issues.append("缺少醫學資料完整性驗證")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+    
+    def validate_pipeline_integration(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證管線整合"""
+        integration_issues = []
+        
+        # 檢查管線相容性
+        if not self._check_pipeline_compatibility(proposal):
+            integration_issues.append("管線相容性問題")
+        
+        # 檢查錯誤傳播
+        if not self._has_proper_error_propagation(proposal):
+            integration_issues.append("錯誤傳播機制不完整")
+        
+        return ValidationResult(
+            is_valid=len(integration_issues) == 0,
+            issues=integration_issues
+        )
+```
+
+## 效能影響最小化
+
+### 選擇性啟用策略
+```python
+# ✅ 效能最佳化策略
+class PerformanceOptimizedDualDev:
+    """效能最佳化的雙開發者模式"""
+    
+    def __init__(self):
+        self.quick_validation_cache = {}
+        self.common_patterns_cache = {}
+    
+    async def optimized_validation(self, proposal: SolutionProposal) -> ValidationResult:
+        """最佳化的驗證流程"""
+        
+        # 快速預檢
+        quick_check = self._quick_validation(proposal)
+        if quick_check.is_obviously_valid:
+            return ValidationResult(is_valid=True, fast_track=True)
+        
+        # 使用快取的常見模式
+        pattern_match = self._match_common_patterns(proposal)
+        if pattern_match.found:
+            return self._apply_cached_validation(pattern_match)
+        
+        # 完整驗證
+        return await self._full_validation(proposal)
+```
+
+## 禁止的模式
+
+### ❌ 絕對不要使用
+```python
+# ❌ 跳過需求澄清
+def bad_skip_requirement_check():
+    # 絕對不要在需求不明確時直接開始編碼
+    pass
+
+# ❌ 單一角色驗證
+def bad_single_role_validation():
+    # 不要讓同一個角色既生成又驗證
+    pass
+
+# ❌ 忽略回歸風險
+def bad_ignore_regression():
+    # 不要忽視潛在的回歸問題
+    pass
+
+# ❌ 過度使用於簡單任務
+def bad_overuse_for_simple_tasks():
+    # 不要對簡單任務也使用複雜流程
+    pass
+```
+
+記住：雙開發者模式是為了提高程式碼品質和減少錯誤，但不應該成為開發效率的瓶頸。明智地選擇使用場景，在品質和效率之間找到平衡。# 雙開發者結對編程規則
+
+## 核心原則
+- **需求優先**: 在開始編碼前必須完全理解和確認需求
+- **雙重驗證**: 透過 Generator 和 Discriminator 角色確保程式碼品質
+- **文檔驅動**: 記錄所有技術決策和假設前提
+- **回歸預防**: 每次變更都必須檢查是否引入新問題
+
+## 雙開發者角色定義
+
+### Developer 1 (Generator) 職責
+
+#### 需求分析階段
+```python
+# ✅ Generator 需求分析檢查清單
+def analyze_requirements(requirements: str) -> RequirementAnalysis:
+    """需求分析流程"""
+    analysis = RequirementAnalysis()
+    
+    # 1. 識別模糊需求
+    unclear_points = identify_ambiguous_requirements(requirements)
+    if unclear_points:
+        analysis.questions = generate_clarification_questions(unclear_points)
+        analysis.status = "needs_clarification"
+        return analysis
+    
+    # 2. 列出假設前提
+    analysis.assumptions = list_all_assumptions(requirements)
+    
+    # 3. 等待確認
+    analysis.status = "awaiting_confirmation"
+    return analysis
+```
+
+#### 實作前驗證
+```python
+# ✅ 實作前必須檢查的項目
+class PreImplementationChecklist:
+    """實作前檢查清單"""
+    
+    def verify_existing_files(self, project_path: Path) -> FileVerification:
+        """驗證現有檔案結構"""
+        return {
+            "exists": self._check_file_existence(),
+            "structure": self._analyze_directory_structure(),
+            "dependencies": self._map_file_dependencies()
+        }
+    
+    def analyze_dependencies(self) -> DependencyAnalysis:
+        """分析所需依賴"""
+        return {
+            "required_packages": self._identify_required_packages(),
+            "version_conflicts": self._check_version_conflicts(),
+            "missing_dependencies": self._find_missing_dependencies()
+        }
+    
+    def plan_implementation(self) -> ImplementationPlan:
+        """規劃實作步驟"""
+        return {
+            "ui_components": self._separate_ui_logic(),
+            "business_logic": self._identify_business_logic(),
+            "integration_points": self._map_integration_points(),
+            "error_handling": self._plan_error_scenarios()
+        }
+```
+
+#### 解決方案提案
+```python
+# ✅ 解決方案提案格式
+@dataclass
+class SolutionProposal:
+    """解決方案提案"""
+    
+    # DRY 和 KISS 原則應用
+    dry_applications: List[str]
+    kiss_simplifications: List[str]
+    
+    # 清晰文檔
+    technical_decisions: Dict[str, str]
+    implementation_rationale: str
+    
+    # 錯誤處理策略
+    error_scenarios: List[ErrorScenario]
+    handling_strategies: Dict[str, str]
+    
+    # 架構分離
+    ui_components: List[ComponentSpec]
+    business_logic: List[LogicSpec]
+    integration_layer: List[IntegrationSpec]
+```
+
+### Developer 2 (Discriminator) 職責
+
+#### 需求驗證
+```python
+# ✅ Discriminator 需求驗證流程
+class RequirementValidator:
+    """需求驗證器"""
+    
+    def validate_clarity(self, requirements: str) -> ValidationResult:
+        """驗證需求清晰度"""
+        issues = []
+        
+        # 檢查模糊用詞
+        ambiguous_terms = self._find_ambiguous_terms(requirements)
+        if ambiguous_terms:
+            issues.append(f"發現模糊用詞: {', '.join(ambiguous_terms)}")
+        
+        # 檢查缺失資訊
+        missing_info = self._identify_missing_information(requirements)
+        if missing_info:
+            issues.append(f"缺失必要資訊: {', '.join(missing_info)}")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+    
+    def request_clarification(self, unclear_points: List[str]) -> List[str]:
+        """生成澄清問題"""
+        questions = []
+        for point in unclear_points:
+            questions.extend(self._generate_specific_questions(point))
+        return questions
+```
+
+#### 提案驗證
+```python
+# ✅ 提案驗證檢查清單
+class ProposalValidator:
+    """提案驗證器"""
+    
+    def validate_file_structure(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證檔案結構"""
+        checks = [
+            self._verify_file_existence(),
+            self._validate_directory_structure(),
+            self._check_import_paths()
+        ]
+        return self._combine_validation_results(checks)
+    
+    def validate_dependencies(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證依賴關係"""
+        checks = [
+            self._check_dependency_versions(),
+            self._verify_package_availability(),
+            self._validate_compatibility()
+        ]
+        return self._combine_validation_results(checks)
+    
+    def validate_principles(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證設計原則"""
+        violations = []
+        
+        # SOLID 原則檢查
+        solid_violations = self._check_solid_principles(proposal)
+        violations.extend(solid_violations)
+        
+        # DRY 原則檢查
+        dry_violations = self._check_dry_principle(proposal)
+        violations.extend(dry_violations)
+        
+        # KISS 原則檢查
+        kiss_violations = self._check_kiss_principle(proposal)
+        violations.extend(kiss_violations)
+        
+        return ValidationResult(
+            is_valid=len(violations) == 0,
+            issues=violations
+        )
+    
+    def validate_separation_of_concerns(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證關注點分離"""
+        ui_logic_mixed = self._check_ui_logic_separation(proposal)
+        business_logic_mixed = self._check_business_logic_separation(proposal)
+        
+        issues = []
+        if ui_logic_mixed:
+            issues.append("UI 邏輯與業務邏輯混合")
+        if business_logic_mixed:
+            issues.append("業務邏輯分離不當")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+```
+
+#### 安全性和最佳實踐檢查
+```python
+# ✅ 安全性檢查
+class SecurityValidator:
+    """安全性驗證器"""
+    
+    def validate_security_practices(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證安全實踐"""
+        security_issues = []
+        
+        # 輸入驗證檢查
+        if not self._has_input_validation(proposal):
+            security_issues.append("缺少輸入驗證")
+        
+        # 錯誤處理檢查
+        if not self._has_proper_error_handling(proposal):
+            security_issues.append("錯誤處理不當，可能洩露敏感資訊")
+        
+        # 權限檢查
+        if not self._has_authorization_checks(proposal):
+            security_issues.append("缺少權限驗證")
+        
+        return ValidationResult(
+            is_valid=len(security_issues) == 0,
+            issues=security_issues
+        )
+    
+    def validate_best_practices(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證最佳實踐"""
+        best_practice_issues = []
+        
+        # 非同步操作檢查
+        if not self._uses_async_properly(proposal):
+            best_practice_issues.append("未正確使用非同步操作")
+        
+        # 錯誤處理檢查
+        if not self._has_comprehensive_error_handling(proposal):
+            best_practice_issues.append("錯誤處理不全面")
+        
+        # 效能考量檢查
+        if not self._considers_performance(proposal):
+            best_practice_issues.append("未考慮效能影響")
+        
+        return ValidationResult(
+            is_valid=len(best_practice_issues) == 0,
+            issues=best_practice_issues
+        )
+```
+
+#### 回歸檢查
+```python
+# ✅ 回歸檢查流程
+class RegressionChecker:
+    """回歸檢查器"""
+    
+    def check_potential_regressions(self, 
+                                   proposal: SolutionProposal, 
+                                   existing_code: CodeBase) -> RegressionReport:
+        """檢查潛在的回歸問題"""
+        
+        potential_issues = []
+        
+        # API 相容性檢查
+        api_changes = self._analyze_api_changes(proposal, existing_code)
+        if api_changes.has_breaking_changes:
+            potential_issues.extend(api_changes.breaking_changes)
+        
+        # 資料庫遷移檢查
+        db_changes = self._analyze_database_changes(proposal, existing_code)
+        if db_changes.requires_migration:
+            potential_issues.extend(db_changes.migration_risks)
+        
+        # 依賴變更檢查
+        dep_changes = self._analyze_dependency_changes(proposal, existing_code)
+        if dep_changes.has_conflicts:
+            potential_issues.extend(dep_changes.conflict_details)
+        
+        return RegressionReport(
+            has_risks=len(potential_issues) > 0,
+            potential_issues=potential_issues,
+            mitigation_strategies=self._suggest_mitigations(potential_issues)
+        )
+```
+
+## 工作流程
+
+### 標準開發流程
+```python
+# ✅ 雙開發者工作流程
+async def dual_developer_workflow(task: DevelopmentTask) -> DevelopmentResult:
+    """雙開發者工作流程"""
+    
+    # 階段 1: Generator 分析需求
+    generator = DeveloperGenerator()
+    requirement_analysis = await generator.analyze_requirements(task.requirements)
+    
+    # 階段 2: Discriminator 驗證需求
+    discriminator = DeveloperDiscriminator()
+    requirement_validation = await discriminator.validate_requirements(requirement_analysis)
+    
+    if not requirement_validation.is_clear:
+        # 需要澄清需求
+        clarification_needed = await discriminator.request_clarification(
+            requirement_validation.unclear_points
+        )
+        return DevelopmentResult(
+            status="needs_clarification",
+            questions=clarification_needed
+        )
+    
+    # 階段 3: Generator 提出解決方案
+    solution_proposal = await generator.propose_solution(requirement_analysis)
+    
+    # 階段 4: Discriminator 驗證提案
+    validation_result = await discriminator.validate_proposal(solution_proposal)
+    
+    if not validation_result.approved:
+        # 提供詳細回饋
+        feedback = await discriminator.provide_detailed_feedback(validation_result)
+        return DevelopmentResult(
+            status="needs_revision",
+            feedback=feedback
+        )
+    
+    # 階段 5: 回歸檢查
+    regression_check = await discriminator.check_regressions(solution_proposal)
+    
+    if regression_check.has_risks:
+        return DevelopmentResult(
+            status="regression_risks_identified",
+            risks=regression_check.potential_issues,
+            mitigations=regression_check.mitigation_strategies
+        )
+    
+    # 所有檢查通過，批准實作
+    return DevelopmentResult(
+        status="approved",
+        implementation_plan=solution_proposal
+    )
+```
+
+## 適用場景判斷
+
+### 何時使用雙開發者模式
+```python
+# ✅ 場景判斷邏輯
+def should_use_dual_developer_mode(task: DevelopmentTask) -> bool:
+    """判斷是否應該使用雙開發者模式"""
+    
+    # 高複雜度場景
+    high_complexity_scenarios = [
+        "new_medical_pipeline",        # 新醫學影像處理管線
+        "critical_algorithm_change",   # 關鍵算法變更
+        "api_architecture_change",     # API 架構變更
+        "security_implementation",     # 安全功能實作
+        "database_schema_migration",   # 資料庫結構遷移
+        "external_api_integration",    # 外部 API 整合
+        "performance_critical_code",   # 效能關鍵程式碼
+    ]
+    
+    # 高風險場景
+    high_risk_scenarios = [
+        "production_hotfix",          # 生產環境熱修復
+        "data_migration",             # 資料遷移
+        "authentication_changes",     # 認證系統變更
+        "payment_processing",         # 付款處理
+        "medical_data_handling",      # 醫學資料處理
+    ]
+    
+    # 複雜需求場景
+    complex_requirement_scenarios = [
+        "unclear_requirements",       # 需求不明確
+        "multiple_stakeholders",      # 多個利害關係人
+        "regulatory_compliance",      # 法規合規要求
+        "cross_team_coordination",    # 跨團隊協調
+    ]
+    
+    return (task.complexity in high_complexity_scenarios or 
+            task.risk_level in high_risk_scenarios or
+            task.requirement_clarity in complex_requirement_scenarios)
+```
+
+### 簡化場景處理
+```python
+# ✅ 簡化場景直接處理
+def handle_simple_tasks(task: DevelopmentTask) -> DevelopmentResult:
+    """處理簡單任務"""
+    
+    simple_scenarios = [
+        "bug_fix",                    # 錯誤修復
+        "minor_feature_update",       # 小功能更新
+        "documentation_update",       # 文檔更新
+        "config_change",             # 配置變更
+        "dependency_update",         # 依賴更新
+        "log_message_update",        # 日誌訊息更新
+    ]
+    
+    if task.type in simple_scenarios:
+        # 直接實作，跳過雙開發者流程
+        return implement_directly(task)
+    
+    # 其他情況使用雙開發者模式
+    return dual_developer_workflow(task)
+```
+
+## 與既有規則整合
+
+### 與 Linus 風格審查整合
+```python
+# ✅ 整合 Linus 風格檢查
+class IntegratedValidator(DeveloperDiscriminator):
+    """整合驗證器"""
+    
+    def validate_code_taste(self, proposal: SolutionProposal) -> ValidationResult:
+        """整合 Linus 風格的 Good Taste 檢查"""
+        
+        # 使用既有的 Linus 風格檢查
+        linus_check = LinusStyleChecker()
+        taste_result = linus_check.evaluate_code_taste(proposal.code)
+        
+        # 結合雙開發者驗證
+        dual_dev_result = self.validate_principles(proposal)
+        
+        # 合併結果
+        combined_issues = taste_result.issues + dual_dev_result.issues
+        
+        return ValidationResult(
+            is_valid=len(combined_issues) == 0,
+            issues=combined_issues,
+            recommendations=self._generate_combined_recommendations(
+                taste_result, dual_dev_result
+            )
+        )
+```
+
+## 醫學影像專案特定應用
+
+### DICOM 處理專用檢查
+```python
+# ✅ 醫學影像特定驗證
+class MedicalImageValidator:
+    """醫學影像驗證器"""
+    
+    def validate_dicom_handling(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證 DICOM 處理邏輯"""
+        issues = []
+        
+        # 檢查 DICOM 標籤安全存取
+        if not self._uses_safe_dicom_access(proposal):
+            issues.append("未使用安全的 DICOM 標籤存取方法")
+        
+        # 檢查 REFORMATTED 檢測
+        if not self._has_reformatted_detection(proposal):
+            issues.append("缺少 REFORMATTED 序列檢測")
+        
+        # 檢查資料驗證
+        if not self._has_medical_data_validation(proposal):
+            issues.append("缺少醫學資料完整性驗證")
+        
+        return ValidationResult(
+            is_valid=len(issues) == 0,
+            issues=issues
+        )
+    
+    def validate_pipeline_integration(self, proposal: SolutionProposal) -> ValidationResult:
+        """驗證管線整合"""
+        integration_issues = []
+        
+        # 檢查管線相容性
+        if not self._check_pipeline_compatibility(proposal):
+            integration_issues.append("管線相容性問題")
+        
+        # 檢查錯誤傳播
+        if not self._has_proper_error_propagation(proposal):
+            integration_issues.append("錯誤傳播機制不完整")
+        
+        return ValidationResult(
+            is_valid=len(integration_issues) == 0,
+            issues=integration_issues
+        )
+```
+
+## 效能影響最小化
+
+### 選擇性啟用策略
+```python
+# ✅ 效能最佳化策略
+class PerformanceOptimizedDualDev:
+    """效能最佳化的雙開發者模式"""
+    
+    def __init__(self):
+        self.quick_validation_cache = {}
+        self.common_patterns_cache = {}
+    
+    async def optimized_validation(self, proposal: SolutionProposal) -> ValidationResult:
+        """最佳化的驗證流程"""
+        
+        # 快速預檢
+        quick_check = self._quick_validation(proposal)
+        if quick_check.is_obviously_valid:
+            return ValidationResult(is_valid=True, fast_track=True)
+        
+        # 使用快取的常見模式
+        pattern_match = self._match_common_patterns(proposal)
+        if pattern_match.found:
+            return self._apply_cached_validation(pattern_match)
+        
+        # 完整驗證
+        return await self._full_validation(proposal)
+```
+
+## 禁止的模式
+
+### ❌ 絕對不要使用
+```python
+# ❌ 跳過需求澄清
+def bad_skip_requirement_check():
+    # 絕對不要在需求不明確時直接開始編碼
+    pass
+
+# ❌ 單一角色驗證
+def bad_single_role_validation():
+    # 不要讓同一個角色既生成又驗證
+    pass
+
+# ❌ 忽略回歸風險
+def bad_ignore_regression():
+    # 不要忽視潛在的回歸問題
+    pass
+
+# ❌ 過度使用於簡單任務
+def bad_overuse_for_simple_tasks():
+    # 不要對簡單任務也使用複雜流程
+    pass
+```
+
+記住：雙開發者模式是為了提高程式碼品質和減少錯誤，但不應該成為開發效率的瓶頸。明智地選擇使用場景，在品質和效率之間找到平衡。

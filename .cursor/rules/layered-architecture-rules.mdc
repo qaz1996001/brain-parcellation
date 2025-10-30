@@ -1,0 +1,487 @@
+---
+alwaysApply: true
+---
+
+# 分層架構規則
+
+## 核心原則
+
+本專案採用分層架構，不同層級適用不同的程式碼風格規範：
+
+1. **Linus 風格為第一優先原則** - 所有層級都必須遵循
+2. **分層應用補充規範** - 根據層級特性選擇適當的補充規範
+3. **接口層統一** - 層級間的接口必須簡潔清晰
+
+## 架構分層定義
+
+### 🔴 核心算法層 (Core Algorithm Layer)
+```
+適用範圍：
+code_ai/
+├── dicom2nii/convert/          # DICOM 轉換算法
+├── pipeline/                   # 影像處理管道
+├── SynthSeg/                   # 腦部分割算法
+├── utils/parcellation/         # 腦區分割工具
+├── utils/inference/            # 推理算法
+└── utils/resample/             # 重採樣算法
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **Donald Knuth 風格** (補充 - 數學嚴謹性)
+- ✅ **效能最佳化規則** (算法效能)
+
+**特殊要求**：
+- 必須包含數學複雜度分析
+- 必須有完整的正確性驗證
+- 必須有詳盡的算法文檔
+
+### 🟡 業務邏輯層 (Business Logic Layer)
+```
+適用範圍：
+backend/app/
+├── routers/                    # FastAPI 路由
+├── services/                   # 業務服務
+├── middleware.py               # 中介軟體
+└── main.py                     # 應用程式入口
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **FastAPI 應用程式規則**
+- ✅ **FastAPI 路由特定規則**
+- ✅ **錯誤處理規則**
+
+**特殊要求**：
+- 簡潔的業務邏輯實現
+- 統一的錯誤處理
+- 高效的 API 回應
+
+### 🟢 資料存取層 (Data Access Layer)
+```
+適用範圍：
+backend/app/
+├── database.py                 # 資料庫配置
+├── models/                     # 資料模型
+└── crud/                       # 資料庫操作
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **資料庫互動規則**
+- ✅ **Pydantic 模型規則**
+- ✅ **效能最佳化規則** (資料庫效能)
+
+**特殊要求**：
+- 非同步資料庫操作
+- 連接池管理
+- 事務安全
+
+### 🔵 基礎設施層 (Infrastructure Layer)
+```
+適用範圍：
+- 快取系統 (cache.py)
+- 訊息佇列 (queue/)
+- 排程器 (scheduler/)
+- 工具函數 (utils/)
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **Python 一般原則**
+- ✅ **效能最佳化規則**
+
+**特殊要求**：
+- 函數式編程優先
+- 模組化設計
+- 高效能實現
+
+## 層級間互動規則
+
+### 1. 接口設計原則
+```python
+# ✅ 正確：簡潔的層級接口
+class ProcessingResult:
+    """統一的處理結果接口"""
+    success: bool
+    data: Optional[Any]
+    error_message: str
+    processing_time: float
+
+# 核心算法層 → 業務邏輯層
+def process_medical_image(image_data: np.ndarray) -> ProcessingResult:
+    """核心算法層接口 - 遵循 Linus 簡潔原則"""
+    pass
+
+# 業務邏輯層 → API 層
+@router.post("/process")
+async def process_endpoint(file: UploadFile) -> ProcessingResponse:
+    """API 層接口 - FastAPI 風格"""
+    result = process_medical_image(image_data)
+    return ProcessingResponse.from_result(result)
+```
+
+### 2. 錯誤處理策略
+```python
+# 核心算法層：詳盡的錯誤分析
+def convert_dicom_core(dicom_path: Path) -> ConversionResult:
+    """
+    核心轉換算法
+    前置條件：dicom_path 必須存在且為有效 DICOM 檔案
+    後置條件：成功時返回 NIfTI 資料，失敗時返回詳細錯誤資訊
+    """
+    if not dicom_path.exists():
+        return ConversionResult.error("DICOM_FILE_NOT_FOUND", "檔案不存在")
+    
+    # 詳盡的算法實現...
+
+# 業務邏輯層：簡潔的錯誤轉換
+async def convert_dicom_service(file: UploadFile) -> ConversionResponse:
+    """業務服務層 - 簡潔的錯誤處理"""
+    temp_path = await save_temp_file(file)
+    result = convert_dicom_core(temp_path)
+    
+    if not result.success:
+        raise HTTPException(500, result.error_message)
+    
+    return ConversionResponse.from_result(result)
+```
+
+### 3. 效能考量
+```python
+# 核心算法層：算法效能優化
+@profile_performance  # Knuth 風格：效能分析
+def resample_image(image: np.ndarray, target_shape: Tuple[int, int, int]) -> np.ndarray:
+    """
+    影像重採樣算法
+    複雜度：O(xyz) where x,y,z 為目標維度
+    記憶體：O(1) 額外空間（原地操作）
+    """
+    # 高效的算法實現...
+
+# 業務邏輯層：快取和非同步
+@cached(expire=300)  # 效能規則：智能快取
+async def resample_image_service(image_id: int, target_shape: Tuple[int, int, int]) -> ImageData:
+    """業務服務層 - 快取和非同步優化"""
+    image = await load_image_async(image_id)
+    resampled = resample_image(image, target_shape)
+    return ImageData.from_array(resampled)
+```
+
+## 程式碼審查檢查清單
+
+### 通用檢查 (所有層級)
+- [ ] **Linus 風格檢查** (第一優先)
+  - [ ] 縮排是否超過 3 層？
+  - [ ] 是否有特殊情況處理？
+  - [ ] 是否使用資料結構解決問題？
+  - [ ] 是否符合 Good Taste 原則？
+
+### 核心算法層額外檢查
+- [ ] **Knuth 風格檢查**
+  - [ ] 是否包含算法描述和複雜度分析？
+  - [ ] 是否有前置/後置條件？
+  - [ ] 是否有數學正確性驗證？
+  - [ ] 是否有適當的效能測試？
+
+### 業務邏輯層額外檢查
+- [ ] **FastAPI 風格檢查**
+  - [ ] 路由處理器是否簡潔？
+  - [ ] 錯誤處理是否統一？
+  - [ ] 回應模型是否類型安全？
+
+### 資料存取層額外檢查
+- [ ] **資料庫規則檢查**
+  - [ ] 是否使用非同步操作？
+  - [ ] 是否正確管理事務？
+  - [ ] 是否有適當的錯誤處理？
+
+## 實施指南
+
+### 新功能開發流程
+1. **確定功能所屬層級**
+2. **選擇適用的規範組合**
+3. **優先通過 Linus 風格檢查**
+4. **應用層級特定的補充規範**
+5. **確保層級間接口簡潔**
+
+### 現有程式碼重構流程
+1. **識別程式碼所屬層級**
+2. **評估是否符合 Linus 風格**
+3. **根據層級應用適當的重構策略**
+4. **保持向後相容性**
+
+### 團隊協作指南
+- **核心算法開發者**：精通 Linus + Knuth 風格
+- **業務邏輯開發者**：精通 Linus + FastAPI 風格
+- **資料庫開發者**：精通 Linus + 資料庫規則
+- **所有開發者**：必須精通 Linus 風格
+
+## 監控與評估
+
+### 品質指標
+- 各層級的程式碼品質評分
+- Linus 風格合規率 (目標：100%)
+- 層級特定規範合規率 (目標：>90%)
+
+### 效能指標
+- 核心算法執行效率
+- API 回應時間
+- 資料庫查詢效能
+
+### 維護指標
+- 程式碼審查時間
+- 新功能開發週期
+- 缺陷修復時間
+
+## 總結
+
+分層架構規則確保了：
+
+1. **一致性**：所有層級都遵循 Linus 風格
+2. **專業性**：每個層級都有適合的補充規範
+3. **效率性**：避免過度工程化
+4. **可維護性**：清晰的層級界限和接口
+
+記住：**「在正確的層級使用正確的規範，但 Linus 風格永遠是第一優先」**# 分層架構規則
+
+## 核心原則
+
+本專案採用分層架構，不同層級適用不同的程式碼風格規範：
+
+1. **Linus 風格為第一優先原則** - 所有層級都必須遵循
+2. **分層應用補充規範** - 根據層級特性選擇適當的補充規範
+3. **接口層統一** - 層級間的接口必須簡潔清晰
+
+## 架構分層定義
+
+### 🔴 核心算法層 (Core Algorithm Layer)
+```
+適用範圍：
+code_ai/
+├── dicom2nii/convert/          # DICOM 轉換算法
+├── pipeline/                   # 影像處理管道
+├── SynthSeg/                   # 腦部分割算法
+├── utils/parcellation/         # 腦區分割工具
+├── utils/inference/            # 推理算法
+└── utils/resample/             # 重採樣算法
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **Donald Knuth 風格** (補充 - 數學嚴謹性)
+- ✅ **效能最佳化規則** (算法效能)
+
+**特殊要求**：
+- 必須包含數學複雜度分析
+- 必須有完整的正確性驗證
+- 必須有詳盡的算法文檔
+
+### 🟡 業務邏輯層 (Business Logic Layer)
+```
+適用範圍：
+backend/app/
+├── routers/                    # FastAPI 路由
+├── services/                   # 業務服務
+├── middleware.py               # 中介軟體
+└── main.py                     # 應用程式入口
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **FastAPI 應用程式規則**
+- ✅ **FastAPI 路由特定規則**
+- ✅ **錯誤處理規則**
+
+**特殊要求**：
+- 簡潔的業務邏輯實現
+- 統一的錯誤處理
+- 高效的 API 回應
+
+### 🟢 資料存取層 (Data Access Layer)
+```
+適用範圍：
+backend/app/
+├── database.py                 # 資料庫配置
+├── models/                     # 資料模型
+└── crud/                       # 資料庫操作
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **資料庫互動規則**
+- ✅ **Pydantic 模型規則**
+- ✅ **效能最佳化規則** (資料庫效能)
+
+**特殊要求**：
+- 非同步資料庫操作
+- 連接池管理
+- 事務安全
+
+### 🔵 基礎設施層 (Infrastructure Layer)
+```
+適用範圍：
+- 快取系統 (cache.py)
+- 訊息佇列 (queue/)
+- 排程器 (scheduler/)
+- 工具函數 (utils/)
+```
+
+**適用規範**：
+- ✅ **Linus 風格** (第一優先)
+- ✅ **Python 一般原則**
+- ✅ **效能最佳化規則**
+
+**特殊要求**：
+- 函數式編程優先
+- 模組化設計
+- 高效能實現
+
+## 層級間互動規則
+
+### 1. 接口設計原則
+```python
+# ✅ 正確：簡潔的層級接口
+class ProcessingResult:
+    """統一的處理結果接口"""
+    success: bool
+    data: Optional[Any]
+    error_message: str
+    processing_time: float
+
+# 核心算法層 → 業務邏輯層
+def process_medical_image(image_data: np.ndarray) -> ProcessingResult:
+    """核心算法層接口 - 遵循 Linus 簡潔原則"""
+    pass
+
+# 業務邏輯層 → API 層
+@router.post("/process")
+async def process_endpoint(file: UploadFile) -> ProcessingResponse:
+    """API 層接口 - FastAPI 風格"""
+    result = process_medical_image(image_data)
+    return ProcessingResponse.from_result(result)
+```
+
+### 2. 錯誤處理策略
+```python
+# 核心算法層：詳盡的錯誤分析
+def convert_dicom_core(dicom_path: Path) -> ConversionResult:
+    """
+    核心轉換算法
+    前置條件：dicom_path 必須存在且為有效 DICOM 檔案
+    後置條件：成功時返回 NIfTI 資料，失敗時返回詳細錯誤資訊
+    """
+    if not dicom_path.exists():
+        return ConversionResult.error("DICOM_FILE_NOT_FOUND", "檔案不存在")
+    
+    # 詳盡的算法實現...
+
+# 業務邏輯層：簡潔的錯誤轉換
+async def convert_dicom_service(file: UploadFile) -> ConversionResponse:
+    """業務服務層 - 簡潔的錯誤處理"""
+    temp_path = await save_temp_file(file)
+    result = convert_dicom_core(temp_path)
+    
+    if not result.success:
+        raise HTTPException(500, result.error_message)
+    
+    return ConversionResponse.from_result(result)
+```
+
+### 3. 效能考量
+```python
+# 核心算法層：算法效能優化
+@profile_performance  # Knuth 風格：效能分析
+def resample_image(image: np.ndarray, target_shape: Tuple[int, int, int]) -> np.ndarray:
+    """
+    影像重採樣算法
+    複雜度：O(xyz) where x,y,z 為目標維度
+    記憶體：O(1) 額外空間（原地操作）
+    """
+    # 高效的算法實現...
+
+# 業務邏輯層：快取和非同步
+@cached(expire=300)  # 效能規則：智能快取
+async def resample_image_service(image_id: int, target_shape: Tuple[int, int, int]) -> ImageData:
+    """業務服務層 - 快取和非同步優化"""
+    image = await load_image_async(image_id)
+    resampled = resample_image(image, target_shape)
+    return ImageData.from_array(resampled)
+```
+
+## 程式碼審查檢查清單
+
+### 通用檢查 (所有層級)
+- [ ] **Linus 風格檢查** (第一優先)
+  - [ ] 縮排是否超過 3 層？
+  - [ ] 是否有特殊情況處理？
+  - [ ] 是否使用資料結構解決問題？
+  - [ ] 是否符合 Good Taste 原則？
+
+### 核心算法層額外檢查
+- [ ] **Knuth 風格檢查**
+  - [ ] 是否包含算法描述和複雜度分析？
+  - [ ] 是否有前置/後置條件？
+  - [ ] 是否有數學正確性驗證？
+  - [ ] 是否有適當的效能測試？
+
+### 業務邏輯層額外檢查
+- [ ] **FastAPI 風格檢查**
+  - [ ] 路由處理器是否簡潔？
+  - [ ] 錯誤處理是否統一？
+  - [ ] 回應模型是否類型安全？
+
+### 資料存取層額外檢查
+- [ ] **資料庫規則檢查**
+  - [ ] 是否使用非同步操作？
+  - [ ] 是否正確管理事務？
+  - [ ] 是否有適當的錯誤處理？
+
+## 實施指南
+
+### 新功能開發流程
+1. **確定功能所屬層級**
+2. **選擇適用的規範組合**
+3. **優先通過 Linus 風格檢查**
+4. **應用層級特定的補充規範**
+5. **確保層級間接口簡潔**
+
+### 現有程式碼重構流程
+1. **識別程式碼所屬層級**
+2. **評估是否符合 Linus 風格**
+3. **根據層級應用適當的重構策略**
+4. **保持向後相容性**
+
+### 團隊協作指南
+- **核心算法開發者**：精通 Linus + Knuth 風格
+- **業務邏輯開發者**：精通 Linus + FastAPI 風格
+- **資料庫開發者**：精通 Linus + 資料庫規則
+- **所有開發者**：必須精通 Linus 風格
+
+## 監控與評估
+
+### 品質指標
+- 各層級的程式碼品質評分
+- Linus 風格合規率 (目標：100%)
+- 層級特定規範合規率 (目標：>90%)
+
+### 效能指標
+- 核心算法執行效率
+- API 回應時間
+- 資料庫查詢效能
+
+### 維護指標
+- 程式碼審查時間
+- 新功能開發週期
+- 缺陷修復時間
+
+## 總結
+
+分層架構規則確保了：
+
+1. **一致性**：所有層級都遵循 Linus 風格
+2. **專業性**：每個層級都有適合的補充規範
+3. **效率性**：避免過度工程化
+4. **可維護性**：清晰的層級界限和接口
+
+記住：**「在正確的層級使用正確的規範，但 Linus 風格永遠是第一優先」**

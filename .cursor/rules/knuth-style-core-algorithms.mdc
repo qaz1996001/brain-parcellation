@@ -1,0 +1,642 @@
+---
+alwaysApply: true
+---
+# Donald Knuth 風格核心算法規範 (Linus 優先相容版)
+
+## 🚨 重要原則：Linus 風格優先
+
+**此規範僅適用於核心算法層，且必須完全相容於 Linus 風格程式碼審查標準。**
+
+所有 Knuth 風格的實現都必須：
+1. **先通過 Linus 風格檢查** - 縮排不超過 3 層、消除特殊情況、使用資料結構解決問題
+2. **保持 Good Taste** - 簡潔、實用、無嵌套
+3. **效能優先** - 文檔不能影響執行效率
+
+## 適用範圍
+
+### ✅ 適用模組 (核心算法層)
+```
+code_ai/
+├── dicom2nii/convert/          # DICOM 轉換算法
+├── pipeline/                   # 影像處理管道
+├── SynthSeg/                   # 腦部分割算法
+├── utils/parcellation/         # 腦區分割工具
+├── utils/inference/            # 推理算法
+└── utils/resample/             # 重採樣算法
+```
+
+### ❌ 不適用模組 (嚴格遵循 Linus 風格)
+```
+backend/app/routers/            # FastAPI 路由 - 簡潔優先
+backend/app/database.py         # 資料庫操作 - 效能優先
+backend/app/middleware.py       # 中介軟體 - 實用優先
+所有其他業務邏輯模組
+```
+
+## 核心原則 (Linus 相容版)
+
+### 1. 文學化編程 + Good Taste
+```python
+# ✅ 正確：Linus + Knuth 風格
+"""
+§1. DICOM 到 NIfTI 轉換的核心算法
+
+問題：將 DICOM 影像序列轉換為 NIfTI 格式，保持空間資訊的準確性。
+策略：使用資料結構驅動的轉換管道，避免特殊情況處理。
+
+時間複雜度：O(n) where n = 影像切片數量
+空間複雜度：O(1) 額外空間（流式處理）
+"""
+
+# 轉換器映射表 - 消除 if/else 鏈 (Linus 原則)
+DICOM_CONVERTERS = {
+    'T1': convert_t1_sequence,
+    'T2': convert_t2_sequence,
+    'DWI': convert_dwi_sequence,
+    'FLAIR': convert_flair_sequence,
+}
+
+def convert_dicom_to_nifti(dicom_path: Path, output_path: Path) -> ConversionResult:
+    """
+    §1.1 主轉換函數
+    
+    不變式：輸入 DICOM 必須包含完整的空間資訊標籤
+    後置條件：輸出 NIfTI 保持原始的體素間距和方向資訊
+    """
+    # §1.2 早期驗證 (Linus 風格)
+    if not dicom_path.exists():
+        return ConversionResult.error("DICOM 檔案不存在")
+    
+    if not _has_spatial_info(dicom_path):
+        return ConversionResult.error("缺少空間資訊標籤")
+    
+    # §1.3 序列類型檢測
+    sequence_type = _detect_sequence_type(dicom_path)
+    converter = DICOM_CONVERTERS.get(sequence_type, convert_default_sequence)
+    
+    # §1.4 執行轉換 (無嵌套，扁平結構)
+    return converter(dicom_path, output_path)
+
+# ❌ 錯誤：違反 Linus 原則的深度嵌套
+def bad_convert_dicom(dicom_path):
+    if dicom_path.exists():
+        if _has_spatial_info(dicom_path):
+            sequence_type = _detect_sequence_type(dicom_path)
+            if sequence_type == 'T1':
+                if _is_reformatted(dicom_path):
+                    # 5 層縮排！違反 Linus 原則
+                    return convert_reformatted_t1(dicom_path)
+```
+
+### 2. 數學嚴謹性 (簡潔版)
+```python
+def resample_to_isotropic(image_data: np.ndarray, voxel_size: Tuple[float, float, float]) -> np.ndarray:
+    """
+    §2. 重採樣到等向性體素
+    
+    算法：三線性插值重採樣
+    輸入：原始影像 + 目標體素大小
+    輸出：等向性重採樣影像
+    
+    數學基礎：
+    新座標 = 原座標 × (原體素大小 / 目標體素大小)
+    
+    複雜度：O(xyz) where x,y,z 為影像維度
+    """
+    # 計算縮放因子 - 簡潔的數學表達
+    scale_factors = np.array(voxel_size) / np.array(image_data.shape)
+    
+    # 使用 scipy 的最佳化實現 - 避免重新發明輪子
+    return zoom(image_data, scale_factors, order=1)
+    
+    # 注記：order=1 表示線性插值，在醫學影像中平衡品質與效能
+```
+
+### 3. 錯誤處理 (Linus + Knuth)
+```python
+class ImageProcessingResult:
+    """處理結果的資料結構 - 避免異常處理的複雜性"""
+    success: bool
+    data: Optional[np.ndarray]
+    error_message: str
+    processing_time: float
+    
+    @classmethod
+    def ok(cls, data: np.ndarray, time: float) -> 'ImageProcessingResult':
+        return cls(True, data, "", time)
+    
+    @classmethod
+    def error(cls, message: str) -> 'ImageProcessingResult':
+        return cls(False, None, message, 0.0)
+
+def process_brain_segmentation(image: np.ndarray) -> ImageProcessingResult:
+    """
+    §3. 腦部分割處理
+    
+    算法：SynthSeg 深度學習分割
+    前置條件：輸入為 T1 加權 MRI 影像
+    後置條件：輸出 104 個腦區的分割標籤
+    """
+    start_time = time.time()
+    
+    # 早期驗證 - Linus 風格
+    if image.ndim != 3:
+        return ImageProcessingResult.error("輸入必須為 3D 影像")
+    
+    if image.dtype != np.float32:
+        return ImageProcessingResult.error("輸入必須為 float32 類型")
+    
+    # 執行分割 - 簡潔實現
+    try:
+        segmentation = _run_synthseg_inference(image)
+        processing_time = time.time() - start_time
+        return ImageProcessingResult.ok(segmentation, processing_time)
+    
+    except Exception as e:
+        return ImageProcessingResult.error(f"分割失敗: {str(e)}")
+```
+
+## 文檔要求 (簡化版)
+
+### 必要文檔元素
+```python
+def algorithm_function():
+    """
+    §X. 算法名稱
+    
+    問題：簡潔描述要解決的問題
+    策略：一句話說明解決方案
+    複雜度：O(?) 時間，O(?) 空間
+    
+    前置條件：輸入要求
+    後置條件：輸出保證
+    """
+    pass
+```
+
+### ❌ 避免過度文檔化
+```python
+# ❌ 錯誤：過度詳細，違反 Linus 簡潔原則
+def bad_documented_function():
+    """
+    這個函數實現了非常複雜的算法，首先我們需要理解歷史背景...
+    (500 行文檔)
+    然後我們分析每一個步驟的數學原理...
+    (又 300 行文檔)
+    """
+    pass
+
+# ✅ 正確：簡潔但完整
+def good_documented_function():
+    """
+    §1. 快速傅立葉變換實現
+    
+    算法：Cooley-Tukey FFT
+    複雜度：O(n log n)
+    用途：頻域濾波預處理
+    """
+    pass
+```
+
+## 測試要求
+
+### 核心算法測試
+```python
+class TestDicomConversion:
+    """§4. DICOM 轉換算法測試套件"""
+    
+    def test_t1_conversion_correctness(self):
+        """§4.1 T1 序列轉換正確性驗證"""
+        # 測試資料
+        dicom_path = Path("test_data/t1_sequence.dcm")
+        expected_shape = (256, 256, 180)
+        
+        # 執行轉換
+        result = convert_dicom_to_nifti(dicom_path, Path("output.nii"))
+        
+        # 驗證結果
+        assert result.success
+        assert result.data.shape == expected_shape
+        assert result.processing_time < 5.0  # 效能要求
+    
+    def test_edge_cases(self):
+        """§4.2 邊界情況測試"""
+        # 空檔案
+        assert not convert_dicom_to_nifti(Path("empty.dcm"), Path("out.nii")).success
+        
+        # 損壞檔案
+        assert not convert_dicom_to_nifti(Path("corrupt.dcm"), Path("out.nii")).success
+```
+
+## 效能基準
+
+### 必要的效能測試
+```python
+def benchmark_core_algorithms():
+    """§5. 核心算法效能基準測試"""
+    
+    # 測試不同大小的影像
+    sizes = [(128, 128, 64), (256, 256, 128), (512, 512, 256)]
+    
+    for size in sizes:
+        test_image = np.random.rand(*size).astype(np.float32)
+        
+        # 測量處理時間
+        start = time.perf_counter()
+        result = process_brain_segmentation(test_image)
+        end = time.perf_counter()
+        
+        # 驗證效能要求
+        assert result.success
+        assert (end - start) < size[0] * size[1] * size[2] / 1000000  # 線性時間
+```
+
+## 與其他規則的整合
+
+### 1. 與 FastAPI 路由的接口
+```python
+# 核心算法層 (Knuth 風格)
+def convert_dicom_core(dicom_data: bytes) -> ConversionResult:
+    """§6. 核心轉換邏輯 (詳盡文檔)"""
+    pass
+
+# 接口層 (Linus 風格)
+@router.post("/convert")
+async def convert_dicom_endpoint(file: UploadFile) -> ConversionResponse:
+    """簡潔的 API 端點 - 無詳盡文檔"""
+    if not file.filename.endswith('.dcm'):
+        raise HTTPException(422, "只支援 DICOM 檔案")
+    
+    result = convert_dicom_core(await file.read())
+    if not result.success:
+        raise HTTPException(500, result.error_message)
+    
+    return ConversionResponse.from_result(result)
+```
+
+### 2. 與資料庫操作的整合
+```python
+# 核心算法 (Knuth 風格)
+async def process_medical_image(image_data: np.ndarray) -> ProcessingResult:
+    """§7. 醫學影像處理核心算法"""
+    pass
+
+# 資料庫層 (效能優先，Linus 風格)
+async def save_processing_result(db: AsyncSession, result: ProcessingResult) -> None:
+    """簡潔的資料庫操作 - 效能優先"""
+    if not result.success:
+        return
+    
+    record = ProcessingRecord(**result.to_dict())
+    db.add(record)
+    await db.commit()
+```
+
+## 程式碼審查檢查清單
+
+### Linus 風格檢查 (優先)
+- [ ] 縮排是否超過 3 層？
+- [ ] 是否有特殊情況處理？
+- [ ] 是否使用資料結構解決問題？
+- [ ] 是否符合 Good Taste 原則？
+
+### Knuth 風格檢查 (次要)
+- [ ] 是否包含算法描述？
+- [ ] 是否分析了複雜度？
+- [ ] 是否有前置/後置條件？
+- [ ] 是否有適當的測試？
+
+### 整合檢查
+- [ ] 核心算法是否與接口層解耦？
+- [ ] 是否影響整體系統效能？
+- [ ] 文檔是否簡潔而完整？
+
+## 總結
+
+此規範在保持 Linus 風格優先的前提下，為核心算法層提供了數學嚴謹性和文學化編程的好處。關鍵是：
+
+1. **範圍限制** - 只在複雜算法中使用
+2. **Linus 優先** - 所有實現必須先通過 Linus 檢查
+3. **簡潔文檔** - 避免過度文檔化
+4. **效能保證** - 不影響系統整體效能
+
+記住：**「在正確的地方追求完美，在其他地方保持簡潔」**# Donald Knuth 風格核心算法規範 (Linus 優先相容版)
+
+## 🚨 重要原則：Linus 風格優先
+
+**此規範僅適用於核心算法層，且必須完全相容於 Linus 風格程式碼審查標準。**
+
+所有 Knuth 風格的實現都必須：
+1. **先通過 Linus 風格檢查** - 縮排不超過 3 層、消除特殊情況、使用資料結構解決問題
+2. **保持 Good Taste** - 簡潔、實用、無嵌套
+3. **效能優先** - 文檔不能影響執行效率
+
+## 適用範圍
+
+### ✅ 適用模組 (核心算法層)
+```
+code_ai/
+├── dicom2nii/convert/          # DICOM 轉換算法
+├── pipeline/                   # 影像處理管道
+├── SynthSeg/                   # 腦部分割算法
+├── utils/parcellation/         # 腦區分割工具
+├── utils/inference/            # 推理算法
+└── utils/resample/             # 重採樣算法
+```
+
+### ❌ 不適用模組 (嚴格遵循 Linus 風格)
+```
+backend/app/routers/            # FastAPI 路由 - 簡潔優先
+backend/app/database.py         # 資料庫操作 - 效能優先
+backend/app/middleware.py       # 中介軟體 - 實用優先
+所有其他業務邏輯模組
+```
+
+## 核心原則 (Linus 相容版)
+
+### 1. 文學化編程 + Good Taste
+```python
+# ✅ 正確：Linus + Knuth 風格
+"""
+§1. DICOM 到 NIfTI 轉換的核心算法
+
+問題：將 DICOM 影像序列轉換為 NIfTI 格式，保持空間資訊的準確性。
+策略：使用資料結構驅動的轉換管道，避免特殊情況處理。
+
+時間複雜度：O(n) where n = 影像切片數量
+空間複雜度：O(1) 額外空間（流式處理）
+"""
+
+# 轉換器映射表 - 消除 if/else 鏈 (Linus 原則)
+DICOM_CONVERTERS = {
+    'T1': convert_t1_sequence,
+    'T2': convert_t2_sequence,
+    'DWI': convert_dwi_sequence,
+    'FLAIR': convert_flair_sequence,
+}
+
+def convert_dicom_to_nifti(dicom_path: Path, output_path: Path) -> ConversionResult:
+    """
+    §1.1 主轉換函數
+    
+    不變式：輸入 DICOM 必須包含完整的空間資訊標籤
+    後置條件：輸出 NIfTI 保持原始的體素間距和方向資訊
+    """
+    # §1.2 早期驗證 (Linus 風格)
+    if not dicom_path.exists():
+        return ConversionResult.error("DICOM 檔案不存在")
+    
+    if not _has_spatial_info(dicom_path):
+        return ConversionResult.error("缺少空間資訊標籤")
+    
+    # §1.3 序列類型檢測
+    sequence_type = _detect_sequence_type(dicom_path)
+    converter = DICOM_CONVERTERS.get(sequence_type, convert_default_sequence)
+    
+    # §1.4 執行轉換 (無嵌套，扁平結構)
+    return converter(dicom_path, output_path)
+
+# ❌ 錯誤：違反 Linus 原則的深度嵌套
+def bad_convert_dicom(dicom_path):
+    if dicom_path.exists():
+        if _has_spatial_info(dicom_path):
+            sequence_type = _detect_sequence_type(dicom_path)
+            if sequence_type == 'T1':
+                if _is_reformatted(dicom_path):
+                    # 5 層縮排！違反 Linus 原則
+                    return convert_reformatted_t1(dicom_path)
+```
+
+### 2. 數學嚴謹性 (簡潔版)
+```python
+def resample_to_isotropic(image_data: np.ndarray, voxel_size: Tuple[float, float, float]) -> np.ndarray:
+    """
+    §2. 重採樣到等向性體素
+    
+    算法：三線性插值重採樣
+    輸入：原始影像 + 目標體素大小
+    輸出：等向性重採樣影像
+    
+    數學基礎：
+    新座標 = 原座標 × (原體素大小 / 目標體素大小)
+    
+    複雜度：O(xyz) where x,y,z 為影像維度
+    """
+    # 計算縮放因子 - 簡潔的數學表達
+    scale_factors = np.array(voxel_size) / np.array(image_data.shape)
+    
+    # 使用 scipy 的最佳化實現 - 避免重新發明輪子
+    return zoom(image_data, scale_factors, order=1)
+    
+    # 注記：order=1 表示線性插值，在醫學影像中平衡品質與效能
+```
+
+### 3. 錯誤處理 (Linus + Knuth)
+```python
+class ImageProcessingResult:
+    """處理結果的資料結構 - 避免異常處理的複雜性"""
+    success: bool
+    data: Optional[np.ndarray]
+    error_message: str
+    processing_time: float
+    
+    @classmethod
+    def ok(cls, data: np.ndarray, time: float) -> 'ImageProcessingResult':
+        return cls(True, data, "", time)
+    
+    @classmethod
+    def error(cls, message: str) -> 'ImageProcessingResult':
+        return cls(False, None, message, 0.0)
+
+def process_brain_segmentation(image: np.ndarray) -> ImageProcessingResult:
+    """
+    §3. 腦部分割處理
+    
+    算法：SynthSeg 深度學習分割
+    前置條件：輸入為 T1 加權 MRI 影像
+    後置條件：輸出 104 個腦區的分割標籤
+    """
+    start_time = time.time()
+    
+    # 早期驗證 - Linus 風格
+    if image.ndim != 3:
+        return ImageProcessingResult.error("輸入必須為 3D 影像")
+    
+    if image.dtype != np.float32:
+        return ImageProcessingResult.error("輸入必須為 float32 類型")
+    
+    # 執行分割 - 簡潔實現
+    try:
+        segmentation = _run_synthseg_inference(image)
+        processing_time = time.time() - start_time
+        return ImageProcessingResult.ok(segmentation, processing_time)
+    
+    except Exception as e:
+        return ImageProcessingResult.error(f"分割失敗: {str(e)}")
+```
+
+## 文檔要求 (簡化版)
+
+### 必要文檔元素
+```python
+def algorithm_function():
+    """
+    §X. 算法名稱
+    
+    問題：簡潔描述要解決的問題
+    策略：一句話說明解決方案
+    複雜度：O(?) 時間，O(?) 空間
+    
+    前置條件：輸入要求
+    後置條件：輸出保證
+    """
+    pass
+```
+
+### ❌ 避免過度文檔化
+```python
+# ❌ 錯誤：過度詳細，違反 Linus 簡潔原則
+def bad_documented_function():
+    """
+    這個函數實現了非常複雜的算法，首先我們需要理解歷史背景...
+    (500 行文檔)
+    然後我們分析每一個步驟的數學原理...
+    (又 300 行文檔)
+    """
+    pass
+
+# ✅ 正確：簡潔但完整
+def good_documented_function():
+    """
+    §1. 快速傅立葉變換實現
+    
+    算法：Cooley-Tukey FFT
+    複雜度：O(n log n)
+    用途：頻域濾波預處理
+    """
+    pass
+```
+
+## 測試要求
+
+### 核心算法測試
+```python
+class TestDicomConversion:
+    """§4. DICOM 轉換算法測試套件"""
+    
+    def test_t1_conversion_correctness(self):
+        """§4.1 T1 序列轉換正確性驗證"""
+        # 測試資料
+        dicom_path = Path("test_data/t1_sequence.dcm")
+        expected_shape = (256, 256, 180)
+        
+        # 執行轉換
+        result = convert_dicom_to_nifti(dicom_path, Path("output.nii"))
+        
+        # 驗證結果
+        assert result.success
+        assert result.data.shape == expected_shape
+        assert result.processing_time < 5.0  # 效能要求
+    
+    def test_edge_cases(self):
+        """§4.2 邊界情況測試"""
+        # 空檔案
+        assert not convert_dicom_to_nifti(Path("empty.dcm"), Path("out.nii")).success
+        
+        # 損壞檔案
+        assert not convert_dicom_to_nifti(Path("corrupt.dcm"), Path("out.nii")).success
+```
+
+## 效能基準
+
+### 必要的效能測試
+```python
+def benchmark_core_algorithms():
+    """§5. 核心算法效能基準測試"""
+    
+    # 測試不同大小的影像
+    sizes = [(128, 128, 64), (256, 256, 128), (512, 512, 256)]
+    
+    for size in sizes:
+        test_image = np.random.rand(*size).astype(np.float32)
+        
+        # 測量處理時間
+        start = time.perf_counter()
+        result = process_brain_segmentation(test_image)
+        end = time.perf_counter()
+        
+        # 驗證效能要求
+        assert result.success
+        assert (end - start) < size[0] * size[1] * size[2] / 1000000  # 線性時間
+```
+
+## 與其他規則的整合
+
+### 1. 與 FastAPI 路由的接口
+```python
+# 核心算法層 (Knuth 風格)
+def convert_dicom_core(dicom_data: bytes) -> ConversionResult:
+    """§6. 核心轉換邏輯 (詳盡文檔)"""
+    pass
+
+# 接口層 (Linus 風格)
+@router.post("/convert")
+async def convert_dicom_endpoint(file: UploadFile) -> ConversionResponse:
+    """簡潔的 API 端點 - 無詳盡文檔"""
+    if not file.filename.endswith('.dcm'):
+        raise HTTPException(422, "只支援 DICOM 檔案")
+    
+    result = convert_dicom_core(await file.read())
+    if not result.success:
+        raise HTTPException(500, result.error_message)
+    
+    return ConversionResponse.from_result(result)
+```
+
+### 2. 與資料庫操作的整合
+```python
+# 核心算法 (Knuth 風格)
+async def process_medical_image(image_data: np.ndarray) -> ProcessingResult:
+    """§7. 醫學影像處理核心算法"""
+    pass
+
+# 資料庫層 (效能優先，Linus 風格)
+async def save_processing_result(db: AsyncSession, result: ProcessingResult) -> None:
+    """簡潔的資料庫操作 - 效能優先"""
+    if not result.success:
+        return
+    
+    record = ProcessingRecord(**result.to_dict())
+    db.add(record)
+    await db.commit()
+```
+
+## 程式碼審查檢查清單
+
+### Linus 風格檢查 (優先)
+- [ ] 縮排是否超過 3 層？
+- [ ] 是否有特殊情況處理？
+- [ ] 是否使用資料結構解決問題？
+- [ ] 是否符合 Good Taste 原則？
+
+### Knuth 風格檢查 (次要)
+- [ ] 是否包含算法描述？
+- [ ] 是否分析了複雜度？
+- [ ] 是否有前置/後置條件？
+- [ ] 是否有適當的測試？
+
+### 整合檢查
+- [ ] 核心算法是否與接口層解耦？
+- [ ] 是否影響整體系統效能？
+- [ ] 文檔是否簡潔而完整？
+
+## 總結
+
+此規範在保持 Linus 風格優先的前提下，為核心算法層提供了數學嚴謹性和文學化編程的好處。關鍵是：
+
+1. **範圍限制** - 只在複雜算法中使用
+2. **Linus 優先** - 所有實現必須先通過 Linus 檢查
+3. **簡潔文檔** - 避免過度文檔化
+4. **效能保證** - 不影響系統整體效能
+
+記住：**「在正確的地方追求完美，在其他地方保持簡潔」**

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "SlashCommand(/sc:analyze:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(xcopy:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "mcp__serena__get_current_config",
+      "Read(//mnt/d/00_Chen/Task04_git_rdx/rdxai/code_ai/pipeline/chuan/**)",
+      "Read(//mnt/d/00_Chen/Task04_git_rdx/rdxai/code_ai/pipeline/**)",
+      "Read(//mnt/d/00_Chen/Task04_git_rdx/rdxai/code_ai/**)",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__serena__find_symbol"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
