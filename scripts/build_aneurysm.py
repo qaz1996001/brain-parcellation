@@ -102,7 +102,7 @@ def execute_rdx_platform_json(_id: int, path_root: pathlib.Path,
 
     # 使用建構器模式組裝最終的平台 JSON
     aneurysm_platform_json = (aneurysm_platform_json_builder
-                              .set_patient_info(series_first_dcm_data_list)                     # 設定患者資訊
+                              .set_patient_info(series_first_dcm_data_list)                   # 設定患者資訊
                               .set_model_id(model_id)                                         # 設定模型 ID
                               .set_detections(dcm_seg_path_list[0], pred_json_merge['data'])  # 設定檢測結果
                               .build()  # 建構最終 JSON

@@ -48,7 +48,7 @@ class AneurysmDetectionBuilder(PredictionBaseBuilder[AneurysmDetectionItem, Aneu
                     "location": str(df[f"{aneurysm_number}_Location"].iloc()[0]),
                     "sub_location": sub_location if pd.notna(sub_location) else "",
                     "probability": round(df[f"{aneurysm_number}_Prob_max"].iloc()[0], 2),
-                    "main_seg_slice": int(np.median(have_labels) + 1),
+                    "main_seg_slice": int(pred.shape[0]) - int(np.median(have_labels) + 1),
                 }
                 series_name_pred.append(segment_attribute)
             pred_json_list.append({"series_name": intput_dict['series_name'],
