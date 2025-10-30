@@ -281,6 +281,47 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def get_mask_instance(self, source_images: List[Union[FileDataset, DicomDir]],
+                          series_type: SeriesTypeEnum,
+                          dicom_seg_result:Dict[str,Any],
+                          pred_json :Dict[str,Any],
+                          *args, **kwargs) -> List["MaskInstanceClass"]:
+        result_data_list    = dicom_seg_result['data']
+        pred_json_data_list = pred_json['data']
+        mask_instance_list = []
+        for index, result in enumerate(result_data_list):
+            mask_instance_dict = dict()
+            filter_cmd_data = list(filter(lambda x: str(x['label#']) == str(result['mask_index']), pred_json_data_list))
+            if filter_cmd_data :
+                filter_cmd = filter_cmd_data[0]
+            else:
+                continue
+            dcm_seg_path = result['dcm_seg_path']
+            with open(dcm_seg_path, 'rb') as f:
+                dcm_seg = pydicom.read_file(f)
+            # Extract UIDs from the DICOM-SEG and source images
+            seg_sop_instance_uid = dcm_seg.get((0x008, 0x0018)).value
+            seg_series_instance_uid = dcm_seg.get((0x020, 0x000E)).value
+            dicom_sop_instance_uid = source_images[int(result['main_seg_slice'])].get((0x008, 0x0018)).value
+
+            mask_instance_dict.update({'diameter'       : filter_cmd['pred_diameter'],
+                                       'type'           : filter_cmd['class_name'],
+                                       'location'       : filter_cmd['type_name'],
+                                       'prob_max'       : filter_cmd['CMB_prob'],
+                                       'main_seg_slice': len(source_images) - result['main_seg_slice'],
+                                       # 'main_seg_slice' : result['main_seg_slice'],
+                                       'mask_index'     : result['mask_index'],
+                                       'mask_name': "A{}".format(result['mask_index']),
+                                       'seg_sop_instance_uid': seg_sop_instance_uid,
+                                       'seg_series_instance_uid': seg_series_instance_uid,
+                                       'dicom_sop_instance_uid': dicom_sop_instance_uid,
+                                       'is_main_seg': "1",
+                                       'checked': "1",
+                                       'is_ai': "1",
+                                       })
+            mask_instance_list.append(self.MaskInstanceClass.model_validate(mask_instance_dict))
+        return mask_instance_list
+
 
     def get_mask_series(self,source_images:List[Union[FileDataset, DicomDir]],
                              series_type: SeriesTypeEnum,
