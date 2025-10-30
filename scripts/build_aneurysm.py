@@ -6,8 +6,12 @@ from typing import Union, List
 import itertools
 import pydicom
 
+
+from code_ai.pipeline.rdx.schema import PredictionBaseResponse, AneurysmDetectionResponse
+
 from code_ai.pipeline.rdx.build import AneurysmDetectionBuilder
 from code_ai.pipeline.dicomseg import utils
+
 
 # @dataclasses
 # class AneurysmPath:
@@ -24,7 +28,8 @@ from code_ai.pipeline.dicomseg import utils
 
 
 def execute_rdx_platform_json(_id: int, path_root: pathlib.Path,
-                              model_id: str = '924d1538-597c-41d6-bc27-4b0b359111cf'):
+                              model_id: str = '924d1538-597c-41d6-bc27-4b0b359111cf') -> (
+        Union)[PredictionBaseResponse,AneurysmDetectionResponse]:
     """
     執行 RDX 平台 JSON 生成流程，處理動脈瘤檢測的 DICOM 和預測結果
 
@@ -115,7 +120,7 @@ def execute_rdx_platform_json(_id: int, path_root: pathlib.Path,
     with open(platform_json_path, 'w') as f:
         f.write(aneurysm_platform_json.model_dump_json())
 
-    print("Processing complete!")
+    return aneurysm_platform_json
 
 
 def main():

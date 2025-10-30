@@ -296,7 +296,7 @@ def load_and_sort_dicom_files(path_dcms: Union[pathlib.Path,str]) -> tuple[
         slice_dcm.append({"d": projection, "dcm": dcm_slice})
 
     # Sort slices by projection value
-    slice_dcms = sorted(slice_dcm, key=lambda i: i['d'])
+    slice_dcms = sorted(slice_dcm, key=lambda i: i['d'],reverse=True)
     sorted_dcms = [y['dcm'] for y in slice_dcms]
 
     # Read the image data

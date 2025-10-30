@@ -20,8 +20,6 @@ scikit-image==0.22.0
 pynvml==12.0.0
 """
 import glob
-import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -142,7 +140,7 @@ class CMBPipeline(BasePipeline):
             raise FileNotFoundError(f"main.py not found in {Path(__file__).parent}")
 
         # Get Python executable
-        python_exe = self.config.path_code / "python3" if self.config.path_code else "python3"
+        python_exe = self.config.path_python if self.config.path_python else "python3"
 
         # Build command
         cmd = [
@@ -275,7 +273,8 @@ class CMBPipeline(BasePipeline):
             self.logger.error(f"DICOM-seg creation failed: {e}", exc_info=True)
             return []
 
-    def _get_output_destination(self, output_name: str, output_path: Path) -> Path:
+    def _get_output_destination(self, output_name: str, output_path: Path) ->\
+            Path:
         """Map output files to destination paths
 
         Args:

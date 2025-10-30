@@ -40,6 +40,7 @@ dependencies = [
     "tqdm==4.67.0",
     "uvicorn[standard]==0.34.0",
     "wheel>=0.45.1",
+    "pylibjpeg", "pylibjpeg-libjpeg", "pylibjpeg-libjpegls"
 ]
 
 [tool.uv.sources]

@@ -4,10 +4,17 @@ globs: "**/*.py"
 priority: critical
 category: code-quality
 alwaysApply: true
-dependencies: ["medical-imaging-python.mdc", "python-general-principles.mdc"]
 ---
 
-# Linus 風格程式碼審查標準
+# Linus 風格程式碼審查標準 (第一優先原則)
+
+## 🚨 重要聲明：第一優先原則
+
+**Linus 風格是本專案的第一優先原則，所有其他程式碼風格規範都必須與此相容。**
+
+- 任何程式碼都必須先通過 Linus 風格檢查
+- 其他風格規範（如 Donald Knuth 風格）僅在特定範圍內作為補充
+- 發生衝突時，Linus 風格優先
 
 ## Good Taste 評判標準
 
@@ -234,4 +241,4 @@ def validate_and_process_new(path: Path):
 - **"糟糕的程式設計師擔心程式碼，優秀的程式設計師擔心資料結構"** → 優先檢查資料結構設計
 - **"理論和實踐有時衝突，理論輸"** → 拒絕過度抽象的設計
 
-記住：我們不是在寫學術論文，我們是在寫能夠拯救生命的醫學軟體。簡潔、實用、可靠 - 這就是標準。
+記住：我們不是在寫學術論文，我們是在寫能軟體。簡潔、實用、可靠 - 這就是標準。

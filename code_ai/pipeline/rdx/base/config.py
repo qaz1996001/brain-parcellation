@@ -58,6 +58,7 @@ class PipelineConfig:
     path_process: Optional[Path] = None
     path_json: Optional[Path] = None
     path_log: Path = Path('./logs')
+    path_python: Optional[Path] = None
 
     # Advanced options
     legacy_output: bool = False  # Use old output structure
@@ -117,6 +118,7 @@ class PipelineConfig:
         path_code = Path(os.getenv('PATH_CODE')) if os.getenv('PATH_CODE') else None
         path_process = Path(os.getenv('PATH_PROCESS')) if os.getenv('PATH_PROCESS') else None
         path_json = Path(os.getenv('PATH_JSON')) if os.getenv('PATH_JSON') else None
+        path_python = Path(os.getenv('PYTHON3')) if os.getenv('PYTHON3') else None
 
         # Log directory: ENV > Default
         path_log = Path('./logs')
@@ -140,6 +142,7 @@ class PipelineConfig:
             path_process=path_process,
             path_json=path_json,
             path_log=path_log,
+            path_python = path_python,
             legacy_output=legacy_output,
             keep_intermediate=keep_intermediate,
             verbose=verbose,
