@@ -1,0 +1,67 @@
+2020/02/21 lkchena
+
+A. Table 的命名規則:
+
+系統代碼_Function1_(sub_function)_bt(h)
+
+tt: temp table
+rt: real time table
+st: summary table
+
+ex:
+
+area_conf_bt
+dcop_collect_bth
+ker_wip_rt
+ker_sum_st
+dcop_collect_tt1
+
+
+B. View 的命名規則:
+
+系統代碼_Function1_(sub_function)_uv(h)
+
+uv : user define view
+bv : base view
+
+ex:
+oee_tool_sch_uvh
+dm_part_mold_powder_bv
+
+
+C. Stored Procedure
+
+系統代碼_Function1_(sub_function)_sp
+
+
+//2020/04/28 lkchena
+D. Function
+fn_Function1_(sub_function)
+
+ex: fn_create_lot_id
+
+
+F. "臨時" 備份 table 
+
+dcop_collect_bt 
+dcop_collect_bt_191115   此為備份檔 
+
+G. "等待" drop table: <-- 沒用到的 table, 請不要直接刪除避免遺憾
+
+x_dcop_collect_bt 
+x_dcop_collect_bt_191115   此為備份檔 
+
+
+
+
+
+
+below is old, wait drop ... ...
+
+//old: mark by lkchena: 2020/04/28
+//D. Function
+//系統代碼_Function1_(Function2)_fn
+//ex:
+//ump_get_lot_id_fn
+
+
