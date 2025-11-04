@@ -4,7 +4,7 @@ set -e
 
 # 设置环境
 WORK_DIR="/var/www/brain-parcellation"
-CONDA_PATH=" /home/tmu/miniconda3/"
+CONDA_PATH=" /home/tmu/miniconda3"
 LOG_DIR="/var/log/brain-parcellation"
 
 # 创建日志目录
@@ -19,8 +19,7 @@ export PYTHONPATH="$WORK_DIR"
 
 # 启动 Docker Compose
 echo "[$(date)] 启动 Docker Compose..." >> "$LOG_DIR/startup.log"
-docker-compose up -d
-
+#docker compose restart -d
 # 等待 Docker 容器就绪
 sleep 3
 
