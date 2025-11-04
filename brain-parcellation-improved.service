@@ -1,0 +1,27 @@
+# systemd 服務配置檔案：brain-parcellation-improved.service
+[Unit]
+Description=Brain Parcellation Service (Docker Compose + Backend + Funboost)
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=200
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/brain-parcellation
+
+# 使用啟動腳本來管理所有組件
+ExecStart=/usr/local/bin/brain-parcellation-start.sh
+
+# 停止時關閉所有組件
+ExecStop=/usr/local/bin/brain-parcellation-stop.sh
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=brain-parcellation
+
+[Install]
+WantedBy=multi-user.target
