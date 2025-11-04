@@ -4,7 +4,7 @@ set -e
 
 # 设置环境
 WORK_DIR="/var/www/brain-parcellation"
-CONDA_PATH=" /home/tmu/miniconda3/bin/conda"
+CONDA_PATH=" /home/tmu/miniconda3/"
 LOG_DIR="/var/log/brain-parcellation"
 
 # 创建日志目录
