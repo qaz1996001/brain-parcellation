@@ -21,6 +21,6 @@ sleep 1
 # 停止 Docker Compose
 echo "[$(date)] 停止 Docker Compose..." >> "$LOG_DIR/shutdown.log"
 cd "$WORK_DIR"
-docker-compose down
+#docker-compose down
 
 echo "[$(date)] 所有服务已关闭" >> "$LOG_DIR/shutdown.log"
