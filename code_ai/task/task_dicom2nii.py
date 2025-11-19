@@ -342,8 +342,11 @@ def get_orthanc_study_uid_series_uid(instance_path_str:str):
     series_sop_uid = dicom_ds[0x0020, 0x000E].value
 
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+    ORTHANC_USERNAME = os.getenv("ORTHANC_USERNAME")
+    ORTHANC_USER_PASSWORD = os.getenv("ORTHANC_USER_PASSWORD")
     # ./raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/10089413 GUO HSIOU HUA/21002010079 MRI Stroke Wall C C/MR 3D Ax SWAN/*.dcm
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300,
+     username=ORTHANC_USERNAME, password=ORTHANC_USER_PASSWORD)
     study_uid = instance_path.parent.parent.parent.parent.name
     study = Study(study_uid,client=client)
     series_filter = list(filter(lambda series: series.uid == series_sop_uid , study.series))
@@ -356,7 +359,10 @@ def get_orthanc_study_uid_series_uid(instance_path_str:str):
 def get_orthanc_series_uid(study_uid: str,
                            series_dir_set: set):
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    ORTHANC_USERNAME = os.getenv("ORTHANC_USERNAME")
+    ORTHANC_USER_PASSWORD = os.getenv("ORTHANC_USER_PASSWORD")
+    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300,
+     username=ORTHANC_USERNAME, password=ORTHANC_USER_PASSWORD)
     series_sop_uid_list = []
     for series_dir in series_dir_set:
         series_path_list = list(series_dir.rglob('*.dcm'))
@@ -408,19 +414,19 @@ def process_dir(func_params: Dict[str, any]):
     df.drop_duplicates(subset=['instance_dir_path','rename_dicom_path'],inplace=True)
     df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x:pydicom.dcmread(x)[0x0020, 0x000E].value)
-    df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
+    #df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
+    df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
 
     study_uid_unique = df['study_uid'].unique()
     dcop_event_list = []
     for study_uid in study_uid_unique:
-        series_dir_set = set(df.loc()[df['study_uid'] == study_uid, 'instance_dir_path'].to_list())
-        df2 = get_orthanc_series_uid(study_uid=study_uid,series_dir_set=series_dir_set)
-        for result in df2.to_dict(orient='records'):
-            series_uid = result['uid']
-            study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'].iloc()[0]
-            raw_dicom_path    = df[df['series_sop_uid'] == result['file_series_sop_uid']]['instance_dir_path'].iloc()[0]
-            rename_dicom_path = df[df['series_sop_uid'] == result['file_series_sop_uid']]['rename_dicom_path'].iloc()[0]
+        series_dir_path_set = set(df.loc()[df['study_uid'] == study_uid, 'instance_dir_path'].to_list())
+        for series_dir in series_dir_path_set:
+            series_uid = series_dir.name
+            study_id   = df[df['study_uid'] == study_uid]['study_id'].iloc()[0]
+            raw_dicom_path    = df[df['instance_dir_path'] == series_dir]['instance_dir_path'].iloc()[0]
+            rename_dicom_path = df[df['instance_dir_path'] == series_dir]['rename_dicom_path'].iloc()[0]
             dcop_event = DCOPEventRequest(study_uid   = study_uid,
                                           series_uid  = series_uid,
                                           ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
@@ -430,6 +436,23 @@ def process_dir(func_params: Dict[str, any]):
                                                          f'rename_dicom_path':str(os.path.dirname(rename_dicom_path)),}
                                           )
             dcop_event_list.append(dcop_event.model_dump_json())
+
+        #series_dir_set = set(df.loc()[df['study_uid'] == study_uid, 'instance_dir_path'].to_list())
+        #df2 = get_orthanc_series_uid(study_uid=study_uid,series_dir_set=series_dir_set)
+        #for result in df2.to_dict(orient='records'):
+        #    series_uid = result['uid']
+        #    study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'].iloc()[0]
+        #    raw_dicom_path    = df[df['series_sop_uid'] == result['file_series_sop_uid']]['instance_dir_path'].iloc()[0]
+        #    rename_dicom_path = df[df['series_sop_uid'] == result['file_series_sop_uid']]['rename_dicom_path'].iloc()[0]
+        #    dcop_event = DCOPEventRequest(study_uid   = study_uid,
+        #                               series_uid  = series_uid,
+        #                                  ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+        #                                  study_id    = study_id,
+        #                                  tool_id     = 'DICOM_TOOL',
+        #                                  result_data = {f'raw_dicom_path':str(os.path.dirname(raw_dicom_path)),
+        #                                                 f'rename_dicom_path':str(os.path.dirname(rename_dicom_path)),}
+        #                                  )
+        #    dcop_event_list.append(dcop_event.model_dump_json())
     call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
                           'data':dcop_event_list
                           })

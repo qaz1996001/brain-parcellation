@@ -12,8 +12,8 @@ router = APIRouter()
 router.include_router(series.router, tags=["series"])
 router.include_router(rerun.router, tags=["rerun"])
 router.include_router(sync.router, tags=["sync"])
-router.include_router(study.router, tags=["study"])
-router.include_router(listen.router, tags=["listen"])
+# router.include_router(study.router, tags=["study"])
+# router.include_router(listen.router, tags=["listen"])
 
 
 

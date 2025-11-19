@@ -20,7 +20,8 @@ from fastapi_cache import FastAPICache
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 from .model import DCOPEventModel
-from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID
+from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID, \
+        validate_orthanc_id
 from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
     SYNC_PROT_STUDY_TRANSFER_COMPLETE
 
@@ -442,8 +443,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             if study_uid_raw_dicom_path.exists():
                 dcm_path_list = sorted(study_uid_raw_dicom_path.rglob('*.dcm'))
                 series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
-                df = self.get_orthanc_series_uid(study_uid, series_dir_set)
-                series_uid_list = df['uid'].to_list()
+                try:
+                    series_uid_list = list(map(lambda x:validate_orthanc_id(x.name),series_dir_set))
+                except ValueError as e:
+                    df = self.get_orthanc_series_uid(study_uid, series_dir_set)
+                    series_uid_list = df['uid'].to_list()
                 task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
                                               output_dicom_path=rename_dicom_path,
                                               output_nifti_path=rename_nifti_path, )

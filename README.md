@@ -26,8 +26,8 @@ conda deactivate
 ```bash 
 conda activate tf_2_14
 
-cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
-cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
+cd ./brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
+cd ./brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
 
 
 conda activate tf_2_14
@@ -97,6 +97,20 @@ python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
 EOF
 
 ```
+```
+cat <<EOF | xargs -I{} bash -c 'conda run -n tf_2_14 bash -c "
+cd /home/david/brain-parcellation && \
+export PYTHONPATH=\$(pwd) && \
+python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
+  --input_dicom \"{}\" \
+  --output_dicom /home/david/pipeline/sean/rename_dicom \
+  --output_nifti /home/david/pipeline/sean/rename_nifti" &' 
+/home/david/pipeline/tmp/021bed3e-f9be3f49-e8159e42-f9c4f2c8-737fb79c
+
+EOF
+
+```
+
 
 ### 
 
