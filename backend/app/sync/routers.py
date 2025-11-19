@@ -1,14 +1,12 @@
 # app/sync/routers.py
 import logging
-import os
-import pathlib
-from typing import Annotated, Tuple, List, Optional, Any
+from typing import Annotated, List, Optional
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (service, filters,)
-from sqlalchemy import Select, text
+from sqlalchemy import Select
 from sqlalchemy.engine.row import Row
 
 from backend.app.sync import urls
@@ -294,7 +292,7 @@ async def delete_events_complex(study_id:Optional[str]        = Query(None),
             logger.error(f"Error processing cache key {key}: {e}")
 
     return {
-        "message": f"Cache deletion completed",
+        "message": "Cache deletion completed",
         "deleted_keys": deleted_keys,
         "deleted_count": len(deleted_keys),
         "search_criteria": {

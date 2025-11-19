@@ -1,15 +1,10 @@
 # app/sync/routers.py
-import os
-import pathlib
-from typing import Annotated, Tuple, List, Optional, Any, Coroutine
-from advanced_alchemy.extensions.fastapi.providers import FieldNameType
-from advanced_alchemy.service import OffsetPagination
-from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
-from advanced_alchemy.extensions.fastapi import (service, filters,)
+from typing import Annotated, List
+from fastapi import APIRouter, Depends, Response, BackgroundTasks
+from advanced_alchemy.extensions.fastapi import (service,)
 
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.schemas import DCOPEventRequest,PostStudyRequest
-from backend.app.sync.model import DCOPEventModel
 
 from . import urls
 from .service import ReRunStudyService

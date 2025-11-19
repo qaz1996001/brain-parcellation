@@ -172,6 +172,7 @@ class StudyModelRequest(BaseModel):
                     return model_type_enum.value
         return value
 
+
     @field_validator('series_type', mode='before')
     @classmethod
     def extract_series_type(cls, value):

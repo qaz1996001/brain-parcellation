@@ -11,7 +11,6 @@ from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
@@ -639,3 +638,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 if done_count == len(results):
                     completed_study_events.append(result)
         return completed_study_events
+
+
+
+
+
+
+
+# class PlatformJsonService:

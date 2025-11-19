@@ -5,7 +5,6 @@ import pathlib
 import shutil
 import traceback
 from typing import List, Optional, Tuple
-import re
 
 import aiofiles.os
 import httpx
@@ -94,7 +93,6 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
 
 
     async def re_run_by_study_uid_on_one(self, study_uid:str,dcop_event_service:DCOPEventDicomService) -> bool:
-        from code_ai.task.task_dicom2nii import dicom_to_nii
         logger.info('del_study_result_by_field 1')
         await self.del_study_result_by_field(field_name='study_uid',
                                              field_value=study_uid)

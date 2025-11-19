@@ -4,10 +4,11 @@ from datetime import datetime
 from typing import Annotated
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from fastapi import APIRouter, Depends
-from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import service, filters
 
 from backend.app.study import urls
+from backend.app.study.schemas import ReBuildPlatformJsonRequest
+
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.model import DCOPEventModel
 from backend.app.sync.schemas import DCOPEventRequest, OrthancID
@@ -67,3 +68,12 @@ async def get_events_complex(
     results, total = await dcop_event_service.list_and_count(*filters_list)
     return dcop_event_service.to_schema(results, total, filters=filters_list)
 
+
+
+@router.get(urls.RE_BUILD_PLATFORM_JSON,
+            status_code=200,
+            summary="重新建立 PLATFORM JSON ",
+            )
+async def re_build_platform_json(re_build_platform:list[ReBuildPlatformJsonRequest],
+                                 ):
+    pass

@@ -1,11 +1,13 @@
 # app/sync/schemas.py
 import re
+from datetime import date
 from typing import List, Annotated, Dict, Any
 
 from typing import Optional
 from enum import Enum
 from pydantic import BaseModel, Field, field_validator, AfterValidator, ConfigDict
 
+from code_ai.pipeline.dicomseg.schema.enum import ModelTypeEnum
 
 def validate_orthanc_id(v: str) -> str:
     orthanc_pattern = r'^[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}-[0-9a-f]{8}$'
@@ -88,3 +90,27 @@ class DCOPStatus(str, Enum):
     STUDY_INFERENCE_RUNNING_RE  = "300.151"
 
     pass
+
+
+
+
+class ReBuildPlatformJsonRequest(BaseModel):
+    patient_id  :str  = Field(...,min_length=1,max_length=20,
+                             pattern=r'^\d{8}$',
+                             description="Patient ID must be 8 digits")
+    study_date  :date = Field(...,description="Study date in YYYY-MM-DD format")
+    group_id    :int  = Field(...,description="Group ID must be a positive integer")
+    model_type  : str = Field(...,
+                              description="Model type enum name")
+
+    @field_validator('model_type', mode='before')
+    @classmethod
+    def extract_model_type(cls, value):
+        if value is None:
+            return '1'
+        if isinstance(value, str):
+            model_type_enum_list: List[ModelTypeEnum] = ModelTypeEnum.to_list()
+            for model_type_enum in model_type_enum_list:
+                if value == model_type_enum.name:
+                    return model_type_enum.value
+        return value

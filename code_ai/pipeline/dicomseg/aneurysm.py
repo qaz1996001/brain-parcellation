@@ -571,7 +571,7 @@ def execute_dicomseg_platform_json(_id:int,root_path:str,group_id:int):
 
     mar_brain_path_dcms = path_dcms.joinpath("MRA_BRAIN")
     mip_pitch_path_dcms = path_dcms.joinpath("MIP_Pitch")
-    mip_yaw_path_dcms = path_dcms.joinpath("MIP_Yaw")
+    mip_yaw_path_dcms   = path_dcms.joinpath("MIP_Yaw")
 
     pred_nii_path_list = [{"series_name": "MRA_BRAIN",
                            "pred_nii_path": str(path_nii.joinpath("Pred.nii.gz"))},
@@ -650,7 +650,7 @@ def main():
                         help='目前執行的case的patient_id or study id')
 
     parser.add_argument('--Inputs', type=str, nargs='+',
-                        default=['/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048/Image_nii/Pred.nii.gz '],
+                        default=['/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048/Image_nii/Pred.nii.gz'],
                         help='用於輸入的檔案')
     parser.add_argument('--Output_folder', type=str, default='/mnt/e/pipeline/新增資料夾/',
                         help='用於輸出結果的資料夾')
