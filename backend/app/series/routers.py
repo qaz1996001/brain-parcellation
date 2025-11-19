@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Response,UploadFile
 import pydicom
 
 if TYPE_CHECKING:
-    import pathlib
+    pass
 
 from code_ai.dicom2nii.convert import ConvertManager
 from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
