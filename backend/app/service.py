@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Optional, TypeVar, Generic, Type, AsyncGenerator, Callable, Any
+from typing import Optional, TypeVar, Generic, AsyncGenerator, Callable, Any
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction, async_sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from advanced_alchemy.extensions.fastapi import service

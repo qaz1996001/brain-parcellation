@@ -618,28 +618,6 @@ def execute_dicomseg_platform_json(_id:int,root_path:str,group_id:int):
                    {"series_name": "MIP_Yaw",
                     "data": mip_yaw_result_list},
                    ]
-    # pred_json_list = [{"series_name": "MRA_BRAIN",
-    #                    "pred_json":pred_json},
-    #                   {"series_name": "MIP_Pitch",
-    #                    "pred_json": pred_json},
-    #                   {"series_name": "MIP_Yaw",
-    #                    "pred_json": pred_json},
-    #                   ]
-    # # Create platform JSON
-    # aneurysm_platform_json_builder = AneurysmPlatformJSONBuilder()
-    # aneurysm_platform_json = (aneurysm_platform_json_builder.set_series_type(SeriesTypeEnum.MRA_BRAIN, mar_brain_source_images)
-    #                                                         .set_series_type(SeriesTypeEnum.MIP_Pitch, mip_pitch_source_images)
-    #                                                         .set_series_type(SeriesTypeEnum.MIP_Yaw, mip_yaw_source_images)
-    #                                                         .set_mask(source_images=mar_brain_source_images,
-    #                                                                   result_list =result_list,
-    #                                                                   pred_json_list=pred_json_list,
-    #                                                                   group_id = group_id)
-    #                                                         .set_sorted(source_images=mar_brain_source_images)
-    #                                                         .set_study(source_images=mar_brain_source_images,
-    #                                                                    result_list =result_list,
-    #                                                                    pred_json_list=pred_json_list,
-    #                                                                    group_id = group_id)
-    #                                                         .build())
 
     aneurysm_platform_json_builder = ReviewAneurysmPlatformJSONBuilder()
     aneurysm_platform_json = (aneurysm_platform_json_builder.set_group_id(group_id=group_id)
@@ -680,8 +658,6 @@ def main():
                         default='/mnt/e/pipeline/新增資料夾/01901124_20250617_MR_21404020048/Dicom/MRA_BRAIN',
                         help='用於輸入的檔案')
     args = parser.parse_args()
-    # path_process      = os.getenv("PATH_PROCESS")
-    # path_processModel = os.path.join(path_process, 'Deep_Aneurysm')
     path_processModel = "/mnt/e/pipeline/p1"
     path_processID = os.path.join(path_processModel, args.ID)
     execute_dicomseg_platform_json(_id=args.ID,root_path=path_processID,group_id=44)

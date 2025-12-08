@@ -40,11 +40,11 @@ class PipelineConfig:
     python3 = os.getenv("PYTHON3")
     conda = "conda"
     conda_env = "tf_2_14"
+    chuan_root_data_key = ['Aneurysm', 'WMH', 'Infarct']
 
     def __init__(self, script_name, data_key):
         self.script_name = script_name
         self.data_key = data_key
-
 
     def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
         input_path_list = [str(x) for x in task.input_path_list]
@@ -52,26 +52,10 @@ class PipelineConfig:
         PATH_ROOT = pathlib.Path(os.getenv('PATH_ROOT'))
         chuan_root = PATH_ROOT.parent.joinpath('chuan')
         chuan_code = chuan_root.joinpath('code')
+
         # PATH_ROOT = / mnt / e / pipeline / sean
-        if self.data_key == 'Aneurysm':
-            # pipeline_aneurysm_tensorflow.py [-h] [--ID ID]
-            #                                        [--Inputs INPUTS [INPUTS ...]]
-            #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
-            #                                        [--Output_folder OUTPUT_FOLDE
-            # if input_dicom_dir is None:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} ')
-            # else:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} '
-            #             f'--DicomDir {input_dicom_dir} '
-            #             )
+        # if self.data_key == 'Aneurysm':
+        if self.data_key in self.chuan_root_data_key:
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
                         f'bash {str(chuan_code)}/{self.script_name} '
@@ -111,6 +95,6 @@ pipelines = {
     InferenceEnum.CMB: PipelineConfig('pipeline_cmb_tensorflow.py', 'CMB'),
     # InferenceEnum.DWI: PipelineConfig('pipeline_synthseg_dwi_tensorflow.py', 'DWI'),
     # InferenceEnum.WMH_PVS: PipelineConfig('pipeline_synthseg_wmh_tensorflow.py', 'WMH_PVS'),
-    # InferenceEnum.WMH: PipelineConfig('pipeline_wmh_tensorflow.py', 'WMH'),
-    # InferenceEnum.Infarct: PipelineConfig('pipeline_infarct_tensorflow.py', 'Infarct'),
+    InferenceEnum.WMH: PipelineConfig('pipeline_wmh.sh', 'WMH'),
+    InferenceEnum.Infarct: PipelineConfig('pipeline_infarct.sh', 'Infarct'),
     }
