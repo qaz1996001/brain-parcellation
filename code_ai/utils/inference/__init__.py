@@ -215,7 +215,7 @@ def build_analysis(study_path: pathlib.Path):
     for task_dict in model_dict_values:
         tasks = {}
         for model_name, input_paths in task_dict.items():
-            input_paths = build_input_post_process(input_paths,model_name)
+            # input_paths = build_input_post_process(input_paths,model_name)
 
             task_output_files = generate_output_files(input_paths,
                                                       model_name,
