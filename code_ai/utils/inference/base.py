@@ -155,12 +155,13 @@ def check_study_mapping_inference(study_path: pathlib.Path, config_path: Optiona
     model_mapping_series_dict = config.get("model_mapping_series", {})
 
     file_list = sorted(study_path.iterdir())
+    print('file_list',file_list)
 
     if any(filter(lambda x: x.name.endswith('nii.gz') or x.name.endswith('nii'), file_list)):
         df_file = pd.DataFrame(file_list, columns=['file_path'])
         df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
         model_mapping_dict = {}
-
+        print("df_file['file_name']",df_file['file_name'])
         for model_name, model_mapping_series_list in model_mapping_series_dict.items():
             for mapping_series in model_mapping_series_list:
                 result = np.intersect1d(df_file['file_name'], mapping_series, return_indices=True)
