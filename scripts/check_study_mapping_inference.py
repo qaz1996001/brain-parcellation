@@ -1,4 +1,5 @@
 import argparse
+import pathlib
 
 
 def main():
@@ -11,7 +12,7 @@ def main():
     # parser.add_argument('--output', type=str, default='/mnt/d/wsl_ubuntu/pipeline/sean/example_output/',
     #                     help='用於輸出結果的資料夾')
     args = parser.parse_args()
-    result_dict = check_study_mapping_inference(args.input)
+    result_dict = check_study_mapping_inference(pathlib.Path(args.input))
     print(result_dict)
 
 
