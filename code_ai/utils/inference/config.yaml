@@ -89,4 +89,4 @@ model_mapping_series:
 
 
 # 輸入後處理配置
-input_post_process:
+#input_post_process:

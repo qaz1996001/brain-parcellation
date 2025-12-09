@@ -66,18 +66,12 @@ InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
         [MRSeriesRenameEnum.DWI0]
     ],
     InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
-
     #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
     InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
                         [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
                         ],
-    # InferenceEnum.CMBSynthSeg
-
     InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0, MRSeriesRenameEnum.DWI1000, MRSeriesRenameEnum.ADC, ]
-                            # MRSeriesRenameEnum.synthseg_DWI0_original_DWI],
                             ],
     InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
                          ]],
-
-
 }
