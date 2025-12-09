@@ -143,11 +143,14 @@ def prepare_output_file_list(file_list: List[pathlib.Path],
             replace_suffix(x.name, suffix)) for x in file_list]
 
 
-def check_study_mapping_inference(study_path: pathlib.Path, config_path: str = "config.yaml") -> dict[str, dict[
-    Any, Any]] | None:
+def check_study_mapping_inference(study_path: pathlib.Path, config_path: Optional[str] = None) -> (
+        dict[str, dict[Any, Any]] | None):
     """
     Check study mapping inference using configuration from YAML.
     """
+    if config_path is None:
+        config_path = pathlib.Path(__file__).parent.joinpath('config.yaml')
+
     config = load_config(config_path)
     model_mapping_series_dict = config.get("model_mapping_series", {})
 
