@@ -90,21 +90,3 @@ model_mapping_series:
 
 # 輸入後處理配置
 input_post_process:
-  Infarct:
-    condition:
-      input_match: ["MRSeriesRenameEnum.ADC", "MRSeriesRenameEnum.DWI0", "MRSeriesRenameEnum.DWI1000"]
-    add_files:
-      - replace:
-          from: "ADC.nii.gz"
-          to: "synthseg_DWI0_original_DWI.nii.gz"
-
-  WMH:
-    condition:
-      input_match: ["T2SeriesRenameEnum.T2FLAIR_AXI"]
-    add_files:
-      - replace:
-          from: "T2FLAIR_AXI.nii.gz"
-          to: "synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz"
-      - replace:
-          from: "T2FLAIR_AXI.nii.gz"
-          to: "synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz"
