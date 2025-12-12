@@ -35,6 +35,8 @@ from code_ai.utils.database import save_result_status_to_sqlalchemy
 from backend.app.sync import urls as sync_urls
 from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
 
+logger = logging.getLogger(__name__)
+
 
 def get_output_study(dicom_ds):
     if dicom_ds is None:
@@ -405,30 +407,57 @@ def process_dir(func_params: Dict[str, any]):
     result_dict_list = list(map(lambda x:json.loads(x),result_filter_list))
     df = pd.DataFrame(result_dict_list,columns=['instance_path_str','rename_dicom_path'])
     df['instance_dir_path'] = df['instance_path_str'].map(lambda x:os.path.dirname(x))
-    df.drop_duplicates(subset=['instance_dir_path','rename_dicom_path'],inplace=True)
+    # 先不去重，保留所有記錄以便後續處理
     df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x:pydicom.dcmread(x)[0x0020, 0x000E].value)
     df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
+    # 根據 rename_dicom_path 去重，確保每個 rename 路徑只保留一筆記錄
+    df.drop_duplicates(subset=['rename_dicom_path'], inplace=True)
 
     study_uid_unique = df['study_uid'].unique()
     dcop_event_list = []
     for study_uid in study_uid_unique:
-        series_dir_set = set(df.loc()[df['study_uid'] == study_uid, 'instance_dir_path'].to_list())
-        df2 = get_orthanc_series_uid(study_uid=study_uid,series_dir_set=series_dir_set)
-        for result in df2.to_dict(orient='records'):
-            series_uid = result['uid']
-            study_id   = df[df['series_sop_uid'] == result['file_series_sop_uid']]['study_id'].iloc()[0]
-            raw_dicom_path    = df[df['series_sop_uid'] == result['file_series_sop_uid']]['instance_dir_path'].iloc()[0]
-            rename_dicom_path = df[df['series_sop_uid'] == result['file_series_sop_uid']]['rename_dicom_path'].iloc()[0]
-            dcop_event = DCOPEventRequest(study_uid   = study_uid,
-                                          series_uid  = series_uid,
-                                          ope_no      = DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
-                                          study_id    = study_id,
-                                          tool_id     = 'DICOM_TOOL',
-                                          result_data = {f'raw_dicom_path':str(os.path.dirname(raw_dicom_path)),
-                                                         f'rename_dicom_path':str(os.path.dirname(rename_dicom_path)),}
-                                          )
+        df_study = df[df['study_uid'] == study_uid]
+        # df 已經根據 rename_dicom_path 去重，所以 df_study 中每個 rename 路徑只有一筆記錄
+        # 收集所有需要的 instance_dir_path（用於查詢 Orthanc）
+        series_dir_set = set(df_study['instance_dir_path'].to_list())
+        df2 = get_orthanc_series_uid(study_uid=study_uid, series_dir_set=series_dir_set)
+        
+        # 建立 series_sop_uid -> series_uid 的映射
+        series_uid_map = {
+            record['file_series_sop_uid']: record['uid']
+            for record in df2.to_dict(orient='records')
+        }
+        if not series_uid_map:
+            logger.warning("study %s 沒有對應的 Orthanc series", study_uid)
+            continue
+        
+        # 為每個 rename_dicom_path 產生事件（df_study 已經去重，每個 rename 路徑只有一筆）
+        for _, row in df_study.iterrows():
+            series_sop_uid = row['series_sop_uid']
+            series_uid = series_uid_map.get(series_sop_uid)
+            if not series_uid:
+                logger.warning("找不到 series_sop_uid=%s 在 study=%s 的 Orthanc mapping，已略過該 rename 路徑 %s",
+                               series_sop_uid, study_uid, row['rename_dicom_path'])
+                continue
+            raw_parent = str(pathlib.Path(row['instance_dir_path']).parent)
+            rename_parent = str(pathlib.Path(row['rename_dicom_path']).parent)
+            # 在 params_data 中包含 rename_dicom_path，以便後續查詢時可以區分不同的 rename 路徑
+            dcop_event = DCOPEventRequest(
+                study_uid=study_uid,
+                series_uid=series_uid,
+                ope_no=DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+                study_id=row['study_id'],
+                tool_id='DICOM_TOOL',
+                params_data={
+                    'rename_dicom_path': rename_parent,  # 在 params_data 中包含 rename_dicom_path
+                },
+                result_data={
+                    'raw_dicom_path': raw_parent,
+                    'rename_dicom_path': rename_parent,
+                }
+            )
             dcop_event_list.append(dcop_event.model_dump_json())
     call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
                           'data':dcop_event_list

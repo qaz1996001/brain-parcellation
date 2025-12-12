@@ -157,7 +157,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                                  series_uid=None,
                                                                  status=DCOPStatus.STUDY_NEW.name,
                                                                  session=session, )
-                    print(DCOPEventRequest.model_validate(new_data).model_dump())
                     session.add(new_data)
                     task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
                                                   output_dicom_path=rename_dicom_path,
@@ -320,31 +319,145 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
-        # engine: AsyncEngine = session.bind
-        # async with engine.connect() as conn:
-        sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
+        # 直接查詢原始表，不使用分組函數，避免相同 series_uid 但不同 rename_dicom_path 的記錄被合併
+        # 加入狀態檢查邏輯，確保只處理那些所有 ope_no 都小於目標狀態的記錄
+        # 支援多種情況：
+        # 1. 有 params_data->>'rename_dicom_path' 的新記錄（優先使用）
+        # 2. 沒有 params_data->>'rename_dicom_path' 但 result_data 中有 rename_dicom_path 的記錄
+        # 3. 都沒有的舊記錄（回退到原始邏輯，只按 series_uid 分組）
+        target_ope_no = DCOPStatus.STUDY_CONVERTING.value
+        # 使用參數化查詢，避免 SQL 注入並確保參數綁定正確
+        sql = text("""
+            WITH series_rename_status AS (
+                SELECT
+                    dcop_event_bt.study_uid,
+                    dcop_event_bt.series_uid,
+                    COALESCE(
+                        dcop_event_bt.params_data->>'rename_dicom_path',
+                        dcop_event_bt.result_data->>'rename_dicom_path'
+                    ) as rename_dicom_path,
+                    MAX(DISTINCT dcop_event_bt.study_id)::varchar as study_id,
+                    array_agg(DISTINCT dcop_event_bt.ope_no) as ope_no_array,
+                    array_agg(dcop_event_bt.result_data ORDER BY dcop_event_bt.create_time DESC) as result_data_array,
+                    array_agg(dcop_event_bt.params_data ORDER BY dcop_event_bt.create_time DESC) as params_data_array,
+                    MAX(dcop_event_bt.create_time) as create_time,
+                    MAX(dcop_event_bt.update_time) as update_time
+                FROM dcop_event_bt
+                WHERE dcop_event_bt.study_uid = :study_uid
+                  AND dcop_event_bt.series_uid IS NOT NULL
+                  AND dcop_event_bt.result_data IS NOT NULL
+                GROUP BY 
+                    dcop_event_bt.study_uid, 
+                    dcop_event_bt.series_uid,
+                    COALESCE(
+                        dcop_event_bt.params_data->>'rename_dicom_path',
+                        dcop_event_bt.result_data->>'rename_dicom_path'
+                    )
+            )
+            SELECT DISTINCT ON (srs.series_uid, COALESCE(srs.rename_dicom_path, ''))
+                srs.study_uid,
+                srs.series_uid,
+                srs.study_id,
+                srs.rename_dicom_path,
+                srs.ope_no_array as ope_no,
+                srs.result_data_array[1] as result_data,
+                srs.params_data_array[1] as params_data,
+                srs.create_time,
+                srs.update_time
+            FROM series_rename_status as srs
+            WHERE (:target_ope_no)::NUMERIC > ALL (srs.ope_no_array::NUMERIC[])
+              AND EXISTS (
+                  SELECT 1
+                  FROM unnest(srs.result_data_array) AS pd
+                  WHERE pd IS NOT NULL
+              )
+            ORDER BY srs.series_uid, COALESCE(srs.rename_dicom_path, ''), srs.create_time DESC
+        """)
         results = await session.execute(sql,
-                                        {'status': DCOPStatus.STUDY_CONVERTING.value,
+                                        {'target_ope_no': target_ope_no,
                                          'study_uid': study_uid})
 
         dcop_event_list = results.all()
         task_params_list = []
         dcop_model_list = []
         for dcop_event in dcop_event_list:
-            result_data = dcop_event.result_data[0]
-            output_dicom_path = result_data['rename_dicom_path']
+            # 使用 Row 物件的屬性訪問或索引訪問（兼容不同 SQLAlchemy 版本）
+            try:
+                # 嘗試屬性訪問（較新版本）
+                if hasattr(dcop_event, '_mapping'):
+                    # SQLAlchemy 2.0+ 使用 _mapping
+                    rename_dicom_path = dcop_event._mapping.get('rename_dicom_path')
+                    result_data = dcop_event._mapping.get('result_data')
+                    study_uid = dcop_event._mapping.get('study_uid')
+                    series_uid = dcop_event._mapping.get('series_uid')
+                    study_id = dcop_event._mapping.get('study_id')
+                elif hasattr(dcop_event, 'rename_dicom_path'):
+                    # 直接屬性訪問
+                    rename_dicom_path = dcop_event.rename_dicom_path
+                    result_data = dcop_event.result_data
+                    study_uid = dcop_event.study_uid
+                    series_uid = dcop_event.series_uid
+                    study_id = dcop_event.study_id
+                else:
+                    # 索引訪問（備用方案）：study_uid, series_uid, study_id, rename_dicom_path, ope_no, result_data, params_data, create_time, update_time
+                    study_uid = dcop_event[0]
+                    series_uid = dcop_event[1]
+                    study_id = dcop_event[2]
+                    rename_dicom_path = dcop_event[3]
+                    result_data = dcop_event[5]
+            except (IndexError, AttributeError, KeyError) as e:
+                logger.error("無法正確解析查詢結果：%s, row=%s", e, dcop_event)
+                continue
+            
+            # 驗證必要欄位
+            if not study_uid or not series_uid:
+                logger.warning("缺少必要欄位，已略過：study_uid=%s, series_uid=%s", study_uid, series_uid)
+                continue
+                
+            # 處理 rename_dicom_path：優先使用查詢結果，如果沒有則從 result_data 中提取
+            if not rename_dicom_path and result_data:
+                if isinstance(result_data, dict):
+                    rename_dicom_path = result_data.get('rename_dicom_path')
+                elif isinstance(result_data, list) and len(result_data) > 0 and isinstance(result_data[0], dict):
+                    rename_dicom_path = result_data[0].get('rename_dicom_path')
+            
+            if not rename_dicom_path:
+                logger.warning("找不到 rename_dicom_path，已略過 series_uid=%s", series_uid)
+                continue
+                
+            # 處理 result_data：確保是 dict 格式
+            if not result_data:
+                logger.warning("result_data 為空，已略過 series_uid=%s, rename_dicom_path=%s", 
+                             series_uid, rename_dicom_path)
+                continue
+                
+            # 標準化 result_data 為 dict 格式
+            if isinstance(result_data, list) and len(result_data) > 0:
+                result_data_dict = result_data[0] if isinstance(result_data[0], dict) else result_data
+            elif isinstance(result_data, dict):
+                result_data_dict = result_data
+            else:
+                logger.warning("result_data 格式不正確，已略過 series_uid=%s, rename_dicom_path=%s", 
+                             series_uid, rename_dicom_path)
+                continue
+                
+            # 確保 result_data 中包含 rename_dicom_path（用於後續查詢）
+            if 'rename_dicom_path' not in result_data_dict:
+                result_data_dict['rename_dicom_path'] = rename_dicom_path
+                
             output_nifti_path = pathlib.Path(path_rename_nifti)
             task_params = Dicom2NiiSeriesParams(sub_dir=None,
-                                                study_uid=dcop_event.study_uid,
-                                                series_uid=dcop_event.series_uid,
-                                                output_dicom_path=output_dicom_path,
+                                                study_uid=study_uid,
+                                                series_uid=series_uid,
+                                                output_dicom_path=rename_dicom_path,
                                                 output_nifti_path=output_nifti_path)
+            # 為每個 rename_dicom_path 建立獨立的 SERIES_CONVERTING 記錄
             new_data_obj = await DCOPEventModel.create_event_ope_no(tool_id='NIFTI_TOOL',
-                                                                    study_uid=dcop_event.study_uid,
-                                                                    series_uid=dcop_event.series_uid,
-                                                                    study_id=dcop_event.study_id,
+                                                                    study_uid=study_uid,
+                                                                    series_uid=series_uid,
+                                                                    study_id=study_id,
                                                                     ope_no=DCOPStatus.SERIES_CONVERTING.value,
-                                                                    result_data=dcop_event.result_data,
+                                                                    result_data=result_data_dict,
                                                                     params_data=task_params.get_str_dict(),
                                                                     session=session)
             dcop_model_list.append(new_data_obj)
