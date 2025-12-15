@@ -1,95 +1,92 @@
 from __future__ import annotations
 
-from argparse import Namespace
+from dataclasses import replace
 from pathlib import Path
-from typing import Callable
 
-from code_ai.pipeline.core import (
+from pipelinecore.core import (  # type: ignore[import-not-found]
     BasePipeline,
     GpuResourceManager,
     PipelineContext,
     TensorflowPipelineMixin,
 )
 
-from . import workflow, workflow5
 from .models import (
     SynthsegJobConfig,
     SynthsegJobResult,
+    SynthsegOutputFlags,
+    SynthsegPreparedBatch,
+)
+from .preparation import build_prepared_batch
+from .inference import run_five_class_batch, run_prepared_batch
+
+_FIVE_CLASS_FLAGS = SynthsegOutputFlags(
+    generate_wm=False,
+    generate_cmb=False,
+    generate_dwi=False,
+    generate_wmh=False,
 )
 
-WorkflowFn = Callable[[Namespace], None]
 
-
-def _to_namespace(config: SynthsegJobConfig) -> Namespace:
-    flags = config.flags.enable_all() if config.run_all else config.flags
-    return Namespace(
-        input=str(config.input_path),
-        input_name=config.input_name,
-        output=str(config.output_path) if config.output_path else None,
-        template=str(config.template_path) if config.template_path else None,
-        template_name=config.template_name,
-        all=config.run_all,
-        wm_file=flags.generate_wm,
-        cmb=flags.generate_cmb,
-        cmb_file=config.output_names.cmb,
-        dwi=flags.generate_dwi,
-        dwi_file=config.output_names.dwi,
-        wmh=flags.generate_wmh,
-        wmh_file=config.output_names.wmh,
-        depth_number=config.depth_number,
-    )
-
-
-class _BaseLegacySynthsegPipeline(
+class _BaseSynthsegPipeline(
     TensorflowPipelineMixin,
-    BasePipeline[SynthsegJobConfig, Namespace, SynthsegJobResult, SynthsegJobResult],
+    BasePipeline[
+        SynthsegJobConfig,
+        SynthsegPreparedBatch,
+        SynthsegJobResult,
+        SynthsegJobResult,
+    ],
 ):
-    """
-    Adapter pipeline that reuses the legacy SynthSeg workflows via the Template Method skeleton.
-    """
-
     def __init__(
         self,
         context: PipelineContext,
         gpu_manager: GpuResourceManager,
-        runner: WorkflowFn,
     ) -> None:
         TensorflowPipelineMixin.__init__(self, gpu_manager)
         BasePipeline.__init__(self, context)
-        self._runner = runner
 
-    def prepare(self, payload: SynthsegJobConfig) -> Namespace:
-        return _to_namespace(payload)
+    def prepare(self, payload: SynthsegJobConfig) -> SynthsegPreparedBatch:
+        normalized = _normalize_config(payload, self.context.paths.output_dir)
+        return build_prepared_batch(normalized, self.context.paths)
 
-    def run_inference(self, prepared: Namespace) -> SynthsegJobResult:
-        self._runner(prepared)
-        result = SynthsegJobResult()
-        result.record_success(Path(prepared.input))
-        return result
+    def run_inference(self, prepared: SynthsegPreparedBatch) -> SynthsegJobResult:
+        return run_prepared_batch(prepared, self.context.logger)
 
     def postprocess(self, inference_result: SynthsegJobResult) -> SynthsegJobResult:
         return inference_result
 
 
-class SynthsegPipeline(_BaseLegacySynthsegPipeline):
+class SynthsegPipeline(_BaseSynthsegPipeline):
     """Full SynthSeg workflow supporting WM/CMB/DWI/WMH outputs."""
 
-    def __init__(
-        self,
-        context: PipelineContext,
-        gpu_manager: GpuResourceManager,
-        runner: WorkflowFn = workflow.run_workflow,
-    ) -> None:
-        super().__init__(context=context, gpu_manager=gpu_manager, runner=runner)
 
-
-class SynthsegFiveClassPipeline(_BaseLegacySynthsegPipeline):
+class SynthsegFiveClassPipeline(_BaseSynthsegPipeline):
     """Specialized pipeline for 5-class SynthSeg outputs."""
 
-    def __init__(
-        self,
-        context: PipelineContext,
-        gpu_manager: GpuResourceManager,
-        runner: WorkflowFn = workflow5.run_workflow,
-    ) -> None:
-        super().__init__(context=context, gpu_manager=gpu_manager, runner=runner)
+    def prepare(self, payload: SynthsegJobConfig) -> SynthsegPreparedBatch:
+        normalized = _normalize_config(
+            payload,
+            self.context.paths.output_dir,
+            override_flags=_FIVE_CLASS_FLAGS,
+        )
+        return build_prepared_batch(normalized, self.context.paths)
+
+    def run_inference(self, prepared: SynthsegPreparedBatch) -> SynthsegJobResult:
+        return run_five_class_batch(prepared, self.context.logger)
+
+
+def _normalize_config(
+    payload: SynthsegJobConfig,
+    default_output_dir: Path,
+    override_flags: SynthsegOutputFlags | None = None,
+) -> SynthsegJobConfig:
+    normalized = payload
+    if payload.output_path is None:
+        normalized = replace(normalized, output_path=default_output_dir)
+
+    if override_flags is not None:
+        normalized = replace(
+            normalized,
+            flags=override_flags,
+            run_all=False,
+        )
+    return normalized

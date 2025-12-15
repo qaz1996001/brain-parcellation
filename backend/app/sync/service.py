@@ -1,8 +1,12 @@
+import asyncio
 import json
 import logging
 import os
 import pathlib
 import traceback
+from collections import defaultdict
+from contextlib import suppress
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 import re
 import httpx
@@ -14,13 +18,13 @@ from funboost import AsyncResult
 from pyorthanc import Study, Orthanc
 
 # from fastapi import
-from sqlalchemy import text, select, and_
+from sqlalchemy import text, select, and_, bindparam, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
-from .model import DCOPEventModel
+from .model import DCOPEventModel, StudyPrevLinkModel
 from .schemas import (
     DCOPStatus,
     DCOPEventRequest,
@@ -40,10 +44,10 @@ logger = logging.getLogger(__name__)
 
 
 class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
-    """Author repository."""
+    """封裝 DICOM 同步/轉檔/推論工作流程的主要服務層。"""
 
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
-        """Author repository."""
+        """提供給 BaseRepositoryService 使用的 async repository 類別。"""
 
         model_type = DCOPEventModel
 
@@ -59,6 +63,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     can_inference_pattern = re.compile(pattern_str)
 
     async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
+        """依據 ope_no 回傳應該觸發的 callback URL。"""
         from code_ai import load_dotenv
 
         load_dotenv()
@@ -77,24 +82,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return url
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
-        """
-        ✅ Good Taste 重構：消除 httpx 自呼叫，改用內部直接調用
-        外部 API → 這個方法 → 內部直接調用 → 無循環
-        """
+        """寫入事件並依 ope_no 分組執行回調，確保單一 URL 只收到相關任務。"""
         from code_ai import load_dotenv
 
         load_dotenv()
-        
-        # ✅ Early return - 空列表直接返回
-        if not data:
-            logger.info("post_ope_no_task: No events to process")
-            return
-        
-        # 按 ope_no 分組事件
-        transfer_complete_events = []
-        conversion_complete_events = []
-        
-        # ✅ 批次寫入 DB
+        # 按 URL 分組 dcop_event，確保每個 URL 只發送對應的 events
+        check_url_events_map = {}  # {url: [dcop_event_list]}
+        # async with AsyncSession(self.repository.session.bind) as session:
         async with self.session_manager.get_session() as session:
             for dcop_event in data:
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
@@ -110,56 +104,28 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 session.add(new_data_obj)
                 await session.commit()
                 await session.refresh(new_data_obj)
-                
-                # ✅ 根據 ope_no 分組，準備後續處理
+
+                # new_data_obj = await self.create(data=new_data, auto_commit=True, auto_refresh=True)
                 match new_data_obj.ope_no:
                     case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                        transfer_complete_events.append(dcop_event)
+                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                        conversion_complete_events.append(dcop_event)
-        
-        # ✅ Good Taste: 直接調用內部方法，而非 httpx POST
-        if transfer_complete_events:
-            logger.info(f"Processing {len(transfer_complete_events)} transfer complete events internally")
-            await self._process_transfer_complete_internal(transfer_complete_events)
-        
-        if conversion_complete_events:
-            logger.info(f"Processing {len(conversion_complete_events)} conversion complete events internally")
-            await self._process_conversion_complete_internal(conversion_complete_events)
-        
+                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
+                    case _:
+                        url = None
+                if url is not None:
+                    # 將對應的 dcop_event 加入到該 URL 的事件列表中
+                    if url not in check_url_events_map:
+                        check_url_events_map[url] = []
+                    check_url_events_map[url].append(dcop_event)
+        async with httpx.AsyncClient(timeout=180) as client:
+            for url, dcop_event_list in check_url_events_map.items():
+                # 發送 POST 請求時傳入對應的 dcop_event_list，確保只處理指定的 study
+                dcop_event_dump_list = [
+                    dcop_event.model_dump() for dcop_event in dcop_event_list
+                ]
+                rep = await client.post(url, json=dcop_event_dump_list)
         return
-
-    async def _process_transfer_complete_internal(
-        self, 
-        events: List[DCOPEventRequest]
-    ) -> None:
-        """
-        ✅ Good Taste: 內部處理方法，無 HTTP 呼叫
-        對應原本 POST /sync/study/transfer/complete 的邏輯
-        """
-        if not events:
-            return  # ✅ Early return
-        
-        logger.info(f"Internal: Processing {len(events)} transfer complete events")
-        
-        # ✅ 直接調用檢查邏輯，無 httpx POST
-        await self.check_study_series_transfer_complete(events)
-    
-    async def _process_conversion_complete_internal(
-        self, 
-        events: List[DCOPEventRequest]
-    ) -> None:
-        """
-        ✅ Good Taste: 內部處理方法，無 HTTP 呼叫
-        對應原本 POST /sync/study/conversion/complete/by-uid 的邏輯
-        """
-        if not events:
-            return  # ✅ Early return
-        
-        logger.info(f"Internal: Processing {len(events)} conversion complete events")
-        
-        # ✅ 直接調用檢查邏輯，無 httpx POST
-        await self.check_study_series_conversion_complete(events)
 
     async def check_study_series_transfer_complete(
         self, data: Optional[List[DCOPEventRequest]] = None
@@ -188,6 +154,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             f"check_study_series_transfer_complete data {data}",
         )
         # Get configuration from environment
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
 
@@ -197,26 +164,38 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 dcop_event_list,
                 dcop_event_dump_list,
             ) = await self._get_studies_ready_for_transfer()
+            for dcop_event_dump in dcop_event_dump_list:
+                dcop_event_dump["params_data"]
         else:
             dcop_event_list = [
                 DCOPEventRequest.model_validate(event, strict=False) for event in data
             ]
-        
-        # ✅ Early return - 無事件需要處理
-        if not dcop_event_list:
-            logger.info("No studies ready for transfer")
-            return []
+            dcop_event_dump_list = [
+                dcop_event.model_dump() for dcop_event in dcop_event_list
+            ]
 
-        # ✅ Good Taste: 直接處理轉換流程，無 httpx POST
-        await self._initiate_conversion_process_internal(
-            dcop_event_list,
-            path_rename_dicom,
-            path_rename_nifti,
-        )
+        # Process eligible studies for conversion
+        if dcop_event_list:
+            await self._send_events(upload_data_api_url, dcop_event_dump_list)
+            await self._initiate_conversion_process(
+                upload_data_api_url,
+                dcop_event_list,
+                path_rename_dicom,
+                path_rename_nifti,
+            )
 
         return dcop_event_list
 
+    async def schedule_new_studies(self, study_uids: List[str]) -> List[DCOPEventModel]:
+        """將輸入轉換為唯一 study 清單並沿用既有建立流程。"""
+        canonical_ids = list(dict.fromkeys(filter(None, study_uids)))
+        if not canonical_ids:
+            return []
+        logger.info("schedule_new_studies count=%s", len(canonical_ids))
+        return await self.add_study_new(data_list=canonical_ids)
+
     async def add_study_new(self, data_list):
+        """初始化 study 任務，建立 STUDY_NEW / STUDY_TRANSFERRING 事件並備妥轉檔參數。"""
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
 
@@ -262,6 +241,42 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return result_list
 
+    async def link_prev_study(
+        self, study_uid: Optional[str], prev_study_uid: Optional[str]
+    ) -> None:
+        """建立 study 與前一個 study 的連結紀錄。"""
+
+        validation_rules = {
+            "missing_current": lambda cur, prev: not cur,
+            "missing_prev": lambda cur, prev: not prev,
+            "duplicated": lambda cur, prev: cur == prev,
+        }
+        for rule_name, predicate in validation_rules.items():
+            if predicate(study_uid, prev_study_uid):
+                logger.info(
+                    "skip link_prev_study rule=%s study_uid=%s prev_study_uid=%s",
+                    rule_name,
+                    study_uid,
+                    prev_study_uid,
+                )
+                return
+
+        async with self.session_manager.get_session() as session:
+            await session.execute(
+                delete(StudyPrevLinkModel).where(
+                    StudyPrevLinkModel.study_uid == study_uid
+                )
+            )
+            session.add(
+                StudyPrevLinkModel(study_uid=study_uid, prev_study_uid=prev_study_uid)
+            )
+            await session.commit()
+        logger.info(
+            "link_prev_study success study_uid=%s prev_study_uid=%s",
+            study_uid,
+            prev_study_uid,
+        )
+
     async def _get_studies_ready_for_transfer(
         self,
     ) -> Tuple[List[DCOPEventRequest], List[dict]]:
@@ -275,11 +290,20 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         dcop_event_list = []
         dcop_event_dump_list = []
 
-        # async with engine.connect() as conn:
         async with self.session_manager.get_session() as session:
-            results = await session.execute(
-                text("select * from public.get_all_studies_status()")
-            )
+            study_uids = await self._get_recent_study_uids(session)
+            if study_uids:
+                sql = (
+                    text(
+                        "SELECT * FROM public.get_all_studies_status() "
+                        "WHERE study_uid IN :study_uids"
+                    ).bindparams(bindparam("study_uids", expanding=True))
+                )
+                results = await session.execute(sql, {"study_uids": tuple(study_uids)})
+            else:
+                results = await session.execute(
+                    text("select * from public.get_all_studies_status()")
+                )
             for result in results.all():
                 logger.info(f"result {result}")
                 study_data = result[0]
@@ -298,61 +322,109 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def _send_events(self, api_url: str, event_data) -> None:
         """
-        ⚠️ DEPRECATED - 僅保留用於向後相容
-        
-        此方法會觸發 httpx POST 到 /sync/ope_no，可能導致無限循環
-        內部邏輯已重構為直接方法調用，不應再使用此方法
-        
-        保留此方法僅為防止舊代碼引用，未來應移除
-        
+        Sends study transfer complete events to the API.
+
         Args:
             api_url: Base URL for the upload data API.
             event_data: List of serialized DCOPEventRequest objects.
         """
         event_data_list = list(filter(lambda x: x is not None, event_data))
-        
-        # ✅ Early return - 空列表不執行 POST
-        if not event_data_list:
-            logger.info("_send_events: No events to send, skipping POST")
-            return
-        
-        logger.warning(
-            f"⚠️ _send_events called with {len(event_data_list)} events - "
-            f"This may trigger infinite loop. Consider using internal methods instead."
-        )
-        
+        logger.info(f"_send_events {event_data_list}")
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
+            # event_data_json = json.dumps(event_data)
             await client.post(url=url, json=event_data_list)
 
-    async def _initiate_conversion_process_internal(
+    async def _get_recent_study_uids(
         self,
+        session: AsyncSession,
+        *,
+        limit: Optional[int] = None,
+        lookback_hours: Optional[int] = None,
+    ) -> List[str]:
+        """
+        Retrieve recently updated study_uids to constrain heavy status queries.
+
+        Args:
+            session: Active AsyncSession.
+            limit: Maximum number of study_uids to return.
+            lookback_hours: Optional lookback window for update_time filtering.
+        """
+
+        default_limit = int(os.getenv("STUDY_STATUS_RECENT_LIMIT", "200"))
+        limit = max(limit or default_limit, 1)
+        env_lookback = os.getenv("STUDY_STATUS_LOOKBACK_HOURS")
+        if lookback_hours is None and env_lookback:
+            with suppress(ValueError):
+                lookback_hours = int(env_lookback)
+
+        threshold_dt = (
+            datetime.utcnow() - timedelta(hours=lookback_hours)
+            if lookback_hours
+            else None
+        )
+
+        base_sql = """
+            SELECT
+                study_uid,
+                MAX(update_time) AS last_update
+            FROM dcop_event_bt
+            WHERE study_uid IS NOT NULL
+            GROUP BY study_uid
+        """
+
+        if threshold_dt is not None:
+            sql = text(
+                f"""
+                SELECT sub.study_uid
+                FROM ({base_sql}) AS sub
+                WHERE sub.last_update >= :threshold
+                ORDER BY sub.last_update DESC
+                LIMIT :limit
+                """
+            )
+            params = {"threshold": threshold_dt, "limit": limit}
+        else:
+            sql = text(
+                f"""
+                SELECT sub.study_uid
+                FROM ({base_sql}) AS sub
+                ORDER BY sub.last_update DESC
+                LIMIT :limit
+                """
+            )
+            params = {"limit": limit}
+
+        results = await session.execute(sql, params)
+        return [row.study_uid for row in results.all()]
+
+    async def _initiate_conversion_process(
+        self,
+        api_url: str,
         events: List[DCOPEventRequest],
         dicom_path: str,
         nifti_path: str,
     ) -> None:
         """
-        ✅ Good Taste 重構：直接啟動轉換流程，無 httpx POST
-        
+        Initiates the conversion process for each study.
+
         Args:
+            api_url: Base URL for the upload data API.
             events: List of DCOPEventRequest objects.
             dicom_path: Path for renamed DICOM files.
             nifti_path: Path for NIFTI output.
         """
+
         if not events:
-            return  # ✅ Early return
-        
-        logger.info(f"Internal: Initiating conversion for {len(events)} studies")
-        
-        # 準備要處理的請求列表
-        nifti_tool_requests = []
-        
+            return
+
+        url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
+        payloads = []
         for event in events:
             study_id = event.study_id
             output_dicom_path = pathlib.Path(os.path.join(dicom_path, study_id))
             output_nifti_path = pathlib.Path(nifti_path)
 
-            # Prepare conversion parameters
             task_params = Dicom2NiiParams(
                 sub_dir=None,
                 output_dicom_path=output_dicom_path,
@@ -366,10 +438,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 params_data=task_params.get_str_dict(),
                 result_data=None,
             )
-            nifti_tool_requests.append(nifti_tool_request)
-        
-        # ✅ Good Taste: 直接調用內部方法，無 httpx POST
-        await self.study_series_nifti_tool(nifti_tool_requests)
+            payloads.append(nifti_tool_request.model_dump())
+
+        async with httpx.AsyncClient(timeout=180) as client:
+            await asyncio.gather(
+                *[client.post(url=url, json=[payload]) for payload in payloads]
+            )
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
@@ -383,55 +457,68 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai import load_dotenv
 
         load_dotenv()
-        # session: AsyncSession = self.repository.session
-        for dcop in data:
-            match dcop.ope_no:
-                case DCOPStatus.STUDY_CONVERTING.value:
-                    async with self.session_manager.get_session() as session:
-                        # DICOM_TOOL
-                        conf_query = select(
-                            DCOPEventModel,
-                        ).where(
+        study_converting_events = list(
+            filter(
+                lambda dcop: dcop.ope_no == DCOPStatus.STUDY_CONVERTING.value,
+                data,
+            )
+        )
+
+        if study_converting_events:
+            async with self.session_manager.get_session() as session:
+                created_records = []
+                study_uids_to_process: set[str] = set()
+                for dcop in study_converting_events:
+                    conf_query = (
+                        select(DCOPEventModel)
+                        .where(
                             and_(
-                                *[
-                                    DCOPEventModel.study_id == dcop.study_id,
-                                    DCOPEventModel.study_uid.isnot(None),
-                                    DCOPEventModel.tool_id == "DICOM_TOOL",
-                                    DCOPEventModel.ope_no
-                                    == DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
-                                ]
+                                DCOPEventModel.study_id == dcop.study_id,
+                                DCOPEventModel.study_uid.isnot(None),
+                                DCOPEventModel.tool_id == "DICOM_TOOL",
+                                DCOPEventModel.ope_no
+                                == DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
                             )
                         )
-                        execute = await session.execute(conf_query)
-                        dcop_event = execute.first()[0]
-                        study_transfer_complete_data = (
-                            await DCOPEventModel.create_event_ope_no(
-                                tool_id=dcop.tool_id,
-                                study_uid=dcop_event.study_uid,
-                                series_uid=None,
-                                study_id=dcop.study_id,
-                                ope_no=dcop.ope_no,
-                                result_data=dcop.result_data,
-                                params_data=dcop.params_data,
-                                session=session,
-                            )
+                        .limit(1)
+                    )
+                    execute = await session.execute(conf_query)
+                    result = execute.first()
+                    if not result:
+                        logger.warning(
+                            "找不到 study_id=%s 的 SERIES_TRANSFER_COMPLETE 記錄，略過 STUDY_CONVERTING",
+                            dcop.study_id,
                         )
+                        continue
+                    dcop_event = result[0]
+                    study_transfer_complete_data = await DCOPEventModel.create_event_ope_no(
+                        tool_id=dcop.tool_id,
+                        study_uid=dcop_event.study_uid,
+                        series_uid=None,
+                        study_id=dcop.study_id,
+                        ope_no=dcop.ope_no,
+                        result_data=dcop.result_data,
+                        params_data=dcop.params_data,
+                        session=session,
+                    )
+                    session.add(study_transfer_complete_data)
+                    created_records.append(study_transfer_complete_data)
+                    study_uids_to_process.add(dcop_event.study_uid)
 
-                        session.add(study_transfer_complete_data)
-                        await session.commit()
-                        await session.refresh(study_transfer_complete_data)
-                        await self.nifti_tool_get_series_info(
-                            dcop_event.study_uid, session
-                        )
-                case DCOPStatus.SERIES_CONVERTING.value:
-                    pass
-                    # new_data_obj = await self.create(new_data, auto_commit=True)
+                if created_records:
+                    await session.commit()
+                    for record in created_records:
+                        await session.refresh(record)
+                    for study_uid in study_uids_to_process:
+                        await self.nifti_tool_get_series_info(study_uid, session)
 
-        # ✅ Good Taste: 直接調用檢查方法，無 httpx POST
-        logger.info("Internal: Triggering conversion complete check")
-        await self.check_study_series_conversion_complete()
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
+        async with httpx.AsyncClient(timeout=180) as client:
+            await client.post(url=url)
 
     async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
+        """查出待轉檔的 series，並推送 funboost 工作到 NIFTI_TOOL。"""
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
@@ -643,6 +730,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     @staticmethod
     def get_orthanc_study_uid_series_uid(instance_path_str: str):
+        """由單一 DICOM instance 解析 Orthanc 內的 study/series uid。"""
         instance_path = pathlib.Path(instance_path_str)
         UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
         # raw_dicom\ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30\10089413 GUO HSIOU HUA\21002010079 MRI Stroke Wall C C\MR 3D Ax SWAN\*.dcm
@@ -665,6 +753,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     @staticmethod
     def get_orthanc_series_uid(study_uid: str, series_dir_set: set):
+        """批次查詢 series 資訊並回傳 pandas DataFrame 以方便後續 mapping。"""
         UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
         client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
         series_sop_uid_list = []
@@ -694,6 +783,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return df2
 
     async def dicom_tool_get_series_info(self, data: List[DCOPEventModel]):
+        """在接獲 study 任務後掃描 series 並建立對應事件、推入轉檔任務列。"""
         from code_ai.task.task_dicom2nii import dicom_to_nii
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
@@ -718,9 +808,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     output_nifti_path=rename_nifti_path,
                 )
                 flage = True
-                for series_uid in series_uid_list:
-                    new_data_list = []
-                    async with self.session_manager.get_session() as session:
+                async with self.session_manager.get_session() as session:
+                    series_event_models = []
+                    for series_uid in series_uid_list:
                         try:
                             series_new_data = await DCOPEventModel.create_event(
                                 study_uid=study_uid,
@@ -728,29 +818,36 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                 status=DCOPStatus.SERIES_NEW.name,
                                 session=session,
                             )
-                            series_transferring_data = (
-                                await DCOPEventModel.create_event(
-                                    study_uid=study_uid,
-                                    series_uid=series_uid,
-                                    status=DCOPStatus.SERIES_TRANSFERRING.name,
-                                    session=session,
-                                )
+                            series_transferring_data = await DCOPEventModel.create_event(
+                                study_uid=study_uid,
+                                series_uid=series_uid,
+                                status=DCOPStatus.SERIES_TRANSFERRING.name,
+                                session=session,
                             )
                             series_transferring_data.params_data = (
                                 task_params.get_str_dict()
                             )
-                            new_data_list.append(series_new_data)
-                            new_data_list.append(series_transferring_data)
-
-                            session.add_all(new_data_list)
-                            await session.commit()
-                            logger.info(f"dicom_tool_get_series_info {new_data_list}")
-                        except:
+                            series_event_models.extend(
+                                [series_new_data, series_transferring_data]
+                            )
+                        except Exception:
                             flage = False
-                            await session.rollback()
-                            logger.error(traceback.print_exc())
+                            logger.error(traceback.format_exc())
+                            break
+                    if flage and series_event_models:
+                        session.add_all(series_event_models)
+                        await session.commit()
+                        for model in series_event_models:
+                            await session.refresh(model)
+                        logger.info(
+                            "dicom_tool_get_series_info 新增 %s 筆 series 事件 (study=%s)",
+                            len(series_event_models),
+                            study_uid,
+                        )
+                    else:
+                        await session.rollback()
                 if flage:
-                    task = dicom_to_nii.push(task_params.get_str_dict())
+                    dicom_to_nii.push(task_params.get_str_dict())
         return None
 
     async def check_study_series_conversion_complete(
@@ -795,23 +892,28 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         )
         # Process events from the provided data list
         completed_study_events = await self.identify_completed_studies(study_events)
-        
-        # ✅ Early return - 無完成的 study
-        if not completed_study_events:
-            logger.info("No completed studies found for inference")
-            return None
-        
-        logger.info(f"Found {len(completed_study_events)} completed studies, queuing inference")
-        
-        # ✅ Good Taste: 直接推送推論任務，無 httpx POST
-        await self._queue_inference_tasks(
-            completed_study_events,
-            upload_data_api_url,
-            rename_dicom_path,
-            rename_nifti_path,
-            task_pipeline_inference,
-        )
-        
+        # Process completed studies and queue them for inference
+        if completed_study_events:
+            study_events_filter = []
+            for completed_study in completed_study_events:
+                study_event = list(
+                    filter(
+                        lambda x: x.study_uid == completed_study.study_uid, study_events
+                    )
+                )
+                study_events_filter.extend(study_event)
+            study_events_filter = list(
+                map(lambda x: x.model_dump(), study_events_filter)
+            )
+            await self._send_events(upload_data_api_url, study_events_filter)
+            # Queue inference tasks for completed studies
+            await self._queue_inference_tasks(
+                completed_study_events,
+                upload_data_api_url,
+                rename_dicom_path,
+                rename_nifti_path,
+                task_pipeline_inference,
+            )
         return None
 
     async def query_studies_pending_completion(self, study_uid: Optional[str] = None):
@@ -825,14 +927,40 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # --order by sos.create_time desc
         async with self.session_manager.get_session() as session:
             if study_uid is None:
-                sql = text(
-                    "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  FROM public.get_stydy_series_ope_no_status(:status) as sos , "
-                    "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb "
-                    "where  sos.study_id = debb.study_id and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])"
+                completion_limit = int(
+                    os.getenv(
+                        "STUDY_COMPLETION_RECENT_LIMIT",
+                        os.getenv("STUDY_STATUS_RECENT_LIMIT", "200"),
+                    )
                 )
-                params = {"status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value}
+                study_uids = await self._get_recent_study_uids(
+                    session, limit=completion_limit
+                )
+                if study_uids:
+                    sql = (
+                        text(
+                            "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  "
+                            "FROM public.get_stydy_series_ope_no_status(:status) as sos , "
+                            "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb "
+                            "WHERE sos.study_id = debb.study_id "
+                            "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) "
+                            "AND sos.study_uid IN :study_uids"
+                        ).bindparams(bindparam("study_uids", expanding=True))
+                    )
+                    params = {
+                        "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
+                        "study_uids": tuple(study_uids),
+                    }
+                else:
+                    sql = text(
+                        "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  "
+                        "FROM public.get_stydy_series_ope_no_status(:status) as sos , "
+                        "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb "
+                        "WHERE sos.study_id = debb.study_id "
+                        "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])"
+                    )
+                    params = {"status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value}
             else:
-                # --
                 sql = text(
                     "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data FROM public.get_stydy_series_ope_no_status(:status) as sos , "
                     "(SELECT deb.study_id, max(deb.ope_no::numeric)as ope_no from dcop_event_bt deb where deb.study_uid= :study_uid group by study_id  )  as debb "
@@ -840,7 +968,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     "and sos.study_id = debb.study_id "
                     "and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) "
                 )
-                # sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {
                     "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                     "study_uid": study_uid,
@@ -921,12 +1048,21 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """Queue inference tasks for completed studies and send related events."""
         redis_backend = FastAPICache.get_backend()
         redis_client = redis_backend.redis
+        events_to_dispatch: List[DCOPEventRequest] = []
 
         for dcop_event in study_events:
             dicom_study_path = rename_dicom_path.joinpath(dcop_event.study_id)
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
 
-            # Create STUDY_INFERENCE_READY event
+            inference_task_key = (
+                f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"
+            )
+            if await redis_client.get(inference_task_key):
+                logger.info(
+                    f"Skipping duplicate inference task for study_id: {dcop_event.study_id}. Already in cache."
+                )
+                continue  # Skip this study_event and move to the next one
+
             dcop_event_inference_ready = DCOPEventRequest(
                 study_uid=dcop_event.study_uid,
                 series_uid=None,
@@ -940,14 +1076,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     "study_id": dcop_event.study_id,
                 },
             )
-            inference_task_key = (
-                f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"
-            )
-            if await redis_client.get(inference_task_key):
-                logger.info(
-                    f"Skipping duplicate inference task for study_id: {dcop_event.study_id}. Already in cache."
-                )
-                continue  # Skip this study_event and move to the next one
 
             # Push to inference task pipeline
             task_pipeline_result: AsyncResult = task_pipeline_inference.push(
@@ -976,13 +1104,14 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 },
             )
 
-            # Send inference events
+            events_to_dispatch.extend(
+                [dcop_event_inference_ready, dcop_event_inference_queued]
+            )
+
+        if events_to_dispatch:
             await self._send_events(
                 upload_data_api_url,
-                [
-                    dcop_event_inference_ready.model_dump(),
-                    dcop_event_inference_queued.model_dump(),
-                ],
+                [event.model_dump() for event in events_to_dispatch],
             )
 
     def _group_series_by_study(self, events):
@@ -1006,63 +1135,56 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def identify_completed_studies(
         self, study_events_list: List[DCOPEventRequest]
     ):
-        """
-        ✅ Good Taste: 修復原有 bug，清晰的計數邏輯
-        Identify studies with all series converted and create completion events.
-        """
+        """Identify studies with all series converted and create completion events."""
         if not study_events_list:
-            return []  # ✅ Early return
-        
-        completed_study_events = []
-        
+            return []
+
+        study_uids = {
+            event.study_uid for event in study_events_list if event.study_uid is not None
+        }
+        if not study_uids:
+            return []
+
         async with self.session_manager.get_session() as session:
-            for study_events in study_events_list:
-                # ✅ 每個 study 重置計數
-                done_count = 0
-                undone = 0
-                
-                sql = text(
-                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid"
-                )
-                params = {
-                    "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
-                    "study_uid": study_events.study_uid,
-                }
-                execute = await session.execute(sql, params)
-                results = execute.all()
-                
-                # ✅ Early return - 無 series 數據
-                if not results:
-                    logger.warning(f"No series data for study {study_events.study_uid}")
-                    continue
-                
-                # 計數完成的 series
-                for result in results:
-                    if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
-                        done_count += 1
-                    elif DCOPStatus.SERIES_CONVERSION_SKIP.value in result.ope_no:
-                        done_count += 1
-                    else:
-                        undone += 1
-                
-                # ✅ 修復 bug: 添加 study_events 而非 result
-                if done_count == len(results) and undone == 0:
-                    logger.info(
-                        f"Study {study_events.study_uid} completed: "
-                        f"{done_count}/{len(results)} series done"
-                    )
-                    completed_study_events.append(study_events)
-                else:
-                    logger.info(
-                        f"Study {study_events.study_uid} incomplete: "
-                        f"{done_count}/{len(results)} done, {undone} undone"
-                    )
-        
+            sql = (
+                text(
+                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
+                    "WHERE study_uid IN :study_uids"
+                ).bindparams(bindparam("study_uids", expanding=True))
+            )
+            params = {
+                "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
+                "study_uids": tuple(study_uids),
+            }
+            execute = await session.execute(sql, params)
+            results = execute.all()
+
+        grouped_results: Dict[str, List[Any]] = defaultdict(list)
+        for result in results:
+            if hasattr(result, "_mapping"):
+                study_uid = result._mapping.get("study_uid")
+            else:
+                study_uid = result[0]
+            if study_uid:
+                grouped_results[study_uid].append(result)
+
+        completed_study_events = []
+        for study_uid, rows in grouped_results.items():
+            if not rows:
+                continue
+            if all(
+                DCOPStatus.SERIES_CONVERSION_COMPLETE.value in row.ope_no
+                or DCOPStatus.SERIES_CONVERSION_SKIP.value in row.ope_no
+                for row in rows
+            ):
+                completed_study_events.append(rows[0])
+
         return completed_study_events
 
     async def get_stydy_series_ope_no_status(
         self, study_uid: OrthancID, ope_no: OpeNo, limit: int, offset: int
     ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+        """查詢指定 ope_no 下，每個 series 的狀態分佈。"""
         async with self.session_manager.get_session() as session:
             if study_uid is None:
                 sql = text(
@@ -1103,6 +1225,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def get_stydy_ope_no_status(
         self, study_uid: OrthancID, ope_no: OpeNo, limit: int, offset: int
     ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+        """查詢 study 維度的 ope_no 狀態，支援分頁。"""
         async with self.session_manager.get_session() as session:
             if study_uid is None:
                 sql = text(
@@ -1143,6 +1266,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def get_check_study_series_conversion_complete(
         self, study_uid: Optional[str] = None
     ) -> Dict[str, Any]:
+        """提供查詢介面，檢視目前未完成/已完成轉檔的 study 清單。"""
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))

@@ -1,9 +1,19 @@
+"""FastAPI 路由：處理 Study/Series 同步、NIFTI 轉檔、快取工具等 API。"""
+
 # app/sync/routers.py
 import logging
 from typing import Annotated, List, Optional
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
-from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
+from fastapi import (
+    APIRouter,
+    Depends,
+    Response,
+    BackgroundTasks,
+    Body,
+    Query,
+    HTTPException,
+)
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (
     service,
@@ -40,6 +50,7 @@ router = APIRouter()
     response_description="",
 )
 async def get_study_uuid() -> Response:
+    """健康檢查端點，確認 DICOM sync service 仍活著。"""
     return Response("DICOM Service is running")
 
 
@@ -57,14 +68,25 @@ async def post_study_uuid(
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
-    # logger.info(f'1000000000 request {request}')
-    # return request
+    """輸入 study uid 後即刻排程後台任務並回傳已建立的事件列表。"""
+    study_ids = request.resolved_ids()
+    if not study_ids:
+        raise HTTPException(status_code=422, detail="缺少 study ids")
 
-    result_list = await dcop_event_service.add_study_new(data_list=request.ids)
-    logger.info(f"1000000000 result_list {result_list}")
+    result_list = await dcop_event_service.schedule_new_studies(study_ids)
+    logger.info("post_study_uuid scheduled=%s", len(result_list))
+
     background_tasks.add_task(
         dcop_event_service.dicom_tool_get_series_info, result_list
     )
+
+    link_target = request.study_uid or (study_ids[0] if len(study_ids) == 1 else None)
+    if request.prev_study_uid and link_target:
+        background_tasks.add_task(
+            dcop_event_service.link_prev_study,
+            link_target,
+            request.prev_study_uid,
+        )
     return result_list
 
 
@@ -94,6 +116,7 @@ async def get_ope_no(
         ),
     ],
 ) -> OffsetPagination[DCOPEventModel]:
+    """支援搜尋/分頁的 ope_no 查詢，便於人工追蹤任務狀態。"""
     logger.info(
         f"filters {filters}",
     )
@@ -116,6 +139,7 @@ async def post_ope_no(
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
+    """批次寫入 ope_no 事件並交給背景任務進行後續轉檔/檢查。"""
     background_tasks.add_task(dcop_event_service.post_ope_no_task, data)
     return Response("post_ope_no")
 
@@ -134,6 +158,7 @@ async def post_check_study_series_transfer_complete(
     ],
     dcop_event_list: Optional[List[DCOPEventRequest]] = Body(default=None),
 ) -> Response:
+    """觸發系列轉檔前檢查；可指定 payload 或讓後台自行掃描。"""
     if dcop_event_list is None:
         background_tasks.add_task(
             dcop_event_service.check_study_series_transfer_complete
@@ -159,6 +184,7 @@ async def post_study_series_nifti_tool(
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
+    """接受 NIFTI_TOOL 回報並更新 study/series 相關狀態。"""
     background_tasks.add_task(dcop_event_service.study_series_nifti_tool, data_list)
     return Response("post_study_nifti_tool")
 
@@ -177,6 +203,7 @@ async def post_check_study_series_conversion_complete(
     background_tasks: BackgroundTasks,
     dcop_event_list: Optional[List[DCOPEventRequest]] = Body(default=None),
 ) -> Response:
+    """確認整體轉檔是否完成，若已完成則排程推論。"""
     if dcop_event_list is None:
         background_tasks.add_task(
             dcop_event_service.check_study_series_conversion_complete
@@ -202,6 +229,7 @@ async def post_check_study_series_conversion_complete(
     background_tasks: BackgroundTasks,
     study_id_list: Optional[List[str]] = Body(default=None),
 ) -> Response:
+    """專供 rename study id 使用者查核轉檔狀態。"""
     if study_id_list is None:
         return Response("post_check_study_series_conversion_complete")
     else:
@@ -292,6 +320,7 @@ async def get_events_complex(
 
 @router.get("/cache", status_code=200, summary="cache")
 async def get_events_complex():
+    """列出推論任務快取鍵，協助偵錯/觀察 queue 狀態。"""
     redis_backend = FastAPICache.get_backend()
     redis_client = redis_backend.redis
     cached_keys = await redis_client.keys("inference_task:*")
@@ -318,7 +347,8 @@ async def get_events_complex():
 @router.delete("/cache", status_code=200, summary="cache")
 async def delete_events_complex(
     study_id: Optional[str] = Query(None), study_uid: Optional[OrthancID] = Query(None)
-):
+) -> dict:
+    """從 redis 中刪除指定 study_id 或 study_uid 的快取。"""
     redis_backend = FastAPICache.get_backend()
     redis_client = redis_backend.redis
 
@@ -386,7 +416,8 @@ async def get_study_series_ope_no_status(
     offset: int = Query(0, ge=0),
     study_uid: Optional[OrthancID] = Query(None),
     ope_no: OpeNo = Query(...),
-):
+    ):
+    """查詢單一 study 下 series 的 ope_no 狀態分頁資料。"""
     result = await dcop_event_service.get_stydy_series_ope_no_status(
         study_uid=study_uid,
         ope_no=ope_no,
@@ -408,6 +439,7 @@ async def get_stydy_ope_no_status(
     limit: int = Query(20, ge=1),
     offset: int = Query(0, ge=0),
 ) -> OffsetPagination[StydySeriesOpeNoStatus]:
+    """查詢 study 維度的 ope_no 狀態並支援 limit/offset。"""
     result = await dcop_event_service.get_stydy_ope_no_status(
         study_uid=study_uid,
         ope_no=ope_no,
@@ -428,6 +460,7 @@ async def get_check_study_series_conversion_complete(
     ],
     study_uid: Optional[str] = Query(None),
 ):
+    """查詢已完成轉檔的 study 列表，方便整合 UI 顯示。"""
     result = await dcop_event_service.get_check_study_series_conversion_complete(
         study_uid=study_uid
     )
