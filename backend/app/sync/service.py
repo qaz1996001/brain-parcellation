@@ -77,12 +77,24 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return url
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
+        """
+        ✅ Good Taste 重構：消除 httpx 自呼叫，改用內部直接調用
+        外部 API → 這個方法 → 內部直接調用 → 無循環
+        """
         from code_ai import load_dotenv
 
         load_dotenv()
-        # 按 URL 分組 dcop_event，確保每個 URL 只發送對應的 events
-        check_url_events_map = {}  # {url: [dcop_event_list]}
-        # async with AsyncSession(self.repository.session.bind) as session:
+        
+        # ✅ Early return - 空列表直接返回
+        if not data:
+            logger.info("post_ope_no_task: No events to process")
+            return
+        
+        # 按 ope_no 分組事件
+        transfer_complete_events = []
+        conversion_complete_events = []
+        
+        # ✅ 批次寫入 DB
         async with self.session_manager.get_session() as session:
             for dcop_event in data:
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
@@ -98,28 +110,56 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 session.add(new_data_obj)
                 await session.commit()
                 await session.refresh(new_data_obj)
-
-                # new_data_obj = await self.create(data=new_data, auto_commit=True, auto_refresh=True)
+                
+                # ✅ 根據 ope_no 分組，準備後續處理
                 match new_data_obj.ope_no:
                     case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
+                        transfer_complete_events.append(dcop_event)
                     case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case _:
-                        url = None
-                if url is not None:
-                    # 將對應的 dcop_event 加入到該 URL 的事件列表中
-                    if url not in check_url_events_map:
-                        check_url_events_map[url] = []
-                    check_url_events_map[url].append(dcop_event)
-        async with httpx.AsyncClient(timeout=180) as client:
-            for url, dcop_event_list in check_url_events_map.items():
-                # 發送 POST 請求時傳入對應的 dcop_event_list，確保只處理指定的 study
-                dcop_event_dump_list = [
-                    dcop_event.model_dump() for dcop_event in dcop_event_list
-                ]
-                rep = await client.post(url, json=dcop_event_dump_list)
+                        conversion_complete_events.append(dcop_event)
+        
+        # ✅ Good Taste: 直接調用內部方法，而非 httpx POST
+        if transfer_complete_events:
+            logger.info(f"Processing {len(transfer_complete_events)} transfer complete events internally")
+            await self._process_transfer_complete_internal(transfer_complete_events)
+        
+        if conversion_complete_events:
+            logger.info(f"Processing {len(conversion_complete_events)} conversion complete events internally")
+            await self._process_conversion_complete_internal(conversion_complete_events)
+        
         return
+
+    async def _process_transfer_complete_internal(
+        self, 
+        events: List[DCOPEventRequest]
+    ) -> None:
+        """
+        ✅ Good Taste: 內部處理方法，無 HTTP 呼叫
+        對應原本 POST /sync/study/transfer/complete 的邏輯
+        """
+        if not events:
+            return  # ✅ Early return
+        
+        logger.info(f"Internal: Processing {len(events)} transfer complete events")
+        
+        # ✅ 直接調用檢查邏輯，無 httpx POST
+        await self.check_study_series_transfer_complete(events)
+    
+    async def _process_conversion_complete_internal(
+        self, 
+        events: List[DCOPEventRequest]
+    ) -> None:
+        """
+        ✅ Good Taste: 內部處理方法，無 HTTP 呼叫
+        對應原本 POST /sync/study/conversion/complete/by-uid 的邏輯
+        """
+        if not events:
+            return  # ✅ Early return
+        
+        logger.info(f"Internal: Processing {len(events)} conversion complete events")
+        
+        # ✅ 直接調用檢查邏輯，無 httpx POST
+        await self.check_study_series_conversion_complete(events)
 
     async def check_study_series_transfer_complete(
         self, data: Optional[List[DCOPEventRequest]] = None
@@ -148,7 +188,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             f"check_study_series_transfer_complete data {data}",
         )
         # Get configuration from environment
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
 
@@ -158,25 +197,22 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 dcop_event_list,
                 dcop_event_dump_list,
             ) = await self._get_studies_ready_for_transfer()
-            for dcop_event_dump in dcop_event_dump_list:
-                dcop_event_dump["params_data"]
         else:
             dcop_event_list = [
                 DCOPEventRequest.model_validate(event, strict=False) for event in data
             ]
-            dcop_event_dump_list = [
-                dcop_event.model_dump() for dcop_event in dcop_event_list
-            ]
+        
+        # ✅ Early return - 無事件需要處理
+        if not dcop_event_list:
+            logger.info("No studies ready for transfer")
+            return []
 
-        # Process eligible studies for conversion
-        if dcop_event_list:
-            await self._send_events(upload_data_api_url, dcop_event_dump_list)
-            await self._initiate_conversion_process(
-                upload_data_api_url,
-                dcop_event_list,
-                path_rename_dicom,
-                path_rename_nifti,
-            )
+        # ✅ Good Taste: 直接處理轉換流程，無 httpx POST
+        await self._initiate_conversion_process_internal(
+            dcop_event_list,
+            path_rename_dicom,
+            path_rename_nifti,
+        )
 
         return dcop_event_list
 
@@ -262,37 +298,55 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def _send_events(self, api_url: str, event_data) -> None:
         """
-        Sends study transfer complete events to the API.
-
+        ⚠️ DEPRECATED - 僅保留用於向後相容
+        
+        此方法會觸發 httpx POST 到 /sync/ope_no，可能導致無限循環
+        內部邏輯已重構為直接方法調用，不應再使用此方法
+        
+        保留此方法僅為防止舊代碼引用，未來應移除
+        
         Args:
             api_url: Base URL for the upload data API.
             event_data: List of serialized DCOPEventRequest objects.
         """
         event_data_list = list(filter(lambda x: x is not None, event_data))
-        logger.info(f"_send_events {event_data_list}")
+        
+        # ✅ Early return - 空列表不執行 POST
+        if not event_data_list:
+            logger.info("_send_events: No events to send, skipping POST")
+            return
+        
+        logger.warning(
+            f"⚠️ _send_events called with {len(event_data_list)} events - "
+            f"This may trigger infinite loop. Consider using internal methods instead."
+        )
+        
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
-            # event_data_json = json.dumps(event_data)
             await client.post(url=url, json=event_data_list)
 
-    async def _initiate_conversion_process(
+    async def _initiate_conversion_process_internal(
         self,
-        api_url: str,
         events: List[DCOPEventRequest],
         dicom_path: str,
         nifti_path: str,
     ) -> None:
         """
-        Initiates the conversion process for each study.
-
+        ✅ Good Taste 重構：直接啟動轉換流程，無 httpx POST
+        
         Args:
-            api_url: Base URL for the upload data API.
             events: List of DCOPEventRequest objects.
             dicom_path: Path for renamed DICOM files.
             nifti_path: Path for NIFTI output.
         """
-
-        url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
+        if not events:
+            return  # ✅ Early return
+        
+        logger.info(f"Internal: Initiating conversion for {len(events)} studies")
+        
+        # 準備要處理的請求列表
+        nifti_tool_requests = []
+        
         for event in events:
             study_id = event.study_id
             output_dicom_path = pathlib.Path(os.path.join(dicom_path, study_id))
@@ -305,18 +359,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 output_nifti_path=output_nifti_path,
             )
 
-            # Create and send the conversion request
-            async with httpx.AsyncClient(timeout=180) as client:
-                nifti_tool_request = DCOPEventNIFTITOOLRequest(
-                    ope_no=DCOPStatus.STUDY_CONVERTING.value,
-                    study_id=study_id,
-                    tool_id="NIFTI_TOOL",
-                    params_data=task_params.get_str_dict(),
-                    result_data=None,
-                )
-
-                request_data = json.dumps([nifti_tool_request.model_dump()])
-                await client.post(url=url, data=request_data)
+            nifti_tool_request = DCOPEventNIFTITOOLRequest(
+                ope_no=DCOPStatus.STUDY_CONVERTING.value,
+                study_id=study_id,
+                tool_id="NIFTI_TOOL",
+                params_data=task_params.get_str_dict(),
+                result_data=None,
+            )
+            nifti_tool_requests.append(nifti_tool_request)
+        
+        # ✅ Good Taste: 直接調用內部方法，無 httpx POST
+        await self.study_series_nifti_tool(nifti_tool_requests)
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
@@ -374,10 +427,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
 
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
-        async with httpx.AsyncClient(timeout=180) as client:
-            await client.post(url=url)
+        # ✅ Good Taste: 直接調用檢查方法，無 httpx POST
+        logger.info("Internal: Triggering conversion complete check")
+        await self.check_study_series_conversion_complete()
 
     async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
@@ -743,28 +795,23 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         )
         # Process events from the provided data list
         completed_study_events = await self.identify_completed_studies(study_events)
-        # Process completed studies and queue them for inference
-        if completed_study_events:
-            study_events_filter = []
-            for completed_study in completed_study_events:
-                study_event = list(
-                    filter(
-                        lambda x: x.study_uid == completed_study.study_uid, study_events
-                    )
-                )
-                study_events_filter.extend(study_event)
-            study_events_filter = list(
-                map(lambda x: x.model_dump(), study_events_filter)
-            )
-            await self._send_events(upload_data_api_url, study_events_filter)
-            # Queue inference tasks for completed studies
-            await self._queue_inference_tasks(
-                completed_study_events,
-                upload_data_api_url,
-                rename_dicom_path,
-                rename_nifti_path,
-                task_pipeline_inference,
-            )
+        
+        # ✅ Early return - 無完成的 study
+        if not completed_study_events:
+            logger.info("No completed studies found for inference")
+            return None
+        
+        logger.info(f"Found {len(completed_study_events)} completed studies, queuing inference")
+        
+        # ✅ Good Taste: 直接推送推論任務，無 httpx POST
+        await self._queue_inference_tasks(
+            completed_study_events,
+            upload_data_api_url,
+            rename_dicom_path,
+            rename_nifti_path,
+            task_pipeline_inference,
+        )
+        
         return None
 
     async def query_studies_pending_completion(self, study_uid: Optional[str] = None):
@@ -959,13 +1006,21 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def identify_completed_studies(
         self, study_events_list: List[DCOPEventRequest]
     ):
-        """Identify studies with all series converted and create completion events."""
+        """
+        ✅ Good Taste: 修復原有 bug，清晰的計數邏輯
+        Identify studies with all series converted and create completion events.
+        """
+        if not study_events_list:
+            return []  # ✅ Early return
+        
         completed_study_events = []
-        # Query to get all series for this study
+        
         async with self.session_manager.get_session() as session:
-            done_count = 0
-            undone = 0
             for study_events in study_events_list:
+                # ✅ 每個 study 重置計數
+                done_count = 0
+                undone = 0
+                
                 sql = text(
                     "SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid"
                 )
@@ -975,6 +1030,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 }
                 execute = await session.execute(sql, params)
                 results = execute.all()
+                
+                # ✅ Early return - 無 series 數據
+                if not results:
+                    logger.warning(f"No series data for study {study_events.study_uid}")
+                    continue
+                
+                # 計數完成的 series
                 for result in results:
                     if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
                         done_count += 1
@@ -982,8 +1044,20 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         done_count += 1
                     else:
                         undone += 1
-                if done_count == len(results):
-                    completed_study_events.append(result)
+                
+                # ✅ 修復 bug: 添加 study_events 而非 result
+                if done_count == len(results) and undone == 0:
+                    logger.info(
+                        f"Study {study_events.study_uid} completed: "
+                        f"{done_count}/{len(results)} series done"
+                    )
+                    completed_study_events.append(study_events)
+                else:
+                    logger.info(
+                        f"Study {study_events.study_uid} incomplete: "
+                        f"{done_count}/{len(results)} done, {undone} undone"
+                    )
+        
         return completed_study_events
 
     async def get_stydy_series_ope_no_status(
