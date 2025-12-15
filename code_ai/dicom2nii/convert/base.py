@@ -5,13 +5,22 @@ from abc import ABCMeta, abstractmethod, ABC
 from typing import Tuple, Union, List
 import numpy as np
 from pydicom import FileDataset
-from .config import BaseEnum, NullEnum, MRSeriesRenameEnum, ModalityEnum, MRAcquisitionTypeEnum, ImageOrientationEnum, \
-    ContrastEnum
+from .config import (
+    BaseEnum,
+    NullEnum,
+    MRSeriesRenameEnum,
+    ModalityEnum,
+    MRAcquisitionTypeEnum,
+    ImageOrientationEnum,
+    ContrastEnum,
+)
 
 
 class ProcessingStrategy(metaclass=ABCMeta):
     @abstractmethod
-    def process(self, dicom_ds: FileDataset, input_path: pathlib.Path, output_path: pathlib.Path):
+    def process(
+        self, dicom_ds: FileDataset, input_path: pathlib.Path, output_path: pathlib.Path
+    ):
         pass
 
     def __call__(self, *args, **kwargs):
@@ -76,7 +85,9 @@ class ModalityProcessingStrategy(SeriesProcessingStrategy):
 
     modality_list = ModalityEnum.to_list()
 
-    def process(self, dicom_ds: FileDataset) -> Union[Enum, BaseEnum, ImageOrientationEnum]:
+    def process(
+        self, dicom_ds: FileDataset
+    ) -> Union[Enum, BaseEnum, ImageOrientationEnum]:
         """
         Process the DICOM dataset based on modality.
 
@@ -174,15 +185,21 @@ class ImageOrientationProcessingStrategy(SeriesProcessingStrategy):
             index_sort = np.argsort(image_orientation_abs)
             return_image_orientation = NullEnum.NULL
             # Determine the plane view based on the sorted indices
-            if ((index_sort[-1] == 0) and (index_sort[-2] == 5)) or ((index_sort[-1] == 5) and (index_sort[-2] == 0)):
-                return_image_orientation =  ImageOrientationEnum.COR
-            if ((index_sort[-1] == 1) and (index_sort[-2] == 5)) or ((index_sort[-1] == 5) and (index_sort[-2] == 1)):
-                return_image_orientation =  ImageOrientationEnum.SAG
-            if ((index_sort[-1] == 0) and (index_sort[-2] == 4)) or ((index_sort[-1] == 4) and (index_sort[-2] == 0)):
-                return_image_orientation =  ImageOrientationEnum.AXI
+            if ((index_sort[-1] == 0) and (index_sort[-2] == 5)) or (
+                (index_sort[-1] == 5) and (index_sort[-2] == 0)
+            ):
+                return_image_orientation = ImageOrientationEnum.COR
+            if ((index_sort[-1] == 1) and (index_sort[-2] == 5)) or (
+                (index_sort[-1] == 5) and (index_sort[-2] == 1)
+            ):
+                return_image_orientation = ImageOrientationEnum.SAG
+            if ((index_sort[-1] == 0) and (index_sort[-2] == 4)) or (
+                (index_sort[-1] == 4) and (index_sort[-2] == 0)
+            ):
+                return_image_orientation = ImageOrientationEnum.AXI
 
             image_type = dicom_ds.get((0x08, 0x08))
-            if image_type[2] == 'REFORMATTED':
+            if image_type[2] == "REFORMATTED":
                 if return_image_orientation == ImageOrientationEnum.AXI:
                     return_image_orientation = ImageOrientationEnum.AXIr
                 elif return_image_orientation == ImageOrientationEnum.SAG:
@@ -209,8 +226,10 @@ class ContrastProcessingStrategy(SeriesProcessingStrategy):
         Process the DICOM dataset based on modality and contrast and return the result.
     """
 
-    modality_processing_strategy: ModalityProcessingStrategy = ModalityProcessingStrategy()
-    pattern = re.compile(r'(\+C|C\+)', re.IGNORECASE)
+    modality_processing_strategy: ModalityProcessingStrategy = (
+        ModalityProcessingStrategy()
+    )
+    pattern = re.compile(r"(\+C|C\+)", re.IGNORECASE)
 
     def process(self, dicom_ds: FileDataset) -> Union[BaseEnum, ContrastEnum]:
         """
@@ -266,7 +285,9 @@ class MRAcquisitionTypeProcessingStrategy(SeriesProcessingStrategy):
         Process the DICOM dataset based on MR acquisition type and return the result.
     """
 
-    mr_acquisition_type_list: List[MRAcquisitionTypeEnum] = MRAcquisitionTypeEnum.to_list()
+    mr_acquisition_type_list: List[MRAcquisitionTypeEnum] = (
+        MRAcquisitionTypeEnum.to_list()
+    )
 
     def process(self, dicom_ds: FileDataset) -> Union[BaseEnum, ImageOrientationEnum]:
         """
@@ -318,9 +339,15 @@ class MRRenameSeriesProcessingStrategy(SeriesProcessingStrategy, ABC):
     """
 
     modality: ModalityEnum = ModalityEnum.MR
-    mr_acquisition_type: Tuple[Union[MRAcquisitionTypeEnum, NullEnum]] = tuple(MRAcquisitionTypeEnum.to_list())
-    modality_processing_strategy: ModalityProcessingStrategy = ModalityProcessingStrategy()
-    mr_acquisition_type_processing_strategy: MRAcquisitionTypeProcessingStrategy = MRAcquisitionTypeProcessingStrategy()
+    mr_acquisition_type: Tuple[Union[MRAcquisitionTypeEnum, NullEnum]] = tuple(
+        MRAcquisitionTypeEnum.to_list()
+    )
+    modality_processing_strategy: ModalityProcessingStrategy = (
+        ModalityProcessingStrategy()
+    )
+    mr_acquisition_type_processing_strategy: MRAcquisitionTypeProcessingStrategy = (
+        MRAcquisitionTypeProcessingStrategy()
+    )
 
     @abstractmethod
     def process(self, dicom_ds: FileDataset) -> Union[MRSeriesRenameEnum, NullEnum]:
@@ -342,7 +369,9 @@ class MRRenameSeriesProcessingStrategy(SeriesProcessingStrategy, ABC):
 
 class CTRenameSeriesProcessingStrategy(SeriesProcessingStrategy, ABC):
     modality: ModalityEnum = ModalityEnum.CT
-    modality_processing_strategy: ModalityProcessingStrategy = ModalityProcessingStrategy()
+    modality_processing_strategy: ModalityProcessingStrategy = (
+        ModalityProcessingStrategy()
+    )
 
     @abstractmethod
     def process(self, dicom_ds: FileDataset) -> Union[MRSeriesRenameEnum, NullEnum]:

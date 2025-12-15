@@ -20,57 +20,63 @@ This script must:
    classes that may be used by other scripts.
 """
 
-
 from __future__ import print_function, division, unicode_literals
 
-import functools      as ft
-import os.path        as op
-import subprocess     as sp
-import textwrap       as tw
-import                   argparse
-import                   collections
-import                   contextlib
-import                   datetime
-import                   fnmatch
-import                   getpass
-import                   hashlib
-import                   json
-import                   locale
-import                   logging
-import                   os
-import                   platform
-import                   pwd
-import                   readline
-import                   re
-import                   shlex
-import                   shutil
-import                   ssl
-import                   sys
-import                   tarfile
-import                   tempfile
-import                   threading
-import                   time
-import                   traceback
+import functools as ft
+import os.path as op
+import subprocess as sp
+import textwrap as tw
+import argparse
+import collections
+import contextlib
+import datetime
+import fnmatch
+import getpass
+import hashlib
+import json
+import locale
+import logging
+import os
+import platform
+import pwd
+import re
+import shlex
+import shutil
+import ssl
+import sys
+import tempfile
+import threading
+import time
+import traceback
 
 try:
     import urllib.request as urlrequest
 except ImportError:
     import urllib
     import urllib2 as urlrequest
+
     urlrequest.pathname2url = urllib.pathname2url
 
 
-try:                import urllib.parse as urlparse
-except ImportError: import                 urlparse
+try:
+    import urllib.parse as urlparse
+except ImportError:
+    import urlparse
 
-try:                import queue
-except ImportError: import Queue as queue
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
-try:                from html.parser import HTMLParser
-except ImportError: from HTMLParser  import HTMLParser
+try:
+    from html.parser import HTMLParser
+except ImportError:
+    from HTMLParser import HTMLParser
 
-try:                from http.cookiejar import CookieJar
-except ImportError: from cookielib      import CookieJar
+try:
+    from http.cookiejar import CookieJar
+except ImportError:
+    from cookielib import CookieJar
 
 
 PYVER = sys.version_info[:2]
@@ -80,25 +86,26 @@ log = logging.getLogger(__name__)
 
 
 # this sometimes gets set to fslinstaller.pyc, so rstrip c
-__absfile__ = op.abspath(__file__).rstrip('c')
+__absfile__ = op.abspath(__file__).rstrip("c")
 
 
-__version__ = '3.16.8'
+__version__ = "3.16.8"
 """Installer script version number. This must be updated
 whenever a new version of the installer script is released.
 """
 
 
-DEFAULT_INSTALLATION_DIRECTORY = op.join(op.expanduser('~'), 'fsl')
+DEFAULT_INSTALLATION_DIRECTORY = op.join(op.expanduser("~"), "fsl")
 """Default FSL installation directory. """
 
 
-DEFAULT_ROOT_INSTALLATION_DIRECTORY = '/usr/local/fsl/'
+DEFAULT_ROOT_INSTALLATION_DIRECTORY = "/usr/local/fsl/"
 """Default FSL installation directory when the installer is run as root. """
 
 
-FSL_RELEASE_MANIFEST = 'https://fsl.fmrib.ox.ac.uk/fsldownloads/' \
-                       'fslconda/releases/manifest.json'
+FSL_RELEASE_MANIFEST = (
+    "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/manifest.json"
+)
 """URL to download the FSL installer manifest file from. The installer
 manifest file is a JSON file which contains information about available FSL
 versions.
@@ -111,14 +118,15 @@ option.
 """
 
 
-FSL_DEV_RELEASES = 'https://fsl.fmrib.ox.ac.uk/fsldownloads/' \
-                   'fslconda/releases/devreleases.txt'
+FSL_DEV_RELEASES = (
+    "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/devreleases.txt"
+)
 """URL to the devreleases.txt file, which contains a list of available
 internal/development FSL releases. See the download_dev_releases function
 for more details.
 """
 
-TEMPLATE_IDENTIFIER = '%%%%%%%%%%%%%'
+TEMPLATE_IDENTIFIER = "%%%%%%%%%%%%%"
 """String used when generating the standalone fslinstaler.py script to identify
 content that is to be inserted. See the .ci/new_release.py script.
 """
@@ -547,29 +555,28 @@ when the standalone fslinstaller.py script is generated.
 """
 
 
-
 # List of modifiers which can be used to change how
 # a message is printed by the printmsg function.
-INFO      = 1
+INFO = 1
 IMPORTANT = 2
-QUESTION  = 3
-PROMPT    = 4
-WARNING   = 5
-ERROR     = 6
-EMPH      = 7
-EMPHASIS  = 7
+QUESTION = 3
+PROMPT = 4
+WARNING = 5
+ERROR = 6
+EMPH = 7
+EMPHASIS = 7
 UNDERLINE = 8
-RESET     = 9
+RESET = 9
 ANSICODES = {
-    INFO      : '\033[37m',         # Light grey
-    IMPORTANT : '\033[92m',         # Green
-    QUESTION  : '\033[36m\033[4m',  # Blue+underline
-    PROMPT    : '\033[36m\033[1m',  # Bright blue+bold
-    WARNING   : '\033[93m',         # Yellow
-    ERROR     : '\033[91m',         # Red
-    EMPHASIS  : '\033[1m',          # White+bold
-    UNDERLINE : '\033[4m',          # Underline
-    RESET     : '\033[0m',          # Used internally
+    INFO: "\033[37m",  # Light grey
+    IMPORTANT: "\033[92m",  # Green
+    QUESTION: "\033[36m\033[4m",  # Blue+underline
+    PROMPT: "\033[36m\033[1m",  # Bright blue+bold
+    WARNING: "\033[93m",  # Yellow
+    ERROR: "\033[91m",  # Red
+    EMPHASIS: "\033[1m",  # White+bold
+    UNDERLINE: "\033[4m",  # Underline
+    RESET: "\033[0m",  # Used internally
 }
 
 
@@ -586,12 +593,12 @@ def get_terminal_width(fallback=None):
         pass
 
     try:
-        return int(os.environ['COLUMNS'])
+        return int(os.environ["COLUMNS"])
     except Exception:
         pass
 
     try:
-        result = Process.check_output('tput cols', log_output=False)
+        result = Process.check_output("tput cols", log_output=False)
         return int(result.strip())
     except Exception:
         return fallback
@@ -601,8 +608,10 @@ def str2bool(value):
     """Convert a string containing a boolean into a boolean. Assumes that
     the value is encoded as "true" or "false" (case insensitive).
     """
-    if isinstance(value, str): return value.lower() == 'true'
-    else:                      return bool(value)
+    if isinstance(value, str):
+        return value.lower() == "true"
+    else:
+        return bool(value)
 
 
 def is_shell_script(filepath):
@@ -610,13 +619,12 @@ def is_shell_script(filepath):
     False otherwise.
     """
     try:
-        with open(filepath, 'rt') as f:
+        with open(filepath, "rt") as f:
             header = f.read(20)
 
-        return any((header.startswith('#!/bin/'),
-                    header.startswith('#!/usr/bin/')))
+        return any((header.startswith("#!/bin/"), header.startswith("#!/usr/bin/")))
 
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -635,13 +643,13 @@ def printmsg(*args, **kwargs):
     All other keyword arguments are passed through to the print function.
     """
 
-    args     = list(args)
+    args = list(args)
     blockids = [i for i in range(len(args)) if (args[i] not in ANSICODES)]
-    logmsg   = kwargs.pop('log',  True)
-    fill     = kwargs.pop('fill', True)
+    logmsg = kwargs.pop("log", True)
+    fill = kwargs.pop("fill", True)
 
-    coded    = ''
-    uncoded  = ''
+    coded = ""
+    uncoded = ""
 
     for i, idx in enumerate(blockids):
         if i == len(blockids) - 1:
@@ -649,15 +657,14 @@ def printmsg(*args, **kwargs):
         else:
             slc = slice(idx + 1, blockids[i + 1])
 
-        msg      = args[idx]
+        msg = args[idx]
         msgcodes = args[slc]
         msgcodes = [ANSICODES[c] for c in msgcodes]
-        msgcodes = ''.join(msgcodes)
+        msgcodes = "".join(msgcodes)
         uncoded += msg
-        coded   += '{}{}{}'.format(msgcodes, msg, ANSICODES[RESET])
+        coded += "{}{}{}".format(msgcodes, msg, ANSICODES[RESET])
 
     if len(blockids) > 0:
-
         if fill:
             width = get_terminal_width(70)
             coded = tw.fill(coded, width, replace_whitespace=False)
@@ -665,12 +672,13 @@ def printmsg(*args, **kwargs):
         print(coded, **kwargs)
 
         if logmsg:
-
             # print line number of caller rather than
             # this line number with the stacklevel
             # argument if we are running python >= 3.8
-            if PYVER >= (3, 8): kwargs = {'stacklevel' : 2}
-            else:               kwargs = {}
+            if PYVER >= (3, 8):
+                kwargs = {"stacklevel": 2}
+            else:
+                kwargs = {}
 
             log.debug(uncoded, **kwargs)
 
@@ -681,12 +689,14 @@ def prompt(promptmsg, *msgtypes, **kwargs):
     """Prompts the user for some input. msgtypes and kwargs are passed
     through to the printmsg function.
     """
-    printmsg(promptmsg, *msgtypes, end='', log=False, **kwargs)
+    printmsg(promptmsg, *msgtypes, end="", log=False, **kwargs)
 
-    if PYVER[0] == 2: response = raw_input(' ').strip()
-    else:             response = input(    ' ').strip()
+    if PYVER[0] == 2:
+        response = raw_input(" ").strip()
+    else:
+        response = input(" ").strip()
 
-    log.debug('%s: %s', promptmsg, response)
+    log.debug("%s: %s", promptmsg, response)
 
     return response
 
@@ -702,6 +712,7 @@ def send_registration_info(url, data):
 
         https://docs.djangoproject.com/en/5.0/ref/csrf/
         """
+
         def __init__(self):
             if sys.version_info[0] < 3:
                 HTMLParser.__init__(self)
@@ -710,16 +721,16 @@ def send_registration_info(url, data):
             self.csrf_token = None
 
         def handle_starttag(self, tag, attrs):
-            if tag == 'input':
+            if tag == "input":
                 attr_dict = dict(attrs)
-                if attr_dict.get('name') == 'csrfmiddlewaretoken':
-                    self.csrf_token = attr_dict.get('value')
+                if attr_dict.get("name") == "csrfmiddlewaretoken":
+                    self.csrf_token = attr_dict.get("value")
 
-    data                    = dict(data)
-    headers                 = {}
-    headers['Content-Type'] = 'application/x-www-form-urlencoded'
-    headers['Referer']      = url
-    resp                    = None
+    data = dict(data)
+    headers = {}
+    headers["Content-Type"] = "application/x-www-form-urlencoded"
+    headers["Referer"] = url
+    resp = None
 
     try:
         # Use cookie jar to store CSRF token
@@ -728,10 +739,12 @@ def send_registration_info(url, data):
         # Download the HTML form (which will
         # contain the CSRF token)
         opener = urlrequest.build_opener(urlrequest.HTTPCookieProcessor(cj))
-        resp   = opener.open(url)
+        resp = opener.open(url)
 
-        if PYVER[0] == 2: form = resp.read()
-        else:             form = resp.read().decode('utf-8')
+        if PYVER[0] == 2:
+            form = resp.read()
+        else:
+            form = resp.read().decode("utf-8")
 
         # extract CSRF token
         parser = CSRFTokenParser()
@@ -740,23 +753,25 @@ def send_registration_info(url, data):
 
         # Send installation data to
         # server via POST request
-        data['csrfmiddlewaretoken'] = csrf_token
-        data['emailaddress']        = ''
+        data["csrfmiddlewaretoken"] = csrf_token
+        data["emailaddress"] = ""
 
-        if PYVER[0] == 2: data_enc = urllib.urlencode(data)
-        else:             data_enc = urlparse.urlencode(data).encode('utf-8')
+        if PYVER[0] == 2:
+            data_enc = urllib.urlencode(data)
+        else:
+            data_enc = urlparse.urlencode(data).encode("utf-8")
 
-        req  = urlrequest.Request(url,
-                                  headers=headers,
-                                  data=data_enc)
+        req = urlrequest.Request(url, headers=headers, data=data_enc)
         resp = opener.open(req)
 
-        if PYVER[0] == 2: msg = resp.read()
-        else:             msg = resp.read().decode('utf-8')
+        if PYVER[0] == 2:
+            msg = resp.read()
+        else:
+            msg = resp.read().decode("utf-8")
 
         log.debug(msg)
 
-        if 'Registered' in msg:
+        if "Registered" in msg:
             log.debug("Registration with %s successful", url)
         else:
             log.debug("Registration with %s failed", url)
@@ -774,18 +789,19 @@ def funccache(func):
     cache = {}
 
     def decorator(*args, **kwargs):
-
         key = list()
         key.extend(args)
         key.extend([kwargs[k] for k in sorted(kwargs.keys())])
 
-        if len(key) > 0: key = tuple(key)
-        else:            key = ('default',)
+        if len(key) > 0:
+            key = tuple(key)
+        else:
+            key = ("default",)
 
         value = cache.get(key, None)
 
         if value is None:
-            value      = func(*args, **kwargs)
+            value = func(*args, **kwargs)
             cache[key] = value
 
         return value
@@ -811,20 +827,21 @@ def identify_platform():
     """
 
     platforms = {
-        ('linux',  'x86_64') : 'linux-64',
-        ('darwin', 'x86_64') : 'macos-64',
-        ('darwin', 'arm64')  : 'macos-M1',
+        ("linux", "x86_64"): "linux-64",
+        ("darwin", "x86_64"): "macos-64",
+        ("darwin", "arm64"): "macos-M1",
     }
 
     system = platform.system().lower()
-    cpu    = platform.machine()
-    key    = (system, cpu)
+    cpu = platform.machine()
+    key = (system, cpu)
 
     if key not in platforms:
-        supported = ', '.join(['[{}, {}]' for s, c in platforms])
-        raise Exception('This platform [{}, {}] is unrecognised or '
-                        'unsupported! Supported platforms: {}'.format(
-                            system, cpu, supported))
+        supported = ", ".join(["[{}, {}]" for s, c in platforms])
+        raise Exception(
+            "This platform [{}, {}] is unrecognised or "
+            "unsupported! Supported platforms: {}".format(system, cpu, supported)
+        )
 
     return platforms[key]
 
@@ -837,12 +854,12 @@ def getlocale():
         # returns a tuple like ('en_US', 'UTF-8')
         locale_tup = locale.getlocale()
         if locale_tup[0] is None:
-            locale_str = locale.setlocale(locale.LC_ALL, '')
-            locale_str = locale_str.replace('C.UTF-8', 'en_US.UTF-8')
+            locale_str = locale.setlocale(locale.LC_ALL, "")
+            locale_str = locale_str.replace("C.UTF-8", "en_US.UTF-8")
         else:
-            locale_str = '.'.join(locale_tup)
+            locale_str = ".".join(locale_tup)
     except TypeError:
-        locale_str = 'en_US.UTF-8'
+        locale_str = "en_US.UTF-8"
     return locale_str
 
 
@@ -874,19 +891,19 @@ def identify_cuda(device=None):
     cudaver = None
 
     try:
-        output = Process.check_output('nvidia-smi -i {}'.format(device))
-        output = output.split('\n')
-        pat    = r'CUDA Version: (\S+)'
+        output = Process.check_output("nvidia-smi -i {}".format(device))
+        output = output.split("\n")
+        pat = r"CUDA Version: (\S+)"
         for line in output:
             match = re.search(pat, line)
             if match:
-                cudaver      = match.group(1)
-                major, minor = cudaver.split('.')
-                cudaver      = (int(major),  int(minor))
+                cudaver = match.group(1)
+                major, minor = cudaver.split(".")
+                cudaver = (int(major), int(minor))
                 break
 
     except Exception as e:
-        log.debug('Unable to interrogate CUDA version: %s', e, exc_info=True)
+        log.debug("Unable to interrogate CUDA version: %s", e, exc_info=True)
         return None
 
     return cudaver
@@ -901,7 +918,7 @@ def check_need_admin(dirname):
     return not os.access(dirname, os.W_OK | os.X_OK)
 
 
-def get_admin_password(action='install FSL'):
+def get_admin_password(action="install FSL"):
     """Prompt the user for their administrator password. An Exception is raised
     if an incorrect password is entered three times.a
 
@@ -911,27 +928,29 @@ def get_admin_password(action='install FSL'):
     """
 
     def validate_admin_password(password):
-        proc = Process.sudo_popen(['true'], password, stdin=sp.PIPE)
+        proc = Process.sudo_popen(["true"], password, stdin=sp.PIPE)
         proc.communicate()
         return proc.returncode == 0
 
-    msg = 'Your administrator password is needed to {}'.format(action)
+    msg = "Your administrator password is needed to {}".format(action)
 
     for attempt in range(3):
-        if attempt == 0: msg = '{}:'.format(msg)
-        else:            msg = '{} [attempt {} of 3]:'.format(msg, attempt + 1)
-        printmsg(msg, IMPORTANT, end='')
-        password = getpass.getpass('')
-        valid    = validate_admin_password(password)
+        if attempt == 0:
+            msg = "{}:".format(msg)
+        else:
+            msg = "{} [attempt {} of 3]:".format(msg, attempt + 1)
+        printmsg(msg, IMPORTANT, end="")
+        password = getpass.getpass("")
+        valid = validate_admin_password(password)
 
         if valid:
-            printmsg('Password accepted', INFO)
+            printmsg("Password accepted", INFO)
             break
         else:
-            printmsg('Incorrect password', WARNING)
+            printmsg("Incorrect password", WARNING)
 
     if not valid:
-        raise Exception('Incorrect password')
+        raise Exception("Incorrect password")
 
     return password
 
@@ -940,8 +959,10 @@ def isstr(s):
     """Returns True if s is a string, False otherwise. Works on python 2.7
     and >=3.3.
     """
-    try:              return isinstance(s, basestring)
-    except Exception: return isinstance(s, str)
+    try:
+        return isinstance(s, basestring)
+    except Exception:
+        return isinstance(s, str)
 
 
 def match_any(s, patterns):
@@ -963,8 +984,10 @@ def tempdir(override_dir=None, change_into=True, delete=True):
     temporary directory, this function just changes into override_dir.
     """
 
-    if override_dir is None: tmpdir = tempfile.mkdtemp()
-    else:                    tmpdir = override_dir
+    if override_dir is None:
+        tmpdir = tempfile.mkdtemp()
+    else:
+        tmpdir = override_dir
 
     prevdir = os.getcwd()
 
@@ -995,17 +1018,21 @@ def warn_on_error(*msgargs, **msgkwargs):
     :arg tolog:    Defaults to True. Print the warning to the log file.
     """
 
-    toscreen = msgkwargs.pop('toscreen', True)
-    tolog    = msgkwargs.pop('tolog',    True)
+    toscreen = msgkwargs.pop("toscreen", True)
+    tolog = msgkwargs.pop("tolog", True)
 
     def decorator(function):
         def wrapper(*args, **kwargs):
             try:
                 function(*args, **kwargs)
             except Exception as e:
-                if toscreen: printmsg(*msgargs, **msgkwargs)
-                if tolog:    log.debug('%s', e, exc_info=True)
+                if toscreen:
+                    printmsg(*msgargs, **msgkwargs)
+                if tolog:
+                    log.debug("%s", e, exc_info=True)
+
         return wrapper
+
     return decorator
 
 
@@ -1024,9 +1051,9 @@ def retry_on_error(func, num_attempts, *args, **kwargs):
                               retried, and the exception is re-raised..
     """
 
-    error_message   = kwargs.pop('retry_error_message',  '')
-    retry_condition = kwargs.pop('retry_condition', lambda e : True)
-    attempts        = 0
+    error_message = kwargs.pop("retry_error_message", "")
+    retry_condition = kwargs.pop("retry_condition", lambda e: True)
+    attempts = 0
     while True:
         try:
             return func(*args, **kwargs)
@@ -1036,11 +1063,18 @@ def retry_on_error(func, num_attempts, *args, **kwargs):
             if (attempts >= num_attempts) or (not retry_condition(e)):
                 raise e
             else:
-                printmsg('{} Trying again (attempt {} of {})'.format(
-                         error_message, attempts + 1, num_attempts),
-                         WARNING, EMPHASIS)
-                log.debug('retry_on_error - reason for failure: {}'.format(
-                    str(e), WARNING))
+                printmsg(
+                    "{} Trying again (attempt {} of {})".format(
+                        error_message, attempts + 1, num_attempts
+                    ),
+                    WARNING,
+                    EMPHASIS,
+                )
+                log.debug(
+                    "retry_on_error - reason for failure: {}".format(
+                        str(e),
+                    )
+                )
 
 
 class LogRecordingHandler(logging.Handler):
@@ -1048,6 +1082,7 @@ class LogRecordingHandler(logging.Handler):
     queue. When used as a context manager, will install itself as a handler
     on the fsl.installer.log logger object.
     """
+
     def __init__(self, patterns, logobj=None):
         """Create a LogRecordingHandler.
 
@@ -1063,9 +1098,9 @@ class LogRecordingHandler(logging.Handler):
             logobj = log
 
         logging.Handler.__init__(self, level=logging.DEBUG)
-        self.__records  = []
+        self.__records = []
         self.__patterns = list(patterns)
-        self.__log      = logobj
+        self.__log = logobj
 
     def __enter__(self):
         self.__log.addHandler(self)
@@ -1095,7 +1130,7 @@ def tempfilename(permissions=None, delete=True):
     fname = None
 
     try:
-        tmpf  = tempfile.NamedTemporaryFile(delete=False)
+        tmpf = tempfile.NamedTemporaryFile(delete=False)
         fname = tmpf.name
 
         tmpf.close()
@@ -1118,7 +1153,7 @@ def sha256(filename, check_against=None, blocksize=1048576):
 
     hashobj = hashlib.sha256()
 
-    with open(filename, 'rb') as f:
+    with open(filename, "rb") as f:
         while True:
             block = f.read(blocksize)
             if len(block) == 0:
@@ -1129,8 +1164,11 @@ def sha256(filename, check_against=None, blocksize=1048576):
 
     if check_against is not None:
         if checksum != check_against:
-            raise Exception('File {} does not match expected checksum '
-                            '({})'.format(filename, check_against))
+            raise Exception(
+                "File {} does not match expected checksum ({})".format(
+                    filename, check_against
+                )
+            )
 
     return checksum
 
@@ -1141,13 +1179,7 @@ def clean_environ():
     All FSL and conda related variables are removed.
     """
 
-    blacklist = [
-        '*FSL*',
-        '*CONDA*',
-        '*MAMBA*',
-        '*PYTHON*',
-        '*PYVENV*'
-    ]
+    blacklist = ["*FSL*", "*CONDA*", "*MAMBA*", "*PYTHON*", "*PYVENV*"]
 
     env = os.environ.copy()
     for v in list(env.keys()):
@@ -1165,24 +1197,23 @@ def install_environ(fsldir, username=None, password=None, cuda_version=None):
     # post-link scripts call $FSLDIR/share/fsl/sbin/createFSLWrapper
     # (part of fsl/base), which will only do its thing if the following
     # env vars are set
-    env['FSL_CREATE_WRAPPER_SCRIPTS'] = '1'
-    env['FSLDIR']                     = fsldir
+    env["FSL_CREATE_WRAPPER_SCRIPTS"] = "1"
+    env["FSLDIR"] = fsldir
 
     # Make sure HTTP proxy variables, if set,
     # are available to the conda env command
-    for v in ['http_proxy', 'https_proxy',
-              'HTTP_PROXY', 'HTTPS_PROXY']:
+    for v in ["http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"]:
         if v in os.environ:
             env[v] = os.environ[v]
 
     # Tell mamba not to abort if the download is taking time
     # https://github.com/mamba-org/mamba/issues/1941
-    env['MAMBA_NO_LOW_SPEED_LIMIT'] = '1'
+    env["MAMBA_NO_LOW_SPEED_LIMIT"] = "1"
 
     # If we are installing FSL with micromamba, we
     # need to set the MAMBA_ROOT_PREFIX variable.
-    if op.exists(op.join(fsldir, 'bin', 'micromamba')):
-        env['MAMBA_ROOT_PREFIX'] = fsldir
+    if op.exists(op.join(fsldir, "bin", "micromamba")):
+        env["MAMBA_ROOT_PREFIX"] = fsldir
 
     # FSL environments which source packages from the internal
     # FSL conda channel will refer to the channel as:
@@ -1190,8 +1221,10 @@ def install_environ(fsldir, username=None, password=None, cuda_version=None):
     # http://${FSLCONDA_USERNAME}:${FSLCONDA_PASSWORD}/abc.com/
     #
     # so we need to set those variables
-    if username: env['FSLCONDA_USERNAME'] = username
-    if password: env['FSLCONDA_PASSWORD'] = password
+    if username:
+        env["FSLCONDA_USERNAME"] = username
+    if password:
+        env["FSLCONDA_PASSWORD"] = password
 
     # Some versions of miniconda seem to have trouble on
     # some versions of macOS, where macOS reports its
@@ -1201,8 +1234,8 @@ def install_environ(fsldir, username=None, password=None, cuda_version=None):
     #
     # https://eclecticlight.co/2020/08/13/macos-version-numbering-isnt-so-simple/
     # https://github.com/conda/conda/issues/13832
-    if platform.system().lower() == 'darwin':
-        env['SYSTEM_VERSION_COMPAT'] = '0'
+    if platform.system().lower() == "darwin":
+        env["SYSTEM_VERSION_COMPAT"] = "0"
 
     # Trick conda into thinking that CUDA is
     # available on this platform if it is, or if
@@ -1215,22 +1248,20 @@ def install_environ(fsldir, username=None, password=None, cuda_version=None):
     #
     # https://conda.io/projects/conda/en/\
     # latest/user-guide/tasks/manage-virtual.html
-    if cuda_version is not None: env['CONDA_OVERRIDE_CUDA'] = cuda_version
-    else:                        env['CONDA_OVERRIDE_CUDA'] = ''
+    if cuda_version is not None:
+        env["CONDA_OVERRIDE_CUDA"] = cuda_version
+    else:
+        env["CONDA_OVERRIDE_CUDA"] = ""
 
     # Don't prompt for confirmation
-    env['MAMBA_ALWAYS_YES'] = 'true'
-    env['CONDA_ALWAYS_YES'] = 'true'
+    env["MAMBA_ALWAYS_YES"] = "true"
+    env["CONDA_ALWAYS_YES"] = "true"
 
     return env
 
 
-def download_file(url,
-                  destination,
-                  progress=None,
-                  blocksize=131072,
-                  ssl_verify=True):
-    """Download a file from url, saving it to destination. """
+def download_file(url, destination, progress=None, blocksize=131072, ssl_verify=True):
+    """Download a file from url, saving it to destination."""
 
     def default_progress(downloaded, total):
         pass
@@ -1238,11 +1269,11 @@ def download_file(url,
     if progress is None:
         progress = default_progress
 
-    log.debug('Downloading %s ...', url)
+    log.debug("Downloading %s ...", url)
 
     # Path to local file
     if op.exists(url):
-        url = 'file:' + urlrequest.pathname2url(op.abspath(url))
+        url = "file:" + urlrequest.pathname2url(op.abspath(url))
 
     # We create and use an unconfigured SSL
     # context to disable SSL verification.
@@ -1250,30 +1281,38 @@ def download_file(url,
     # use default behaviour.
     kwargs = {}
     if not ssl_verify:
-
         # - The urlopen(context) argument is not available in py3.3
         # - py3.4 does not have PROTOCOL_TLS
         # - PROTOCOL_TLS deprecated in py3.10
-        if   PYVER == (3, 3):                     pro = None
-        elif hasattr(ssl, 'PROTOCOL_TLS_CLIENT'): pro = ssl.PROTOCOL_TLS_CLIENT
-        elif hasattr(ssl, 'PROTOCOL_TLS'):        pro = ssl.PROTOCOL_TLS
-        elif hasattr(ssl, 'PROTOCOL_TLSv1_2'):    pro = ssl.PROTOCOL_TLSv1_2
-        elif hasattr(ssl, 'PROTOCOL_TLSv1_1'):    pro = ssl.PROTOCOL_TLSv1_1
-        elif hasattr(ssl, 'PROTOCOL_TLSv1'):      pro = ssl.PROTOCOL_TLSv1
-        else:                                     pro = None
+        if PYVER == (3, 3):
+            pro = None
+        elif hasattr(ssl, "PROTOCOL_TLS_CLIENT"):
+            pro = ssl.PROTOCOL_TLS_CLIENT
+        elif hasattr(ssl, "PROTOCOL_TLS"):
+            pro = ssl.PROTOCOL_TLS
+        elif hasattr(ssl, "PROTOCOL_TLSv1_2"):
+            pro = ssl.PROTOCOL_TLSv1_2
+        elif hasattr(ssl, "PROTOCOL_TLSv1_1"):
+            pro = ssl.PROTOCOL_TLSv1_1
+        elif hasattr(ssl, "PROTOCOL_TLSv1"):
+            pro = ssl.PROTOCOL_TLSv1
+        else:
+            pro = None
 
         if pro is None:
-            printmsg('SSL verification cannot be skipped - if this is '
-                     'a problem, try running the installer with a newer '
-                     'version of Python.', INFO)
+            printmsg(
+                "SSL verification cannot be skipped - if this is "
+                "a problem, try running the installer with a newer "
+                "version of Python.",
+                INFO,
+            )
         else:
-            printmsg('Skipping SSL verification - this '
-                     'is not recommended!', WARNING)
+            printmsg("Skipping SSL verification - this is not recommended!", WARNING)
 
-            sslctx                = ssl.SSLContext(pro)
+            sslctx = ssl.SSLContext(pro)
             sslctx.check_hostname = False
-            sslctx.verify_mode    = ssl.CERT_NONE
-            kwargs['context']     = sslctx
+            sslctx.verify_mode = ssl.CERT_NONE
+            kwargs["context"] = sslctx
 
     # py2: urlopen result cannot be used as a
     # context manager, so we use try-finally
@@ -1282,17 +1321,17 @@ def download_file(url,
     resp = None
 
     try:
-
         # Some servers reject requests originating
         # from urllib, so we pretend to be firefox
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        req     = urlrequest.Request(url, headers=headers)
-        resp    = urlrequest.urlopen(req, **kwargs)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        req = urlrequest.Request(url, headers=headers)
+        resp = urlrequest.urlopen(req, **kwargs)
 
-        with open(destination, 'wb') as outf:
-
-            try:             total = int(resp.headers['content-length'])
-            except KeyError: total = None
+        with open(destination, "wb") as outf:
+            try:
+                total = int(resp.headers["content-length"])
+            except KeyError:
+                total = None
 
             downloaded = 0
 
@@ -1324,32 +1363,35 @@ def download_manifest(url, workdir=None, **kwargs):
     attribute to all FSL build entries.
     """
 
-    log.debug('Downloading FSL installer manifest from %s', url)
+    log.debug("Downloading FSL installer manifest from %s", url)
 
     with tempdir(workdir):
-
         try:
-            download_file(url, 'manifest.json', **kwargs)
+            download_file(url, "manifest.json", **kwargs)
         except Exception as e:
-            log.debug('Error downloading FSL release manifest from %s',
-                      url, exc_info=True)
-            raise Exception('Unable to download FSL release manifest '
-                            'from {} [{}]!'.format(url, str(e)))
+            log.debug(
+                "Error downloading FSL release manifest from %s", url, exc_info=True
+            )
+            raise Exception(
+                "Unable to download FSL release manifest from {} [{}]!".format(
+                    url, str(e)
+                )
+            )
 
-        with open('manifest.json') as f:
+        with open("manifest.json") as f:
             lines = f.readlines()
 
     # Drop comments
-    lines = [l for l in lines if not l.lstrip().startswith('//')]
+    lines = [l for l in lines if not l.lstrip().startswith("//")]
 
-    manifest = json.loads('\n'.join(lines))
+    manifest = json.loads("\n".join(lines))
 
     # Add "version" to every build
-    for version, builds in manifest['versions'].items():
-        if version == 'latest':
+    for version, builds in manifest["versions"].items():
+        if version == "latest":
             continue
         for build in builds:
-            build['version'] = version
+            build["version"] = version
 
     return manifest
 
@@ -1391,11 +1433,13 @@ def download_dev_releases(url, workdir=None, **kwargs):
         # it doesn't look like a commit hash,
         # assume that this file corresponds to a
         # public release.
-        commit = name.rsplit('.', 2)[-2]
+        commit = name.rsplit(".", 2)[-2]
 
         # public release or dev release
-        if len(commit) < 7: bits = [name, None, None]
-        else:               bits = name.rsplit('.', 2)
+        if len(commit) < 7:
+            bits = [name, None, None]
+        else:
+            bits = name.rsplit(".", 2)
 
         return bits
 
@@ -1403,17 +1447,16 @@ def download_dev_releases(url, workdir=None, **kwargs):
     devreleases = []
 
     with tempdir(workdir):
-
         try:
-            download_file(url, 'devreleases.txt', **kwargs)
-        except Exception as e:
-            log.debug('Error downloading devreleases.txt from %s',
-                      url, exc_info=True)
-            raise Exception('Unable to download development manifest '
-                            'list from {}!'.format(url))
+            download_file(url, "devreleases.txt", **kwargs)
+        except Exception:
+            log.debug("Error downloading devreleases.txt from %s", url, exc_info=True)
+            raise Exception(
+                "Unable to download development manifest list from {}!".format(url)
+            )
 
-        with open('devreleases.txt', 'rt') as f:
-            urls = f.read().strip().split('\n')
+        with open("devreleases.txt", "rt") as f:
+            urls = f.read().strip().split("\n")
             urls = [l.strip() for l in urls]
 
         for url in urls:
@@ -1438,15 +1481,17 @@ class Progress(object):
                 p.update(i + 1, 100)
     """
 
-    def __init__(self,
-                 label='',
-                 transform=None,
-                 fmt='{:.1f}',
-                 total=None,
-                 width=None,
-                 proglabel='progress',
-                 progfile=None,
-                 prefix=None):
+    def __init__(
+        self,
+        label="",
+        transform=None,
+        fmt="{:.1f}",
+        total=None,
+        width=None,
+        proglabel="progress",
+        progfile=None,
+        prefix=None,
+    ):
         """Create a Progress reporter.
 
         :arg label:     Units (e.g. "MB", "%",)
@@ -1477,17 +1522,19 @@ class Progress(object):
         if transform is None:
             transform = Progress.default_transform
 
-        if prefix is None: prefix = ''
-        else:              prefix = '{} '.format(prefix)
+        if prefix is None:
+            prefix = ""
+        else:
+            prefix = "{} ".format(prefix)
 
-        self.width     = width
-        self.fmt       = fmt.format
-        self.total     = total
-        self.label     = label
+        self.width = width
+        self.fmt = fmt.format
+        self.total = total
+        self.label = label
         self.transform = transform
         self.proglabel = proglabel
-        self.progfile  = progfile
-        self.prefix    = prefix
+        self.progfile = progfile
+        self.prefix = prefix
 
         # used by the spin function
         self.__last_spin = None
@@ -1498,8 +1545,10 @@ class Progress(object):
 
     @staticmethod
     def bytes_to_mb(val, total):
-        if val   is not None: val   = val   / 1048576
-        if total is not None: total = total / 1048576
+        if val is not None:
+            val = val / 1048576
+        if total is not None:
+            total = total / 1048576
         return val, total
 
     @staticmethod
@@ -1512,21 +1561,21 @@ class Progress(object):
         return self
 
     def __exit__(self, *args, **kwargs):
-        printmsg('', log=False, fill=False)
+        printmsg("", log=False, fill=False)
 
     def write_progress(self, value, total):
-
         if self.progfile is None:
             return
 
-        if value is None: value = ''
-        if total is None: total = ''
+        if value is None:
+            value = ""
+        if total is None:
+            total = ""
 
-        with open(self.progfile, 'at') as f:
-            f.write('{} {} {}\n'.format(self.proglabel, value, total))
+        with open(self.progfile, "at") as f:
+            f.write("{} {} {}\n".format(self.proglabel, value, total))
 
     def update(self, value=None, total=None):
-
         if total is None:
             total = self.total
 
@@ -1542,62 +1591,66 @@ class Progress(object):
         self.write_progress(value, total)
 
     def spin(self, show_prefix=True):
+        symbols = ["|", "/", "-", "\\"]
 
-        symbols = ['|', '/', '-',  '\\']
+        if self.__last_spin is not None:
+            last = self.__last_spin
+        else:
+            last = symbols[-1]
 
-        if self.__last_spin is not None: last = self.__last_spin
-        else:                            last = symbols[-1]
-
-        idx  = symbols.index(last)
-        idx  = (idx + 1) % len(symbols)
+        idx = symbols.index(last)
+        idx = (idx + 1) % len(symbols)
         this = symbols[idx]
 
-        if show_prefix: msg = '{}{}'.format(self.prefix, this)
-        else:           msg = this
+        if show_prefix:
+            msg = "{}{}".format(self.prefix, this)
+        else:
+            msg = this
 
-        printmsg(msg, end='\r', log=False, fill=False)
+        printmsg(msg, end="\r", log=False, fill=False)
         self.__last_spin = this
 
     def count(self, value):
-
         value = self.fmt(value)
 
-        if self.label is None: line = '{} ...'.format(value)
-        else:                  line = '{}{} ...'.format(value, self.label)
+        if self.label is None:
+            line = "{} ...".format(value)
+        else:
+            line = "{}{} ...".format(value, self.label)
 
-        msg = '{}{}'.format(self.prefix, line)
+        msg = "{}{}".format(self.prefix, line)
 
-        printmsg(msg, end='\r', log=False, fill=False)
+        printmsg(msg, end="\r", log=False, fill=False)
 
     def progress(self, value, total):
-
         value = min(value, total)
 
         # arbitrary fallback of 50 columns if
         # terminal width cannot be determined
-        if self.width is None: width = get_terminal_width(50)
-        else:                  width = self.width
+        if self.width is None:
+            width = get_terminal_width(50)
+        else:
+            width = self.width
 
         fvalue = self.fmt(value)
         ftotal = self.fmt(total)
         prefix = self.prefix
-        suffix = '{} / {} {}'.format(fvalue, ftotal, self.label).rstrip()
+        suffix = "{} / {} {}".format(fvalue, ftotal, self.label).rstrip()
 
         # +6: - square brackets around bar
         #     - space between bar and tally
         #     - space+spin+space at the end
-        width     = width - (len(prefix) + len(suffix) + 6)
-        completed = int(round(width * (value  / total)))
+        width = width - (len(prefix) + len(suffix) + 6)
+        completed = int(round(width * (value / total)))
         remaining = width - completed
-        progress  = '{}[{}{}] {}'.format(prefix,
-                                         '#' * completed,
-                                         ' ' * remaining,
-                                         suffix)
+        progress = "{}[{}{}] {}".format(
+            prefix, "#" * completed, " " * remaining, suffix
+        )
 
-        printmsg(progress, end='', fill=False)
-        printmsg(' ', end='', log=False, fill=False)
+        printmsg(progress, end="", fill=False)
+        printmsg(" ", end="", log=False, fill=False)
         self.spin(False)
-        printmsg(end='\r', log=False, fill=False)
+        printmsg(end="\r", log=False, fill=False)
 
 
 class Process(object):
@@ -1611,15 +1664,16 @@ class Process(object):
      - Process.monitor_progress
     """
 
-
-    def __init__(self,
-                 cmd,
-                 admin=False,
-                 password=None,
-                 log_output=True,
-                 print_output=False,
-                 append_env=None,
-                 **kwargs):
+    def __init__(
+        self,
+        cmd,
+        admin=False,
+        password=None,
+        log_output=True,
+        print_output=False,
+        append_env=None,
+        **kwargs,
+    ):
         """Run the specified command. Starts threads to capture stdout and
         stderr.
 
@@ -1643,31 +1697,45 @@ class Process(object):
         :arg kwargs:       Passed to subprocess.Popen
         """
 
-        self.cmd     = cmd
+        self.cmd = cmd
         self.stdoutq = queue.Queue()
         self.stderrq = queue.Queue()
 
         if log_output:
-            log.debug('Running %s [as admin: %s]', cmd, admin)
+            log.debug("Running %s [as admin: %s]", cmd, admin)
 
-        self.popen = Process.popen(cmd, admin, password,
-                                   append_env=append_env, **kwargs)
+        self.popen = Process.popen(
+            cmd, admin, password, append_env=append_env, **kwargs
+        )
 
         # threads for consuming stdout/stderr
         self.stdout_thread = threading.Thread(
             target=Process.forward_stream,
-            args=(self.popen.stdout, self.stdoutq, cmd,
-                  'stdout', log_output, print_output))
+            args=(
+                self.popen.stdout,
+                self.stdoutq,
+                cmd,
+                "stdout",
+                log_output,
+                print_output,
+            ),
+        )
         self.stderr_thread = threading.Thread(
             target=Process.forward_stream,
-            args=(self.popen.stderr, self.stderrq, cmd,
-                  'stderr', log_output, print_output))
+            args=(
+                self.popen.stderr,
+                self.stderrq,
+                cmd,
+                "stderr",
+                log_output,
+                print_output,
+            ),
+        )
 
         self.stdout_thread.daemon = True
         self.stderr_thread.daemon = True
         self.stdout_thread.start()
         self.stderr_thread.start()
-
 
     def wait(self):
         """Waits for the process to terminate, then waits for the stdout
@@ -1677,17 +1745,18 @@ class Process(object):
         self.stdout_thread.join()
         self.stderr_thread.join()
 
-
     @property
     def returncode(self):
         """Process return code. Returns None until the process has terminated,
         and the stdout/stderr consumer threads have finished.
         """
-        if self.popen.returncode is None: return None
-        if self.stdout_thread.is_alive(): return None
-        if self.stderr_thread.is_alive(): return None
+        if self.popen.returncode is None:
+            return None
+        if self.stdout_thread.is_alive():
+            return None
+        if self.stderr_thread.is_alive():
+            return None
         return self.popen.returncode
-
 
     @staticmethod
     def check_output(cmd, *args, **kwargs):
@@ -1699,15 +1768,15 @@ class Process(object):
         :arg cmd: The command to run, as a string
         """
 
-        check = kwargs.pop('check', True)
-        proc  = Process(cmd, *args, **kwargs)
+        check = kwargs.pop("check", True)
+        proc = Process(cmd, *args, **kwargs)
 
         proc.wait()
 
         if check and (proc.returncode != 0):
-            raise RuntimeError('This command returned an error: ' + cmd)
+            raise RuntimeError("This command returned an error: " + cmd)
 
-        stdout = ''
+        stdout = ""
         while True:
             try:
                 stdout += proc.stdoutq.get_nowait()
@@ -1715,7 +1784,6 @@ class Process(object):
                 break
 
         return stdout
-
 
     @staticmethod
     def check_call(cmd, *args, **kwargs):
@@ -1727,16 +1795,15 @@ class Process(object):
         :arg cmd: The command to run, as a string
         """
 
-        check = kwargs.pop('check', True)
-        proc  = Process(cmd, *args, **kwargs)
+        check = kwargs.pop("check", True)
+        proc = Process(cmd, *args, **kwargs)
 
         proc.wait()
 
         if check and proc.returncode != 0:
-            raise RuntimeError('This command returned an error: ' + cmd)
+            raise RuntimeError("This command returned an error: " + cmd)
 
         return proc.returncode
-
 
     @staticmethod
     def monitor_progress(cmd, total=None, *args, **kwargs):
@@ -1765,39 +1832,44 @@ class Process(object):
         :arg prefix:    Label to show before progress bar
         """
 
-        timeout   = kwargs.pop('timeout',   0.5)
-        progfunc  = kwargs.pop('progfunc',  None)
-        proglabel = kwargs.pop('proglabel', None)
-        progfile  = kwargs.pop('progfile',  None)
-        prefix    = kwargs.pop('prefix',    None)
+        timeout = kwargs.pop("timeout", 0.5)
+        progfunc = kwargs.pop("progfunc", None)
+        proglabel = kwargs.pop("proglabel", None)
+        progfile = kwargs.pop("progfile", None)
+        prefix = kwargs.pop("prefix", None)
 
-        if total is None: label = None
-        else:             label = '%'
+        if total is None:
+            label = None
+        else:
+            label = "%"
 
         if progfunc is None:
             nlines = [0]
+
             def progfunc(proc):
                 try:
-                    _         = proc.stdoutq.get_nowait()
+                    _ = proc.stdoutq.get_nowait()
                     nlines[0] = nlines[0] + 1
                 except queue.Empty:
                     pass
                 return nlines[0]
 
-        if isstr(cmd): cmds = [cmd]
-        else:          cmds =  cmd
+        if isstr(cmd):
+            cmds = [cmd]
+        else:
+            cmds = cmd
 
-        with Progress(label=label,
-                      fmt='{:.0f}',
-                      transform=Progress.percent,
-                      proglabel=proglabel,
-                      progfile=progfile,
-                      prefix=prefix) as prog:
-
+        with Progress(
+            label=label,
+            fmt="{:.0f}",
+            transform=Progress.percent,
+            proglabel=proglabel,
+            progfile=progfile,
+            prefix=prefix,
+        ) as prog:
             progcount = 0 if total else None
 
             for cmd in cmds:
-
                 proc = Process(cmd, *args, **kwargs)
                 prog.update(progcount, total)
 
@@ -1811,17 +1883,10 @@ class Process(object):
                 if proc.returncode == 0:
                     prog.update(total, total)
                 else:
-                    raise RuntimeError('This command returned '
-                                       'an error: ' + cmd)
-
+                    raise RuntimeError("This command returned an error: " + cmd)
 
     @staticmethod
-    def forward_stream(stream,
-                       queue,
-                       cmd,
-                       streamname,
-                       log_output,
-                       print_output):
+    def forward_stream(stream, queue, cmd, streamname, log_output, print_output):
         """Reads lines from stream and pushes them onto queue until popen
         is finished. Logs every line.
 
@@ -1834,15 +1899,14 @@ class Process(object):
         """
 
         while True:
-            line = stream.readline().decode('utf-8')
-            if line == '':
+            line = stream.readline().decode("utf-8")
+            if line == "":
                 break
             queue.put(line)
             if log_output:
-                log.debug(' [%s]: %s', streamname, line.rstrip())
+                log.debug(" [%s]: %s", streamname, line.rstrip())
             if print_output:
-                print(' [{}]: {}'.format(streamname, line.rstrip()))
-
+                print(" [{}]: {}".format(streamname, line.rstrip()))
 
     @staticmethod
     def popen(cmd, admin=False, password=None, append_env=None, **kwargs):
@@ -1867,10 +1931,10 @@ class Process(object):
 
         admin = admin and os.getuid() != 0
 
-        cmd              = shlex.split(cmd)
-        kwargs['stdin']  = sp.PIPE
-        kwargs['stdout'] = sp.PIPE
-        kwargs['stderr'] = sp.PIPE
+        cmd = shlex.split(cmd)
+        kwargs["stdin"] = sp.PIPE
+        kwargs["stdout"] = sp.PIPE
+        kwargs["stderr"] = sp.PIPE
 
         if admin:
             proc = Process.sudo_popen(cmd, password, append_env, **kwargs)
@@ -1878,14 +1942,13 @@ class Process(object):
             # if append_env has been specified,
             # add it to the normal env option.
             if append_env is not None:
-                env = kwargs.get('env', os.environ.copy())
+                env = kwargs.get("env", os.environ.copy())
                 env.update(append_env)
-                kwargs['env'] = env
+                kwargs["env"] = env
 
             proc = sp.Popen(cmd, **kwargs)
 
         return proc
-
 
     @staticmethod
     def sudo_popen(cmd, password, append_env=None, **kwargs):
@@ -1905,20 +1968,20 @@ class Process(object):
         # Make the wrapper script delete itself
         # after the command has been executed.
         with tempfilename(0o755, delete=False) as wrapper:
-            with open(wrapper, 'wt') as f:
-                f.write('#!/usr/bin/env sh\n')
-                f.write('set -e\n')
-                f.write('thisfile=$0\n')
-                f.write('thisdir=$(cd $(dirname $0) && pwd)\n')
+            with open(wrapper, "wt") as f:
+                f.write("#!/usr/bin/env sh\n")
+                f.write("set -e\n")
+                f.write("thisfile=$0\n")
+                f.write("thisdir=$(cd $(dirname $0) && pwd)\n")
                 for k, v in append_env.items():
                     f.write('export {}="{}"\n'.format(k, v))
                 # shlex.join not available in py27
-                f.write(' '.join(cmd) + '\n')
-                f.write('cd ${thisdir} && rm ${thisfile}\n')
+                f.write(" ".join(cmd) + "\n")
+                f.write("cd ${thisdir} && rm ${thisfile}\n")
 
-        cmd  = ['sudo', '-S', '-k', wrapper]
+        cmd = ["sudo", "-S", "-k", wrapper]
         proc = sp.Popen(cmd, **kwargs)
-        proc.stdin.write('{}\n'.format(password).encode())
+        proc.stdin.write("{}\n".format(password).encode())
         proc.stdin.flush()
         return proc
 
@@ -1928,6 +1991,7 @@ class Version(object):
     """Class to represent and compare version strings.  Accepted version
     strings are of the form W.X.Y.Z, where W, X, Y, and Z are all integers.
     """
+
     def __init__(self, verstr):
         # Version identifiers for official FSL
         # releases will have up to four
@@ -1938,15 +2002,17 @@ class Version(object):
 
         # ignore a leading "v", e.g. v1.2.3
         verstr = verstr.lower()
-        if verstr.startswith('v'):
+        if verstr.startswith("v"):
             verstr = verstr[1:]
 
-        for comp in verstr.split('.'):
-            try:              components.append(int(comp))
-            except Exception: break
+        for comp in verstr.split("."):
+            try:
+                components.append(int(comp))
+            except Exception:
+                break
 
         self.components = components
-        self.verstr     = verstr
+        self.verstr = verstr
 
     def __str__(self):
         return self.verstr
@@ -1959,8 +2025,10 @@ class Version(object):
 
     def __lt__(self, other):
         for p1, p2 in zip(self.components, other.components):
-            if p1 < p2: return True
-            if p1 > p2: return False
+            if p1 < p2:
+                return True
+            if p1 > p2:
+                return False
         return len(self.components) < len(other.components)
 
 
@@ -1972,7 +2040,7 @@ class Context(object):
     their values are immutable.
     """
 
-    def __init__(self, args, destdir=None, action='install FSL'):
+    def __init__(self, args, destdir=None, action="install FSL"):
         """Create the context with the argparse.Namespace object containing
         parsed command-line arguments.
 
@@ -1985,21 +2053,21 @@ class Context(object):
         if destdir is not None:
             destdir = op.abspath(destdir)
 
-        self.args  = args
-        self.shell = op.basename(os.environ.get('SHELL', 'sh')).lower()
+        self.args = args
+        self.shell = op.basename(os.environ.get("SHELL", "sh")).lower()
 
         # These attributes are updated on-demand via
         # the property accessors defined below, or are
         # all updated via the finalise_settings method.
-        self.__platform         = None
-        self.__manifest         = None
-        self.__devmanifest      = None
+        self.__platform = None
+        self.__manifest = None
+        self.__devmanifest = None
         self.__candidate_builds = None
-        self.__build            = None
-        self.__destdir          = destdir
-        self.__need_admin       = None
-        self.__admin_password   = None
-        self.__action           = action
+        self.__build = None
+        self.__destdir = destdir
+        self.__need_admin = None
+        self.__admin_password = None
+        self.__action = action
 
         # If the destination directory already exists,
         # and the user chooses to overwrite it, it is
@@ -2015,20 +2083,18 @@ class Context(object):
         # applicable. The cuda version is used during
         # installation to ensure that the correct CUDA
         # packages are installed.
-        self.environment_file        = None
+        self.environment_file = None
         self.extra_environment_files = None
-        self.environment_channels    = None
-        self.python_version          = None
-        self.cuda_version            = None
+        self.environment_channels = None
+        self.python_version = None
+        self.cuda_version = None
 
         # The config_logging function stores the path
         # to the fslinstaller log file here.
         self.logfile = None
 
-
     def finalise_settings(self):
-        """Finalise values for all information and settings in the Context.
-        """
+        """Finalise values for all information and settings in the Context."""
         self.manifest
         self.candidate_builds
         self.platform
@@ -2038,22 +2104,19 @@ class Context(object):
         self.admin_password
         self.extras_dir
 
-
     @property
     def license_url(self):
         """Return the FSL license URL from the manifest, or None if it is not
         present.
         """
-        return self.manifest['installer'].get('license_url')
-
+        return self.manifest["installer"].get("license_url")
 
     @property
     def registration_url(self):
         """Return the FSL registration URL from the manifest, or None if it is
         not present.
         """
-        return self.manifest['installer'].get('registration_url')
-
+        return self.manifest["installer"].get("registration_url")
 
     @property
     def platform(self):
@@ -2072,15 +2135,14 @@ class Context(object):
 
             # if M1, check that we have a suitable
             # FSL build, falling back to x86 if not.
-            if plat == 'macos-M1':
+            if plat == "macos-M1":
                 candidates = self.candidate_builds
-                if not any(c['platform'] == 'macos-M1' for c in candidates):
-                    plat = 'macos-64'
+                if not any(c["platform"] == "macos-M1" for c in candidates):
+                    plat = "macos-64"
 
             self.__platform = plat
 
         return self.__platform
-
 
     @property
     def miniconda_metadata(self):
@@ -2093,14 +2155,14 @@ class Context(object):
         """
         # Get information about the miniconda installer
         # from the manifest.
-        metadata = self.manifest['miniconda'][self.platform]
+        metadata = self.manifest["miniconda"][self.platform]
 
         # From FSL 6.0.7.17 and newer, installations
         # may be based on micromamba. If micromamba is
         # present in the manifest, use it, unless the
         # user has requested otherwise via --conda.
-        if 'micromamba' in metadata and (not self.args.conda):
-            return metadata['micromamba']
+        if "micromamba" in metadata and (not self.args.conda):
+            return metadata["micromamba"]
 
         # From FSL 6.0.7.12 and newer, the manifest
         # contains a separate miniconda installer URL
@@ -2109,7 +2171,7 @@ class Context(object):
         # manifest just contained a single miniconda URL
         # for each platform. This code supports both the
         # old and new manifest formats.
-        pyver = 'python{}'.format(self.python_version)
+        pyver = "python{}".format(self.python_version)
 
         if pyver in metadata:
             return metadata[pyver]
@@ -2119,12 +2181,13 @@ class Context(object):
         # single miniconda installer, or the manifest
         # does not contain a miniconda installer entry
         # for the python version to be installed.
-        if 'url' not in metadata:
-            raise Exception('Manifest does not contain metadata for a Python '
-                            '{} conda installer!'.format(pyver))
+        if "url" not in metadata:
+            raise Exception(
+                "Manifest does not contain metadata for a Python "
+                "{} conda installer!".format(pyver)
+            )
 
         return metadata
-
 
     @property
     def candidate_builds(self):
@@ -2138,21 +2201,22 @@ class Context(object):
         # not specified by the user
         fslversion = self.args.fslversion
         if fslversion is None:
-            fslversion = 'latest'
+            fslversion = "latest"
 
-        if fslversion not in self.manifest['versions']:
-            available = ', '.join(self.manifest['versions'].keys())
+        if fslversion not in self.manifest["versions"]:
+            available = ", ".join(self.manifest["versions"].keys())
             raise Exception(
-                'FSL version "{}" is not available - available '
-                'versions: {}'.format(fslversion, available))
+                'FSL version "{}" is not available - available versions: {}'.format(
+                    fslversion, available
+                )
+            )
 
-        if fslversion == 'latest':
-            fslversion = self.manifest['versions']['latest']
+        if fslversion == "latest":
+            fslversion = self.manifest["versions"]["latest"]
 
-        self.__candidate_builds = list(self.manifest['versions'][fslversion])
+        self.__candidate_builds = list(self.manifest["versions"][fslversion])
 
         return self.__candidate_builds
-
 
     @property
     def build(self):
@@ -2179,29 +2243,30 @@ class Context(object):
         # in the list of builds for a given FSL
         # version.
         candidates = self.candidate_builds
-        build      = None
+        build = None
 
         for candidate in candidates:
-            if candidate['platform'] == self.platform:
+            if candidate["platform"] == self.platform:
                 build = candidate
                 break
         else:
             raise Exception(
-                'Cannot find a version of FSL matching '
-                'platform {}'.format(self.platform))
+                "Cannot find a version of FSL matching platform {}".format(
+                    self.platform
+                )
+            )
 
-        printmsg('FSL {} selected for installation'.format(build['version']))
+        printmsg("FSL {} selected for installation".format(build["version"]))
 
         # Make sure the cuda_enabled flag is present
         # for all environments specified in the build
         # entry
-        build['cuda_enabled'] = str2bool(build.get('cuda_enabled', False))
-        for extra in build.get('extras', {}).values():
-            extra['cuda_enabled'] = str2bool(extra.get('cuda_enabled', False))
+        build["cuda_enabled"] = str2bool(build.get("cuda_enabled", False))
+        for extra in build.get("extras", {}).values():
+            extra["cuda_enabled"] = str2bool(extra.get("cuda_enabled", False))
 
         self.__build = build
         return build
-
 
     @property
     def destdir(self):
@@ -2212,72 +2277,84 @@ class Context(object):
         if self.__destdir is not None:
             return self.__destdir
 
-        fsldir = os.environ.get('FSLDIR', None)
+        fsldir = os.environ.get("FSLDIR", None)
 
-        if fsldir is not None: defdestdir = fsldir
-        elif os.getuid() != 0: defdestdir = DEFAULT_INSTALLATION_DIRECTORY
-        else:                  defdestdir = DEFAULT_ROOT_INSTALLATION_DIRECTORY
+        if fsldir is not None:
+            defdestdir = fsldir
+        elif os.getuid() != 0:
+            defdestdir = DEFAULT_INSTALLATION_DIRECTORY
+        else:
+            defdestdir = DEFAULT_ROOT_INSTALLATION_DIRECTORY
 
         # The loop below validates the destination directory
         # both when specified at commmand line or
         # interactively.  In either case, if invalid, the
         # user is re-prompted to enter a new destination.
         destdir = None
-        if self.args.dest is not None: response = self.args.dest
-        else:                          response = None
+        if self.args.dest is not None:
+            response = self.args.dest
+        else:
+            response = None
 
         while destdir is None:
-
             if response is None:
-                printmsg('\nWhere do you want to install FSL?',
-                         IMPORTANT, EMPHASIS)
-                printmsg('Press enter to install to the default location '
-                         '[{}]\n'.format(defdestdir), INFO)
-                response = prompt('FSL installation directory [{}]:'.format(
-                    defdestdir), QUESTION, EMPHASIS)
+                printmsg("\nWhere do you want to install FSL?", IMPORTANT, EMPHASIS)
+                printmsg(
+                    "Press enter to install to the default location [{}]\n".format(
+                        defdestdir
+                    ),
+                    INFO,
+                )
+                response = prompt(
+                    "FSL installation directory [{}]:".format(defdestdir),
+                    QUESTION,
+                    EMPHASIS,
+                )
                 response = response.rstrip(op.sep)
 
-                if response == '':
+                if response == "":
                     response = defdestdir
 
-            response  = op.expanduser(op.expandvars(response))
-            response  = op.abspath(response)
+            response = op.expanduser(op.expandvars(response))
+            response = op.abspath(response)
             parentdir = op.dirname(response)
             if op.exists(parentdir):
                 destdir = response
             else:
-                printmsg('Destination directory {} does not '
-                         'exist!'.format(parentdir), ERROR)
+                printmsg(
+                    "Destination directory {} does not exist!".format(parentdir), ERROR
+                )
                 response = None
 
         self.__destdir = destdir
         return self.__destdir
 
-
     @property
     def conda(self):
         """Return a path to the ``conda``, ``mamba``, or ``micromamba``
-        executable. """
-        bindir   = op.join(self.basedir, 'bin')
-        condabin = op.join(bindir, 'conda')
-        mambabin = op.join(bindir, 'mamba')
-        mmbin    = op.join(bindir, 'micromamba')
+        executable."""
+        bindir = op.join(self.basedir, "bin")
+        condabin = op.join(bindir, "conda")
+        mambabin = op.join(bindir, "mamba")
+        mmbin = op.join(bindir, "micromamba")
 
         # Prefer, in this order:
         #  - micromamba
         #  - mamba
         #  - conda
         # unless the user requestd otherwise via the --conda flag
-        if not self.args.conda: candidates = [mmbin, mambabin, condabin]
-        else:                   candidates = [condabin, mambabin, mmbin]
+        if not self.args.conda:
+            candidates = [mmbin, mambabin, condabin]
+        else:
+            candidates = [condabin, mambabin, mmbin]
 
         for c in candidates:
             if op.exists(c):
                 return c
 
-        raise RuntimeError('Cannot find conda/mamba/micromamba '
-                           'executable in {}'.format(bindir))
-
+        raise RuntimeError(
+            "Cannot find conda/mamba/micromamba executable in {}".format(bindir)
+        )
 
     @property
     def basedir(self):
@@ -2295,7 +2372,6 @@ class Context(object):
         else:
             return self.destdir
 
-
     @property
     def extras_dir(self):
         """Return the path to a directory into which child environments for
@@ -2303,22 +2379,21 @@ class Context(object):
         installation, this is set to $FSLDIR/envs/.
         """
         if self.basedir == self.destdir:
-            return op.join(self.destdir, 'envs')
+            return op.join(self.destdir, "envs")
 
         if self.args.extras_dir is None:
-            raise RuntimeError('--extras_dir must be specified when '
-                               'installing FSL as a child environment!')
+            raise RuntimeError(
+                "--extras_dir must be specified when "
+                "installing FSL as a child environment!"
+            )
         return self.args.extras_dir
-
 
     @property
     def use_existing_base(self):
         """Return True if we have been instructed to use an existing
         [mini]conda installation, as opposed to downloading/installing one.
         """
-        return ((self.args.miniconda is not None) and
-                op.isdir(self.args.miniconda))
-
+        return (self.args.miniconda is not None) and op.isdir(self.args.miniconda)
 
     @property
     def need_admin(self):
@@ -2331,11 +2406,9 @@ class Context(object):
         self.__need_admin = check_need_admin(parentdir)
         return self.__need_admin
 
-
     @property
     def admin_password(self):
-        """Returns the user's administrator password, prompting them if needed.
-        """
+        """Returns the user's administrator password, prompting them if needed."""
         # need_admin may be None or False,
         # so don't rely on truthiness.
         if not self.need_admin:
@@ -2344,10 +2417,9 @@ class Context(object):
             self.__admin_password = get_admin_password(self.__action)
         return self.__admin_password
 
-
     @property
     def manifest(self):
-        """Returns the FSL installer manifest as a dictionary. """
+        """Returns the FSL installer manifest as a dictionary."""
 
         if self.__manifest is None:
             if self.devmanifest is not None:
@@ -2356,9 +2428,9 @@ class Context(object):
             self.__manifest = download_manifest(
                 self.args.manifest,
                 self.args.workdir,
-                ssl_verify=(not self.args.skip_ssl_verify))
+                ssl_verify=(not self.args.skip_ssl_verify),
+            )
         return self.__manifest
-
 
     @property
     def devmanifest(self):
@@ -2374,7 +2446,7 @@ class Context(object):
         """
         if not self.args.devrelease:
             return None
-        if self.__devmanifest == 'na':
+        if self.__devmanifest == "na":
             return None
         elif self.__devmanifest is not None:
             return self.__devmanifest
@@ -2382,17 +2454,16 @@ class Context(object):
         devreleases = download_dev_releases(
             FSL_DEV_RELEASES,
             self.args.workdir,
-            ssl_verify=(not self.args.skip_ssl_verify))
+            ssl_verify=(not self.args.skip_ssl_verify),
+        )
 
         if len(devreleases) == 0:
-            self.__devmanifest = 'na'
+            self.__devmanifest = "na"
             return None
 
-        self.__devmanifest = prompt_dev_release(devreleases,
-                                                self.args.devlatest)
+        self.__devmanifest = prompt_dev_release(devreleases, self.args.devlatest)
 
         return self.__devmanifest
-
 
     def run(self, process_func, *args, **kwargs):
         """Run a command via a static Process method.  Handles sudo/
@@ -2408,12 +2479,11 @@ class Context(object):
         """
 
         process_func = ft.partial(process_func, *args, **kwargs)
-        env          = dict(kwargs.pop('env',        {}))
-        append_env   = dict(kwargs.pop('append_env', {}))
-        install_env  = install_environ(self.destdir,
-                                       self.args.username,
-                                       self.args.password,
-                                       self.cuda_version)
+        env = dict(kwargs.pop("env", {}))
+        append_env = dict(kwargs.pop("append_env", {}))
+        install_env = install_environ(
+            self.destdir, self.args.username, self.args.password, self.cuda_version
+        )
 
         # Clear any environment variables that refer to
         # existing FSL or conda installations, and ensure
@@ -2425,24 +2495,34 @@ class Context(object):
         env.update(clean_environ())
         install_env.update(append_env)
 
-        return process_func(admin=self.need_admin,
-                            password=self.admin_password,
-                            env=env,
-                            append_env=install_env)
+        return process_func(
+            admin=self.need_admin,
+            password=self.admin_password,
+            env=env,
+            append_env=install_env,
+        )
 
 
 def agree_to_license(ctx):
     """Prompts the user to agree to the terms of the FSL license."""
 
-    msg = ['Installing FSL implies agreement with the terms of the FSL '
-           'license - if you do not agree with these terms, you can '
-           'cancel the installation by pressing CTRL+C.', IMPORTANT]
+    msg = [
+        "Installing FSL implies agreement with the terms of the FSL "
+        "license - if you do not agree with these terms, you can "
+        "cancel the installation by pressing CTRL+C.",
+        IMPORTANT,
+    ]
 
     if ctx.license_url is not None:
-        msg = msg + [' You can view the license at ', IMPORTANT,
-                     ctx.license_url, IMPORTANT, UNDERLINE]
+        msg = msg + [
+            " You can view the license at ",
+            IMPORTANT,
+            ctx.license_url,
+            IMPORTANT,
+            UNDERLINE,
+        ]
     printmsg(*msg)
-    printmsg('')
+    printmsg("")
 
 
 def check_rosetta_status(ctx):
@@ -2452,8 +2532,7 @@ def check_rosetta_status(ctx):
     does nothing further. Otherwise, prints a message and exits.
     """
 
-    if not all((identify_platform() == 'macos-M1',
-                ctx.platform        == 'macos-64')):
+    if not all((identify_platform() == "macos-M1", ctx.platform == "macos-64")):
         return
 
     # Using the strategy discussed at
@@ -2463,40 +2542,48 @@ def check_rosetta_status(ctx):
     # The pkgutil command should return 0 if
     # rosetta is installed, non-0 otherwise.
     try:
-        Process.check_output('pkgutil --files com.apple.pkg.RosettaUpdateAuto')
+        Process.check_output("pkgutil --files com.apple.pkg.RosettaUpdateAuto")
     except RuntimeError:
-        printmsg('Rosetta emulation does not appear to be enabled!\n', ERROR)
-        printmsg('Enable rosetta emulation, and then run this installer '
-                 'again. You can enable rosetta emulation by running this '
-                 'command:\n', INFO)
-        printmsg('  /usr/sbin/softwareupdate --install-rosetta '
-                 '--agree-to-license\n', IMPORTANT)
-        printmsg('Aborting installation', ERROR)
+        printmsg("Rosetta emulation does not appear to be enabled!\n", ERROR)
+        printmsg(
+            "Enable rosetta emulation, and then run this installer "
+            "again. You can enable rosetta emulation by running this "
+            "command:\n",
+            INFO,
+        )
+        printmsg(
+            "  /usr/sbin/softwareupdate --install-rosetta --agree-to-license\n",
+            IMPORTANT,
+        )
+        printmsg("Aborting installation", ERROR)
         sys.exit(1)
     # pkgutil command not found - should
     # never happen, but print a warning
     # just in case
     except Exception as e:
-        printmsg('An error occurred calling the pkgutil command - this '
-                 'may not be a problem, so I\'ll attempt to proceed '
-                 'with the installation. ({}'.format(e), WARNING)
+        printmsg(
+            "An error occurred calling the pkgutil command - this "
+            "may not be a problem, so I'll attempt to proceed "
+            "with the installation. ({}".format(e),
+            WARNING,
+        )
 
 
 def list_available_versions(manifest):
-    """Lists available FSL versions. """
-    printmsg('Available FSL versions:', EMPHASIS)
-    versions = list(manifest['versions'].keys())
+    """Lists available FSL versions."""
+    printmsg("Available FSL versions:", EMPHASIS)
+    versions = list(manifest["versions"].keys())
     versions = reversed(sorted([Version(v) for v in versions]))
     for version in versions:
-        if str(version) == 'latest':
+        if str(version) == "latest":
             continue
         printmsg(str(version), IMPORTANT, EMPHASIS)
-        for build in manifest['versions'][str(version)]:
-            printmsg('  {}'.format(build['platform']), EMPHASIS, end=' ')
-            printmsg(build['environment'], INFO)
-            if len(build.get('extras', [])) > 0:
-                extras = ', '.join(build['extras'])
-                printmsg('  Extras: {}'.format(extras), INFO)
+        for build in manifest["versions"][str(version)]:
+            printmsg("  {}".format(build["platform"]), EMPHASIS, end=" ")
+            printmsg(build["environment"], INFO)
+            if len(build.get("extras", [])) > 0:
+                extras = ", ".join(build["extras"])
+                printmsg("  Extras: {}".format(extras), INFO)
 
 
 def prompt_dev_release(devreleases, latest):
@@ -2515,21 +2602,22 @@ def prompt_dev_release(devreleases, latest):
         return devreleases[0][0]
 
     # show the user a list, ask them which one they want
-    printmsg('Available development releases:', EMPHASIS)
+    printmsg("Available development releases:", EMPHASIS)
     for i, (url, tag, commit, branch) in enumerate(devreleases):
         # dev release
         if commit is not None:
-            printmsg('  [{}]: {} [{} commit {}]'.format(
-                i + 1, tag, branch, commit), IMPORTANT)
+            printmsg(
+                "  [{}]: {} [{} commit {}]".format(i + 1, tag, branch, commit),
+                IMPORTANT,
+            )
         # public release
         else:
-            printmsg('  [{}]: {}'.format(i + 1, tag), IMPORTANT)
+            printmsg("  [{}]: {}".format(i + 1, tag), IMPORTANT)
 
     while True:
-        selection = prompt('Which release would you like to '
-                           'install? [1]:', PROMPT)
-        if selection == '':
-            selection = '1'
+        selection = prompt("Which release would you like to install? [1]:", PROMPT)
+        if selection == "":
+            selection = "1"
         try:
             selection = int(selection) - 1
         except Exception:
@@ -2564,7 +2652,7 @@ def add_cuda_packages(ctx):
     """
 
     # User has requested no CUDA
-    if ctx.args.cuda == 'none':
+    if ctx.args.cuda == "none":
         return {}, None
 
     # If user has requested a specific CUDA/
@@ -2588,10 +2676,13 @@ def add_cuda_packages(ctx):
 
     # We have a GPU, and/or the user
     # has requested CUDA packages.
-    printmsg('\nBy downloading and using the CUDA Toolkit conda packages, you '
-             'accept the terms and conditions of the CUDA End User License '
-             'Agreement (EULA): https://docs.nvidia.com/cuda/eula/index.html'
-             '\n', IMPORTANT)
+    printmsg(
+        "\nBy downloading and using the CUDA Toolkit conda packages, you "
+        "accept the terms and conditions of the CUDA End User License "
+        "Agreement (EULA): https://docs.nvidia.com/cuda/eula/index.html"
+        "\n",
+        IMPORTANT,
+    )
 
     # CUDA >= 11 should have binary compatibility
     # within major release, so we set the version
@@ -2600,11 +2691,9 @@ def add_cuda_packages(ctx):
     # than 11.2, so we are not doing anything
     # special to handle older versions.
     major, minor = cuda
-    packages     = {
-        'cuda-version' : '>={}.{},<{}'.format(major, minor, major + 1)
-    }
+    packages = {"cuda-version": ">={}.{},<{}".format(major, minor, major + 1)}
 
-    return packages, '{}.{}'.format(*cuda)
+    return packages, "{}.{}".format(*cuda)
 
 
 def read_environment_file(filename):
@@ -2615,51 +2704,52 @@ def read_environment_file(filename):
      - A dict of { package : version } packages (where version may be None)
     """
 
-    name     = None
+    name = None
     channels = []
     packages = collections.OrderedDict()
 
     # load the channel and package lists
     # from the environment file.
-    with open(filename, 'rt') as f:
-
+    with open(filename, "rt") as f:
         in_channels_section = False
-        in_deps_section     = False
+        in_deps_section = False
 
         for line in f:
             line = line.strip()
 
             # environment name
-            if line.startswith('name:'):
-                name = line.split(':')[1].strip()
+            if line.startswith("name:"):
+                name = line.split(":")[1].strip()
                 continue
 
             line = line.strip()
 
-            if line == '':           continue
-            if line.startswith('#'): continue
+            if line == "":
+                continue
+            if line.startswith("#"):
+                continue
 
             # start of channels list
-            if line == 'channels:':
+            if line == "channels:":
                 in_channels_section = True
                 continue
 
             if in_channels_section:
                 # end of channels list
-                if not line.startswith('-'):
+                if not line.startswith("-"):
                     in_channels_section = False
                 else:
                     channels.append(line[1:].strip())
                     continue
 
             # start of deps list
-            if line == 'dependencies:':
+            if line == "dependencies:":
                 in_deps_section = True
                 continue
 
             if in_deps_section:
                 # end of deps list
-                if not line.startswith('-'):
+                if not line.startswith("-"):
                     in_deps_section = False
 
                 else:
@@ -2672,10 +2762,12 @@ def read_environment_file(filename):
                     # Note that we assume here that packages are
                     # specified as "package version", rather than
                     # "package=version".
-                    pkg = line.strip('- ').split(' ', 1)
+                    pkg = line.strip("- ").split(" ", 1)
 
-                    if len(pkg) == 1: pkg, ver = pkg[0], None
-                    else:             pkg, ver = pkg
+                    if len(pkg) == 1:
+                        pkg, ver = pkg[0], None
+                    else:
+                        pkg, ver = pkg
 
                     packages[pkg] = ver
                     continue
@@ -2688,23 +2780,23 @@ def write_environment_file(filename, name, channels, packages):
     and packages.
     """
 
-    with open(filename, 'wt') as f:
-
+    with open(filename, "wt") as f:
         if name is not None:
-            f.write('name: {}\n'.format(name))
+            f.write("name: {}\n".format(name))
 
         if len(channels) > 0:
-            f.write('channels:\n')
+            f.write("channels:\n")
             for channel in channels:
-                f.write(' - {}\n'.format(channel))
+                f.write(" - {}\n".format(channel))
 
-        f.write('dependencies:\n')
+        f.write("dependencies:\n")
         for package, version in packages.items():
+            if version is None:
+                version = ""
+            else:
+                version = " {}".format(version)
 
-            if version is None: version = ''
-            else:               version = ' {}'.format(version)
-
-            f.write(' - {}{}\n'.format(package, version))
+            f.write(" - {}{}\n".format(package, version))
 
 
 def download_fsl_environment_files(ctx):
@@ -2729,7 +2821,7 @@ def download_fsl_environment_files(ctx):
     # the package list for each conda
     # environment to be installed.
     cuda_pkgs, cuda_ver = add_cuda_packages(ctx)
-    ctx.cuda_version    = cuda_ver
+    ctx.cuda_version = cuda_ver
 
     # A FSL release may comprise multiple
     # separate environment files - a "main"
@@ -2743,20 +2835,18 @@ def download_fsl_environment_files(ctx):
     # We identify the main env with an empty
     # string - extra/child environments are
     # all named in the manifest.
-    allenvs  = [('', ctx.build)]
-    allenvs += list(ctx.build.get('extras', {}).items())
+    allenvs = [("", ctx.build)]
+    allenvs += list(ctx.build.get("extras", {}).items())
 
     ctx.extra_environment_files = {}
 
     for envname, build in allenvs:
+        url = build["environment"]
+        checksum = build.get("sha256", None)
 
-        url      = build['environment']
-        checksum = build.get('sha256', None)
+        printmsg("Downloading FSL environment specification from {}...".format(url))
 
-        printmsg('Downloading FSL environment specification '
-                 'from {}...'.format(url))
-
-        fname = url.split('/')[-1]
+        fname = url.split("/")[-1]
 
         download_file(url, fname, ssl_verify=(not ctx.args.skip_ssl_verify))
 
@@ -2767,17 +2857,20 @@ def download_fsl_environment_files(ctx):
         # will list the internal FSL conda channel with
         # ${FSLCONDA_USERNAME} and ${FSLCONDA_PASSWORD}
         # as placeholders for the username/password.
-        with open(fname, 'rt') as f:
-            need_auth = '${FSLCONDA_USERNAME}' in f.read()
+        with open(fname, "rt") as f:
+            need_auth = "${FSLCONDA_USERNAME}" in f.read()
 
         # We need a username/password to access the internal
         # FSL conda channel. Prompt the user if they haven't
         # provided credentials.
         if need_auth and (ctx.args.username is None):
-            printmsg('A username and password are required to install '
-                     'this version of FSL.', WARNING, EMPHASIS)
-            ctx.args.username = prompt('Username:').strip()
-            ctx.args.password = getpass.getpass('Password: ').strip()
+            printmsg(
+                "A username and password are required to install this version of FSL.",
+                WARNING,
+                EMPHASIS,
+            )
+            ctx.args.username = prompt("Username:").strip()
+            ctx.args.password = getpass.getpass("Password: ").strip()
 
         # We are now going to load, modify, and re-write, the
         # FSL environment file.
@@ -2791,19 +2884,21 @@ def download_fsl_environment_files(ctx):
         name, channels, packages = read_environment_file(fname)
 
         # Save some key information about the base environment
-        if envname == '':
+        if envname == "":
             ctx.environment_file = fname
 
             # Save the python version to ctx.python_version.
             # The Context.miniconda_metadata function will
             # use it to select a suitable miniconda installer.
-            if 'python' not in packages:
-                raise Exception('Could not identify Python version in '
-                                'FSL environment file ({})'.format(url))
+            if "python" not in packages:
+                raise Exception(
+                    "Could not identify Python version in "
+                    "FSL environment file ({})".format(url)
+                )
 
             # Just save the X.Y version
-            pyver              = packages['python'].split('.')
-            pyver              = '.'.join(pyver[:2])
+            pyver = packages["python"].split(".")
+            pyver = ".".join(pyver[:2])
             ctx.python_version = pyver
 
             # Save the channels to ctx.environment_channels.
@@ -2825,19 +2920,19 @@ def download_fsl_environment_files(ctx):
         for package in list(packages.keys()):
             exclude = match_any(package, ctx.args.exclude_package)
             if exclude:
-                log.debug('Excluding package %s', exclude)
+                log.debug("Excluding package %s", exclude)
                 packages.pop(package)
 
         # Add cuda_pkgs to each environment, but only
         # if the build entry has cuda_enabled=True
-        if build['cuda_enabled']:
+        if build["cuda_enabled"]:
             packages.update(cuda_pkgs)
 
         # Re-generate the environment file so it contains
         # the updated package list. We don't need to
         # save the channels, as they will be written to
         # condarc.
-        copy = '.' + op.basename(fname)
+        copy = "." + op.basename(fname)
         shutil.move(fname, copy)
         write_environment_file(fname, name, [], packages)
 
@@ -2863,26 +2958,30 @@ def download_miniconda(ctx, **kwargs):
     # user specified a URL/path to a
     # miniconda installer
     elif ctx.args.miniconda is not None:
-        url      = ctx.args.miniconda
+        url = ctx.args.miniconda
         checksum = None
 
     # Use miniconda installer specified
     # in FSL release manifest
     else:
         metadata = ctx.miniconda_metadata
-        url      = metadata['url']
-        checksum = metadata['sha256']
+        url = metadata["url"]
+        checksum = metadata["sha256"]
 
     # Download
-    printmsg('Downloading miniconda from {}...'.format(url))
-    with Progress('MB', transform=Progress.bytes_to_mb,
-                  proglabel='download_miniconda',
-                  progfile=ctx.args.progress_file,
-                  **kwargs) as prog:
-        download_file(url, 'miniconda.sh', prog.update,
-                      ssl_verify=(not ctx.args.skip_ssl_verify))
+    printmsg("Downloading miniconda from {}...".format(url))
+    with Progress(
+        "MB",
+        transform=Progress.bytes_to_mb,
+        proglabel="download_miniconda",
+        progfile=ctx.args.progress_file,
+        **kwargs,
+    ) as prog:
+        download_file(
+            url, "miniconda.sh", prog.update, ssl_verify=(not ctx.args.skip_ssl_verify)
+        )
     if (not ctx.args.no_checksum) and (checksum is not None):
-        sha256('miniconda.sh', checksum)
+        sha256("miniconda.sh", checksum)
 
 
 def install_miniconda(ctx, **kwargs):
@@ -2905,7 +3004,7 @@ def install_miniconda(ctx, **kwargs):
     # the miniconda installer from the manifest.
     if not ctx.args.miniconda:
         metadata = ctx.miniconda_metadata
-        output   = metadata.get('output', '')
+        output = metadata.get("output", "")
     else:
         output = None
 
@@ -2913,7 +3012,7 @@ def install_miniconda(ctx, **kwargs):
     # string containing an int)
     if isinstance(output, str):
         output = output.strip()
-    if output == '':
+    if output == "":
         output = None
     if output is not None:
         output = int(output)
@@ -2923,35 +3022,42 @@ def install_miniconda(ctx, **kwargs):
     # is assumed to be either an executable
     # shell script (miniconda/miniforge), or
     # a tarball (micromamba).
-    printmsg('Installing conda at {}...'.format(ctx.basedir))
-    if is_shell_script('miniconda.sh'):
-        cmd = 'bash miniconda.sh -b -p {}'.format(ctx.basedir)
-        ctx.run(Process.monitor_progress, cmd, total=output,
-                proglabel='install_miniconda',
-                progfile=ctx.args.progress_file,
-                **kwargs)
+    printmsg("Installing conda at {}...".format(ctx.basedir))
+    if is_shell_script("miniconda.sh"):
+        cmd = "bash miniconda.sh -b -p {}".format(ctx.basedir)
+        ctx.run(
+            Process.monitor_progress,
+            cmd,
+            total=output,
+            proglabel="install_miniconda",
+            progfile=ctx.args.progress_file,
+            **kwargs,
+        )
     else:
-        cmds = ['mkdir {}'                    .format(ctx.basedir),
-                'tar -x -f miniconda.sh -C {}'.format(ctx.basedir)]
-        with Progress(label='%',
-                      fmt='{:.0f}',
-                      total=1,
-                      transform=Progress.percent,
-                      **kwargs) as prog:
+        cmds = [
+            "mkdir {}".format(ctx.basedir),
+            "tar -x -f miniconda.sh -C {}".format(ctx.basedir),
+        ]
+        with Progress(
+            label="%", fmt="{:.0f}", total=1, transform=Progress.percent, **kwargs
+        ) as prog:
             for cmd in cmds:
                 ctx.run(Process.check_call, cmd)
                 prog.update(0.5)
 
     # Avoid WSL filesystem issue
     # https://github.com/conda/conda/issues/9948#issuecomment-909989810
-    cmd = 'find {} -type f -exec touch {{}} +'.format(ctx.basedir)
+    cmd = "find {} -type f -exec touch {{}} +".format(ctx.basedir)
     ctx.run(Process.check_call, cmd)
 
 
-@warn_on_error('WARNING: An error occurred while generating the FSL wrapper '
-               'management scripts! Installation will proceed, but you may '
-               'encounter problems with your FSL installation.',
-               WARNING, EMPHASIS)
+@warn_on_error(
+    "WARNING: An error occurred while generating the FSL wrapper "
+    "management scripts! Installation will proceed, but you may "
+    "encounter problems with your FSL installation.",
+    WARNING,
+    EMPHASIS,
+)
 def install_wrapper_scripts(ctx, **kwargs):
     """Creates the ${FSLDIR}/shrae/fsl/sbin/createFSLWrapper and
     ${FSLDIR}/shrae/fsl/sbin/removeFSLWrapper scripts. These scripts are used by
@@ -2959,55 +3065,52 @@ def install_wrapper_scripts(ctx, **kwargs):
     ${FSLDIR}/share/fsl/bin/. These wrapper scripts are created so that FSL commands
     can be isolated from the other executables in ${FSLDIR}/bin/.
     """
-    thisdir              = op.dirname(__file__)
-    destdir              = op.join(ctx.destdir, 'share', 'fsl', 'sbin')
-    createFSLWrapperSrc  = op.join(thisdir, 'createFSLWrapper.py')
-    removeFSLWrapperSrc  = op.join(thisdir, 'removeFSLWrapper.py')
-    createFSLWrapperDest = op.join(destdir, 'createFSLWrapper')
-    removeFSLWrapperDest = op.join(destdir, 'removeFSLWrapper')
+    thisdir = op.dirname(__file__)
+    destdir = op.join(ctx.destdir, "share", "fsl", "sbin")
+    createFSLWrapperSrc = op.join(thisdir, "createFSLWrapper.py")
+    removeFSLWrapperSrc = op.join(thisdir, "removeFSLWrapper.py")
+    createFSLWrapperDest = op.join(destdir, "createFSLWrapper")
+    removeFSLWrapperDest = op.join(destdir, "removeFSLWrapper")
     createFSLWrapperText = FSL_CREATE_WRAPPER_SCRIPT
     removeFSLWrapperText = FSL_REMOVE_WRAPPER_SCRIPT
 
     # This is obviously a super quick operation, but we
     # use a progress bar so that the terminal output
     # is consistent with the other installation steps
-    printmsg('Creating FSL wrapper management scripts...')
-    with Progress(label='%',
-                  fmt='{:.0f}',
-                  total=1,
-                  transform=Progress.percent,
-                  **kwargs) as prog:
-
+    printmsg("Creating FSL wrapper management scripts...")
+    with Progress(
+        label="%", fmt="{:.0f}", total=1, transform=Progress.percent, **kwargs
+    ) as prog:
         # Running from source code - load wrapper
         # script contents from source files
         if createFSLWrapperText.startswith(TEMPLATE_IDENTIFIER):
-            with open(createFSLWrapperSrc, 'rt') as f:
+            with open(createFSLWrapperSrc, "rt") as f:
                 createFSLWrapperText = f.read().strip()
         if removeFSLWrapperText.startswith(TEMPLATE_IDENTIFIER):
-            with open(removeFSLWrapperSrc, 'rt') as f:
+            with open(removeFSLWrapperSrc, "rt") as f:
                 removeFSLWrapperText = f.read().strip()
 
-        with open('createFSLWrapper', 'wt') as f:
+        with open("createFSLWrapper", "wt") as f:
             f.write(createFSLWrapperText)
-        with open('removeFSLWrapper', 'wt') as f:
+        with open("removeFSLWrapper", "wt") as f:
             f.write(removeFSLWrapperText)
 
-        cmds = ['mkdir -p {}'           .format(destdir),
-                'cp createFSLWrapper {}'.format(createFSLWrapperDest),
-                'cp removeFSLWrapper {}'.format(removeFSLWrapperDest),
-                'chmod 755 {}'          .format(createFSLWrapperDest),
-                'chmod 755 {}'          .format(removeFSLWrapperDest)]
+        cmds = [
+            "mkdir -p {}".format(destdir),
+            "cp createFSLWrapper {}".format(createFSLWrapperDest),
+            "cp removeFSLWrapper {}".format(removeFSLWrapperDest),
+            "chmod 755 {}".format(createFSLWrapperDest),
+            "chmod 755 {}".format(removeFSLWrapperDest),
+        ]
 
         for cmd in cmds:
             ctx.run(Process.check_call, cmd)
         prog.update(1)
 
 
-def generate_condarc(fsldir,
-                     channels,
-                     skip_ssl_verify=False,
-                     throttle_downloads=False,
-                     pkgsdir=None):
+def generate_condarc(
+    fsldir, channels, skip_ssl_verify=False, throttle_downloads=False, pkgsdir=None
+):
     """Called by install_fsl. Generates content for a .condarc file to
     be saved in $FSLDIR/.condarc. This file contains some default values, and
     also enforces some settings so that they cannot be overridden by the
@@ -3076,7 +3179,8 @@ def generate_condarc(fsldir,
     # Fix the conda package cache
     # if a pkgsdir was provided
     if pkgsdir is not None:
-        condarc += tw.dedent("""
+        condarc += tw.dedent(
+            """
         # Fix the package cache at $FSLDIR/pkgs/. Conda
         # will download packages to this directory,
         # unless it is not writeable, in which case the
@@ -3084,11 +3188,14 @@ def generate_condarc(fsldir,
         # ~/.condarc
         pkgs_dirs:
         - {} #!top
-        """.format(pkgsdir))
+        """.format(pkgsdir)
+        )
 
     if skip_ssl_verify:
-        printmsg('Configuring conda to skip SSL verification '
-                 '- this is not recommended!', WARNING)
+        printmsg(
+            "Configuring conda to skip SSL verification - this is not recommended!",
+            WARNING,
+        )
         condarc += tw.dedent("""
         # Disable SSL verification when accessing
         # conda channels over https:// (the
@@ -3107,11 +3214,11 @@ def generate_condarc(fsldir,
 
     channels = list(channels)
     if len(channels) > 0:
-        channels[0]  += ' #!top'
-        channels[-1] += ' #!bottom'
-        condarc      += '\nchannels: #!final\n'
+        channels[0] += " #!top"
+        channels[-1] += " #!bottom"
+        condarc += "\nchannels: #!final\n"
         for channel in channels:
-            condarc += ' - {}\n'.format(channel)
+            condarc += " - {}\n".format(channel)
 
     return condarc
 
@@ -3128,8 +3235,10 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
       - a function to pass as the progfunc.
     """
 
-    if build   is None: build   = ctx.build
-    if destdir is None: destdir = ctx.destdir
+    if build is None:
+        build = ctx.build
+    if destdir is None:
+        destdir = ctx.destdir
 
     # Installation progress parameters may differ
     # depending on the target system. If we are
@@ -3137,10 +3246,10 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
     # extra environment is CUDA-capable, the
     # manifest should contain CUDA-specific
     # installation parameters.
-    if (ctx.cuda_version is not None) and build['cuda_enabled']:
-        params_key = 'cuda'
+    if (ctx.cuda_version is not None) and build["cuda_enabled"]:
+        params_key = "cuda"
     else:
-        params_key = 'install'
+        params_key = "install"
 
     # We calculate installation progress in
     # one of a few ways, as we have changed
@@ -3148,7 +3257,7 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
     # 'output/install' field in the manifest
     # gives us information about how to
     # report installation progress.
-    progparams = build.get('output', {}).get(params_key, None)
+    progparams = build.get("output", {}).get(params_key, None)
 
     # The first method (version 1) involves
     # progress reporting by monitoring number of
@@ -3183,10 +3292,10 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
     # This is combined with the number of
     # files saved to $FSLDIR/bin/ and
     # $FSLDIR/lib/
-    pkgdir = op.join(ctx.basedir, 'pkgs')
-    pkgdir = op.join(ctx.basedir, 'pkgs')
-    bindir = op.join(    destdir, 'bin')
-    libdir = op.join(    destdir, 'lib')
+    pkgdir = op.join(ctx.basedir, "pkgs")
+    pkgdir = op.join(ctx.basedir, "pkgs")
+    bindir = op.join(destdir, "bin")
+    libdir = op.join(destdir, "lib")
 
     def matchany(name, *filters):
         return any([fnmatch.fnmatch(name, f) for f in filters])
@@ -3198,35 +3307,38 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
         contents = [f for f in contents if matchany(f, *filters)]
         return [op.join(dirname, f) for f in contents]
 
-    start_pkgs  = contents(pkgdir, '*.conda', '*.bz2')
+    start_pkgs = contents(pkgdir, "*.conda", "*.bz2")
     start_sizes = sum([op.getsize(p) for p in start_pkgs])
-    start_pkgs  = len(start_pkgs)
-    start_bins  = len(contents(bindir))
-    start_libs  = len(contents(libdir))
+    start_pkgs = len(start_pkgs)
+    start_bins = len(contents(bindir))
+    start_libs = len(contents(libdir))
 
     def progress_v234(v, _):
-
-        pkgs  = contents(pkgdir, '*.conda', '*.bz2')
-        bins  = contents(bindir)
-        libs  = contents(libdir)
+        pkgs = contents(pkgdir, "*.conda", "*.bz2")
+        bins = contents(bindir)
+        libs = contents(libdir)
         sizes = [op.getsize(p) for p in pkgs]
-        pkgs  = len(pkgs)  - start_pkgs
-        bins  = len(bins)  - start_bins
-        libs  = len(libs)  - start_libs
+        pkgs = len(pkgs) - start_pkgs
+        bins = len(bins) - start_bins
+        libs = len(libs) - start_libs
         sizes = sum(sizes) - start_sizes
 
-        if   v == 2: return pkgs
-        elif v == 3: return pkgs  + bins + libs
-        elif v == 4: return sizes + bins + libs
-        else:        return None
+        if v == 2:
+            return pkgs
+        elif v == 3:
+            return pkgs + bins + libs
+        elif v == 4:
+            return sizes + bins + libs
+        else:
+            return None
 
-    progresses    = {}
-    progresses[1] =            progress_v1
+    progresses = {}
+    progresses[1] = progress_v1
     progresses[2] = ft.partial(progress_v234, 2)
     progresses[3] = ft.partial(progress_v234, 3)
     progresses[4] = ft.partial(progress_v234, 4)
 
-    progval  = None
+    progval = None
     progfunc = None
 
     # The output field may be either a
@@ -3235,19 +3347,19 @@ def get_install_fsl_progress_reporting_method(ctx, build=None, destdir=None):
     # the progress reporting version, and
     # an integer value.
     if isstr(progparams):
-        progval  = int(progparams)
+        progval = int(progparams)
         progfunc = progresses[2]
 
     # output field is a dict - versioned
     # progress reporting
     elif isinstance(progparams, dict):
-        progver  = int(progparams['version'])
+        progver = int(progparams["version"])
         progfunc = progresses[progver]
-        progval  = progparams['value']
+        progval = progparams["value"]
 
         # unsupported progress reporting version
         if progver > 4:
-            progval  = None
+            progval = None
             progfunc = None
 
         # version 4: progval is a dict
@@ -3285,28 +3397,33 @@ def install_fsl(ctx, **kwargs):
     # the package cache directory to isolate it from
     # other conda installations that may be on the
     # system.
-    if ctx.destdir == ctx.basedir: pkgsdir = op.join(ctx.destdir, 'pkgs')
-    else:                          pkgsdir = None
+    if ctx.destdir == ctx.basedir:
+        pkgsdir = op.join(ctx.destdir, "pkgs")
+    else:
+        pkgsdir = None
 
-    condarc_contents = generate_condarc(ctx.destdir,
-                                        ctx.environment_channels,
-                                        ctx.args.skip_ssl_verify,
-                                        ctx.args.throttle_downloads,
-                                        pkgsdir)
-    with open('.condarc', 'wt') as f:
+    condarc_contents = generate_condarc(
+        ctx.destdir,
+        ctx.environment_channels,
+        ctx.args.skip_ssl_verify,
+        ctx.args.throttle_downloads,
+        pkgsdir,
+    )
+    with open(".condarc", "wt") as f:
         f.write(condarc_contents)
 
-    condarc = op.join(ctx.destdir, '.condarc')
-    cmds    = ['mkdir -p ' + ctx.destdir,
-               'cp -f .condarc ' + condarc]
+    condarc = op.join(ctx.destdir, ".condarc")
+    cmds = ["mkdir -p " + ctx.destdir, "cp -f .condarc " + condarc]
 
     for cmd in cmds:
         ctx.run(Process.check_call, cmd)
 
     # Are we updating an existing
     # env or creating a new env?
-    if ctx.destdir == ctx.basedir: cmd = 'update'
-    else:                          cmd = 'create'
+    if ctx.destdir == ctx.basedir:
+        cmd = "update"
+    else:
+        cmd = "create"
 
     env = {}
 
@@ -3314,46 +3431,45 @@ def install_fsl(ctx, **kwargs):
     # want conda to install any CUDA-related
     # packages. Set this var so that conda
     # ignores any installed GPU
-    env['CONDA_OVERRIDE_CUDA'] = ''
+    env["CONDA_OVERRIDE_CUDA"] = ""
 
     # One of several methods employed to try and
     # convince conda to only use settings from
     # ${FSLDIR}/.condarc
-    env['CONDARC'] = condarc
+    env["CONDARC"] = condarc
 
     # We install FSL simply by running conda
     # env [update|create] -f env.yml.
     envfile = ctx.environment_file
-    cmd     = (ctx.conda + ' env ' + cmd +
-               ' -p ' + ctx.destdir      +
-               ' -f ' + envfile)
+    cmd = ctx.conda + " env " + cmd + " -p " + ctx.destdir + " -f " + envfile
 
     # Another method employed to try and persuade
     # conda to ignore other .condarc files. The --rc-file
     # flag is only supported by mamba/micromamba
-    if op.basename(ctx.conda) in ('mamba', 'micromamba'):
-        cmd += ' --rc-file ' + condarc
+    if op.basename(ctx.conda) in ("mamba", "micromamba"):
+        cmd += " --rc-file " + condarc
 
     # Make conda/mamba super verbose if the
     # hidden --debug option was specified.
     if ctx.args.debug:
-        cmd += ' -v -v -v'
+        cmd += " -v -v -v"
 
-    printmsg('Installing FSL into {}...'.format(ctx.destdir))
+    printmsg("Installing FSL into {}...".format(ctx.destdir))
 
     # Temporarily install a logging handler which
     # records any stdout/stderr messages emitted
     # by the conda command that contain phrases
     # indicating that the installation failed due
     # to a network error.
-    err_patterns = ['Connection broken',
-                    'Download error',
-                    'NewConnectionError',
-                    'Downloaded bytes did not match Content-Length',
-                    'CONNECTION FAILED']
+    err_patterns = [
+        "Connection broken",
+        "Download error",
+        "NewConnectionError",
+        "Downloaded bytes did not match Content-Length",
+        "CONNECTION FAILED",
+    ]
 
     with LogRecordingHandler(err_patterns) as hd:
-
         # If the installation fails for what appears
         # to have been a network error, retry it
         # according to --num_retries. Conda>=23.11.0
@@ -3364,18 +3480,28 @@ def install_fsl(ctx, **kwargs):
         # Tell the retry_on_error function to retry
         # if conda emitted any messages matching the
         # patterns above
-        err_message = 'Installation failed!'
+        err_message = "Installation failed!"
+
         def retry_install(e):
             logmsgs = hd.records()
             hd.clear()
             return len(logmsgs) > 0
 
-        retry_on_error(ctx.run, ctx.args.num_retries, Process.monitor_progress,
-                       cmd, append_env=env, timeout=2, total=progval,
-                       progfunc=progfunc, proglabel='install_fsl',
-                       progfile=ctx.args.progress_file,
-                       retry_error_message=err_message,
-                       retry_condition=retry_install, **kwargs)
+        retry_on_error(
+            ctx.run,
+            ctx.args.num_retries,
+            Process.monitor_progress,
+            cmd,
+            append_env=env,
+            timeout=2,
+            total=progval,
+            progfunc=progfunc,
+            proglabel="install_fsl",
+            progfile=ctx.args.progress_file,
+            retry_error_message=err_message,
+            retry_condition=retry_install,
+            **kwargs,
+        )
 
 
 def install_extra(ctx, name, **kwargs):
@@ -3391,77 +3517,93 @@ def install_extra(ctx, name, **kwargs):
     destdir = op.join(ctx.extras_dir, name)
 
     # directory already exists - try updating
-    if not op.exists(destdir): action = 'create'
-    else:                      action = 'update'
+    if not op.exists(destdir):
+        action = "create"
+    else:
+        action = "update"
 
-    cmd = (ctx.conda + ' env ' + action +
-               ' -p ' + destdir +
-               ' -f ' + envfile)
+    cmd = ctx.conda + " env " + action + " -p " + destdir + " -f " + envfile
 
-    env     = {}
-    condarc = op.join(ctx.destdir, '.condarc')
+    env = {}
+    condarc = op.join(ctx.destdir, ".condarc")
 
     # Try to convince conda to only use our settings
     if op.exists(condarc):
-        env['CONDARC'] = condarc
+        env["CONDARC"] = condarc
 
-        if op.basename(ctx.conda) in ('mamba', 'micromamba'):
-            cmd += ' --rc-file ' + condarc
+        if op.basename(ctx.conda) in ("mamba", "micromamba"):
+            cmd += " --rc-file " + condarc
 
     if ctx.args.debug:
-        cmd += ' -v -v -v'
+        cmd += " -v -v -v"
 
     progval, progfunc = get_install_fsl_progress_reporting_method(
-        ctx, ctx.build['extras'][name], destdir)
+        ctx, ctx.build["extras"][name], destdir
+    )
 
-    printmsg('Installing {} into {}...'.format(name, destdir))
-    ctx.run(Process.monitor_progress, cmd,
-            timeout=2, total=progval, progfunc=progfunc,
-            proglabel='install_{}'.format(name),
-            progfile=ctx.args.progress_file,
-            **kwargs)
+    printmsg("Installing {} into {}...".format(name, destdir))
+    ctx.run(
+        Process.monitor_progress,
+        cmd,
+        timeout=2,
+        total=progval,
+        progfunc=progfunc,
+        proglabel="install_{}".format(name),
+        progfile=ctx.args.progress_file,
+        **kwargs,
+    )
 
 
-@warn_on_error('WARNING: The installation succeeded, but an error occurred '
-               'while creating $FSLDIR/etc/fslversion! There may be more '
-               'information in the log file.', WARNING, EMPHASIS)
+@warn_on_error(
+    "WARNING: The installation succeeded, but an error occurred "
+    "while creating $FSLDIR/etc/fslversion! There may be more "
+    "information in the log file.",
+    WARNING,
+    EMPHASIS,
+)
 def finalise_installation(ctx):
     """Performs some finalisation tasks. Includes:
-      - Saving the installed version to $FSLDIR/etc/fslversion
-      - Saving this installer script and the environment file to
-        $FSLDIR/etc/
+    - Saving the installed version to $FSLDIR/etc/fslversion
+    - Saving this installer script and the environment file to
+      $FSLDIR/etc/
     """
 
-    with open('fslversion', 'wt') as f:
-        f.write(ctx.build['version'])
+    with open("fslversion", "wt") as f:
+        f.write(ctx.build["version"])
 
-    etcdir = op.join(ctx.destdir, 'etc')
-    cmds   = ['cp fslversion {}' .format(etcdir),
-              'cp {} {}'         .format(ctx.environment_file, etcdir)]
+    etcdir = op.join(ctx.destdir, "etc")
+    cmds = [
+        "cp fslversion {}".format(etcdir),
+        "cp {} {}".format(ctx.environment_file, etcdir),
+    ]
 
     for envfile in ctx.extra_environment_files.values():
-        cmds.append('cp {} {}'.format(envfile, etcdir))
+        cmds.append("cp {} {}".format(envfile, etcdir))
 
     for cmd in cmds:
         ctx.run(Process.check_call, cmd)
 
 
-@warn_on_error('WARNING: The installation succeeded, but an error occurred '
-               'while removing intermediate package files! There may be more '
-               'information in the log file.', WARNING, EMPHASIS)
+@warn_on_error(
+    "WARNING: The installation succeeded, but an error occurred "
+    "while removing intermediate package files! There may be more "
+    "information in the log file.",
+    WARNING,
+    EMPHASIS,
+)
 def post_install_cleanup(ctx, tmpdir):
-    """Cleans up the FSL directory after installation. """
+    """Cleans up the FSL directory after installation."""
 
-    cmds = [ctx.conda + ' clean -y --all']
+    cmds = [ctx.conda + " clean -y --all"]
 
     if tmpdir is not None:
-        cmds.append('rm -rf ' + tmpdir)
+        cmds.append("rm -rf " + tmpdir)
 
     for cmd in cmds:
         ctx.run(Process.check_call, cmd)
 
 
-@warn_on_error('WARNING: ', WARNING, EMPHASIS, toscreen=False)
+@warn_on_error("WARNING: ", WARNING, EMPHASIS, toscreen=False)
 def register_installation(ctx):
     """Gathers and sends some basic system details to the FSL registration
     website.
@@ -3476,37 +3618,37 @@ def register_installation(ctx):
 
     # Exclude hostname from uname output, as
     # it may contain identifying information
-    uname  = Process.check_output('uname -msrv', check=False)
+    uname = Process.check_output("uname -msrv", check=False)
     system = platform.system().lower()
-    osinfo = ''
+    osinfo = ""
 
     # macOS
-    if system == 'darwin':
-        osinfo = Process.check_output('sw_vers', check=False)
+    if system == "darwin":
+        osinfo = Process.check_output("sw_vers", check=False)
 
     # Linux
     else:
-        if op.exists('/etc/os-release'):
-            with open('/etc/os-release', 'rt') as f:
+        if op.exists("/etc/os-release"):
+            with open("/etc/os-release", "rt") as f:
                 osinfo = f.read().strip()
         else:
-            osinfo = 'Unknown'
+            osinfo = "Unknown"
         # WSL
-        if 'microsoft' in uname.lower():
-            osinfo += '\n\n' + Process.check_output('wsl.exe -v', check=False)
+        if "microsoft" in uname.lower():
+            osinfo += "\n\n" + Process.check_output("wsl.exe -v", check=False)
     info = {
-        'architecture'   : platform.machine(),
-        'os'             : system,
-        'os_info'        : osinfo,
-        'uname'          : uname,
-        'python_version' : platform.python_version(),
-        'python_info'    : sys.version,
-        'fsl_version'    : ctx.build['version'],
-        'fsl_platform'   : ctx.build['platform'],
-        'locale'         : getlocale(),
+        "architecture": platform.machine(),
+        "os": system,
+        "os_info": osinfo,
+        "uname": uname,
+        "python_version": platform.python_version(),
+        "python_info": sys.version,
+        "fsl_version": ctx.build["version"],
+        "fsl_platform": ctx.build["platform"],
+        "locale": getlocale(),
     }
 
-    printmsg('Registering installation with {}'.format(regurl))
+    printmsg("Registering installation with {}".format(regurl))
 
     send_registration_info(regurl, data=info)
 
@@ -3521,7 +3663,7 @@ def patch_file(filename, searchline, numlines, content):
     Otherwise, content is appended to the end of the file.
     """
 
-    content = content.split('\n')
+    content = content.split("\n")
 
     if op.isfile(filename):
         with open(filename) as f:
@@ -3531,15 +3673,15 @@ def patch_file(filename, searchline, numlines, content):
 
     # replace block
     try:
-        idx   = lines.index(searchline)
-        lines = lines[:idx] + content + lines[idx + numlines:]
+        idx = lines.index(searchline)
+        lines = lines[:idx] + content + lines[idx + numlines :]
 
     # append to end
     except ValueError:
-        lines = lines + [''] + content + ['']
+        lines = lines + [""] + content + [""]
 
-    with open(filename, 'wt') as f:
-        f.write('\n'.join(lines))
+    with open(filename, "wt") as f:
+        f.write("\n".join(lines))
 
 
 def configure_shell(shell, homedir, fsldir):
@@ -3551,8 +3693,8 @@ def configure_shell(shell, homedir, fsldir):
     :arg fsldir:  FSL installation directory
     """
 
-    bourne_shells  = ['sh', 'bash', 'zsh', 'dash']
-    csh_shells     = ['csh', 'tcsh']
+    bourne_shells = ["sh", "bash", "zsh", "dash"]
+    csh_shells = ["csh", "tcsh"]
 
     # we edit the first file that exists in
     # the list of candidate profile files.
@@ -3566,33 +3708,45 @@ def configure_shell(shell, homedir, fsldir):
     # legacy FSL installations, i.e. so we can modify
     # profiles with an existing configuration from older
     # FSL versions
-    bourne_cfg = tw.dedent("""
+    bourne_cfg = (
+        tw.dedent("""
     # FSL Setup
     FSLDIR={fsldir}
     PATH=${{FSLDIR}}/share/fsl/bin:${{PATH}}
     export FSLDIR PATH
     . ${{FSLDIR}}/etc/fslconf/fsl.sh
-    """).format(fsldir=fsldir).strip()
+    """)
+        .format(fsldir=fsldir)
+        .strip()
+    )
 
-    csh_cfg = tw.dedent("""
+    csh_cfg = (
+        tw.dedent("""
     # FSL Setup
     setenv FSLDIR {fsldir}
     setenv PATH ${{FSLDIR}}/share/fsl/bin:${{PATH}}
     source ${{FSLDIR}}/etc/fslconf/fsl.csh
-    """).format(fsldir=fsldir).strip()
+    """)
+        .format(fsldir=fsldir)
+        .strip()
+    )
 
     if shell not in bourne_shells + csh_shells:
-        printmsg('Shell {} not recognised - skipping environment '
-                 'setup'.format(shell), WARNING, EMPHASIS)
+        printmsg(
+            "Shell {} not recognised - skipping environment setup".format(shell),
+            WARNING,
+            EMPHASIS,
+        )
         return
 
-    if shell in bourne_shells: cfg = bourne_cfg
-    else:                      cfg = csh_cfg
+    if shell in bourne_shells:
+        cfg = bourne_cfg
+    else:
+        cfg = csh_cfg
 
     # find the profile file to edit
-    profile    = None
-    candidates = [op.join(homedir, p)
-                  for p in shell_profiles[shell]]
+    profile = None
+    candidates = [op.join(homedir, p) for p in shell_profiles[shell]]
     for candidate in candidates:
         if op.isfile(candidate):
             profile = candidate
@@ -3603,26 +3757,29 @@ def configure_shell(shell, homedir, fsldir):
     if profile is None:
         profile = candidates[0]
 
-    printmsg('Adding FSL configuration to {}'.format(profile))
+    printmsg("Adding FSL configuration to {}".format(profile))
 
-    patch_file(profile, '# FSL Setup', len(cfg.split('\n')), cfg)
+    patch_file(profile, "# FSL Setup", len(cfg.split("\n")), cfg)
 
-configure_shell.shell_profiles = {'sh'   : ['.profile'],
-                                  'ksh'  : ['.profile'],
-                                  'bash' : ['.bash_profile', '.profile'],
-                                  'dash' : ['.bash_profile', '.profile'],
-                                  'zsh'  : ['.zprofile'],
-                                  'csh'  : ['.cshrc'],
-                                  'tcsh' : ['.tcshrc']}
+
+configure_shell.shell_profiles = {
+    "sh": [".profile"],
+    "ksh": [".profile"],
+    "bash": [".bash_profile", ".profile"],
+    "dash": [".bash_profile", ".profile"],
+    "zsh": [".zprofile"],
+    "csh": [".cshrc"],
+    "tcsh": [".tcshrc"],
+}
 
 
 def configure_matlab(homedir, fsldir):
-    """Creates/appends FSL configuration code to ~/Documents/MATLAB/startup.m.
-    """
+    """Creates/appends FSL configuration code to ~/Documents/MATLAB/startup.m."""
 
     # DO NOT CHANGE the format of this configuration -
     # see in-line comments in configure_shell.
-    cfg = tw.dedent("""
+    cfg = (
+        tw.dedent("""
     % FSL Setup
     setenv( 'FSLDIR', '{fsldir}' );
     setenv('FSLOUTPUTTYPE', 'NIFTI_GZ');
@@ -3630,17 +3787,20 @@ def configure_matlab(homedir, fsldir):
     fsldirmpath = sprintf('%s/etc/matlab',fsldir);
     path(path, fsldirmpath);
     clear fsldir fsldirmpath;
-    """).format(fsldir=fsldir).strip()
+    """)
+        .format(fsldir=fsldir)
+        .strip()
+    )
 
-    matlab_dir = op.expanduser(op.join(homedir, 'Documents', 'MATLAB'))
-    startup_m  = op.join(matlab_dir, 'startup.m')
+    matlab_dir = op.expanduser(op.join(homedir, "Documents", "MATLAB"))
+    startup_m = op.join(matlab_dir, "startup.m")
 
     if not op.exists(matlab_dir):
         os.makedirs(matlab_dir)
 
-    printmsg('Adding FSL configuration to {}'.format(startup_m))
+    printmsg("Adding FSL configuration to {}".format(startup_m))
 
-    patch_file(startup_m, '% FSL Setup', len(cfg.split('\n')), cfg)
+    patch_file(startup_m, "% FSL Setup", len(cfg.split("\n")), cfg)
 
 
 def self_update(manifest, workdir, checksum, **kwargs):
@@ -3649,38 +3809,43 @@ def self_update(manifest, workdir, checksum, **kwargs):
     place of this script.
     """
 
-    thisver   = Version(__version__)
-    latestver = Version(manifest['installer']['version'])
+    thisver = Version(__version__)
+    latestver = Version(manifest["installer"]["version"])
 
     if latestver <= thisver:
-        log.debug('Installer is up to date (this version: %s, '
-                  'latest version: %s)', thisver, latestver)
+        log.debug(
+            "Installer is up to date (this version: %s, latest version: %s)",
+            thisver,
+            latestver,
+        )
         return
 
-    log.debug('New version of installer is available '
-              '(%s) - self-updating', latestver)
+    log.debug("New version of installer is available (%s) - self-updating", latestver)
 
     tmpf = tempfile.NamedTemporaryFile(
-        prefix='new_fslinstaller', delete=False, dir=workdir)
+        prefix="new_fslinstaller", delete=False, dir=workdir
+    )
     tmpf.close()
     tmpf = tmpf.name
 
-    download_file(manifest['installer']['url'], tmpf, **kwargs)
+    download_file(manifest["installer"]["url"], tmpf, **kwargs)
 
     if checksum:
         try:
-            sha256(tmpf, manifest['installer']['sha256'])
-        except Exception as e:
-            printmsg('New installer file does not match expected '
-                     'checksum! Skipping update.', WARNING)
+            sha256(tmpf, manifest["installer"]["sha256"])
+        except Exception:
+            printmsg(
+                "New installer file does not match expected checksum! Skipping update.",
+                WARNING,
+            )
             return
 
     # Don't try and update again - if for some
     # reason the online manifest reports a newer
     # version than what is available, we would
     # otherwise enter into an infinite loop.
-    cmd = [sys.executable, tmpf] + sys.argv[1:] + ['--no_self_update']
-    log.debug('Running new installer: %s', cmd)
+    cmd = [sys.executable, tmpf] + sys.argv[1:] + ["--no_self_update"]
+    log.debug("Running new installer: %s", cmd)
     os.execv(sys.executable, cmd)
 
 
@@ -3704,12 +3869,14 @@ def overwrite_destdir(ctx):
         return
 
     if not ctx.args.overwrite:
-        printmsg('\nDestination directory [{}] already exists!\n'
-                 .format(ctx.destdir), WARNING, EMPHASIS)
-        response = prompt('Do you want to overwrite it [y/N]?',
-                          QUESTION, EMPHASIS)
-        if response.lower() not in ('y', 'yes'):
-            printmsg('Aborting installation', ERROR, EMPHASIS)
+        printmsg(
+            "\nDestination directory [{}] already exists!\n".format(ctx.destdir),
+            WARNING,
+            EMPHASIS,
+        )
+        response = prompt("Do you want to overwrite it [y/N]?", QUESTION, EMPHASIS)
+        if response.lower() not in ("y", "yes"):
+            printmsg("Aborting installation", ERROR, EMPHASIS)
             sys.exit(1)
 
     # generate a unique name for the old
@@ -3718,14 +3885,13 @@ def overwrite_destdir(ctx):
     # repeatedly)
     i = 0
     while True:
-        ctx.old_destdir = op.abspath('old_destdir{}'.format(i))
-        i              += 1
+        ctx.old_destdir = op.abspath("old_destdir{}".format(i))
+        i += 1
         if not op.exists(ctx.old_destdir):
             break
 
-    printmsg('Deleting directory {}'.format(ctx.destdir), IMPORTANT)
-    ctx.run(Process.check_call,
-            'mv {} {}'.format(ctx.destdir, ctx.old_destdir))
+    printmsg("Deleting directory {}".format(ctx.destdir), IMPORTANT)
+    ctx.run(Process.check_call, "mv {} {}".format(ctx.destdir, ctx.old_destdir))
 
 
 def parse_args(argv=None, include=None, parser=None):
@@ -3747,8 +3913,10 @@ def parse_args(argv=None, include=None, parser=None):
 
     uid = os.getuid()
 
-    if uid != 0: destdir = DEFAULT_INSTALLATION_DIRECTORY
-    else:        destdir = DEFAULT_ROOT_INSTALLATION_DIRECTORY
+    if uid != 0:
+        destdir = DEFAULT_INSTALLATION_DIRECTORY
+    else:
+        destdir = DEFAULT_ROOT_INSTALLATION_DIRECTORY
 
     # on macOS, when Python is run with sudo,
     # op.expanduser('~') will return the
@@ -3764,112 +3932,100 @@ def parse_args(argv=None, include=None, parser=None):
     # determine the appropriate home directory.
     homedir = pwd.getpwuid(uid).pw_dir
 
-    username = os.environ.get('FSLCONDA_USERNAME', None)
-    password = os.environ.get('FSLCONDA_PASSWORD', None)
+    username = os.environ.get("FSLCONDA_USERNAME", None)
+    password = os.environ.get("FSLCONDA_PASSWORD", None)
 
     options = {
         # regular options
-        'version'           : ('-v', {'action'  : 'version',
-                                      'version' : __version__}),
-        'dest'              : ('-d', {'metavar' : 'DESTDIR'}),
-        'overwrite'         : ('-o', {'action'  : 'store_true'}),
-        'listversions'      : ('-l', {'action'  : 'store_true'}),
-        'no_env'            : ('-n', {'action'  : 'store_true'}),
-        'no_shell'          : ('-s', {'action'  : 'store_true'}),
-        'no_matlab'         : ('-m', {'action'  : 'store_true'}),
-        'skip_registration' : ('-r', {'action'  : 'store_true'}),
-        'extra'             : ('-e', {'action'  : 'append'}),
-        'fslversion'        : ('-V', {'default' : 'latest'}),
-        'cuda'              : ('-c', {'metavar' : 'X.Y'}),
-
+        "version": ("-v", {"action": "version", "version": __version__}),
+        "dest": ("-d", {"metavar": "DESTDIR"}),
+        "overwrite": ("-o", {"action": "store_true"}),
+        "listversions": ("-l", {"action": "store_true"}),
+        "no_env": ("-n", {"action": "store_true"}),
+        "no_shell": ("-s", {"action": "store_true"}),
+        "no_matlab": ("-m", {"action": "store_true"}),
+        "skip_registration": ("-r", {"action": "store_true"}),
+        "extra": ("-e", {"action": "append"}),
+        "fslversion": ("-V", {"default": "latest"}),
+        "cuda": ("-c", {"metavar": "X.Y"}),
         # hidden options
-        'skip_ssl_verify'    : (None, {'action'  : 'store_true'}),
-        'throttle_downloads' : (None, {'action'  : 'store_true'}),
-        'num_retries'        : (None, {'type'    : int,
-                                       'default' : 3}),
-        'debug'              : (None, {'action'  : 'store_true'}),
-        'logfile'            : (None, {}),
-        'username'           : (None, {'default' : username}),
-        'password'           : (None, {'default' : password}),
-        'no_checksum'        : (None, {'action'  : 'store_true'}),
-        'workdir'            : (None, {}),
-        'homedir'            : (None, {'default' : homedir}),
-        'devrelease'         : (None, {'action'  : 'store_true'}),
-        'devlatest'          : (None, {'action'  : 'store_true'}),
-        'manifest'           : (None, {}),
-        'channel'            : (None, {'action'  : 'append'}),
-        'miniconda'          : (None, {}),
-        'extras_dir'         : (None, {}),
-        'conda'              : (None, {'action'  : 'store_true'}),
-        'no_self_update'     : (None, {'action'  : 'store_true'}),
-        'exclude_package'    : (None, {'action'  : 'append'}),
-        'root_env'           : (None, {'action'  : 'store_true'}),
-        'progress_file'      : (None, {}),
+        "skip_ssl_verify": (None, {"action": "store_true"}),
+        "throttle_downloads": (None, {"action": "store_true"}),
+        "num_retries": (None, {"type": int, "default": 3}),
+        "debug": (None, {"action": "store_true"}),
+        "logfile": (None, {}),
+        "username": (None, {"default": username}),
+        "password": (None, {"default": password}),
+        "no_checksum": (None, {"action": "store_true"}),
+        "workdir": (None, {}),
+        "homedir": (None, {"default": homedir}),
+        "devrelease": (None, {"action": "store_true"}),
+        "devlatest": (None, {"action": "store_true"}),
+        "manifest": (None, {}),
+        "channel": (None, {"action": "append"}),
+        "miniconda": (None, {}),
+        "extras_dir": (None, {}),
+        "conda": (None, {"action": "store_true"}),
+        "no_self_update": (None, {"action": "store_true"}),
+        "exclude_package": (None, {"action": "append"}),
+        "root_env": (None, {"action": "store_true"}),
+        "progress_file": (None, {}),
     }
 
     if include is None:
         include = list(options.keys())
 
     helps = {
-        'version'           : 'Print installer version number and exit.',
-        'listversions'      : 'List available FSL versions and exit.',
-        'dest'              : 'Install FSL into this folder (default: '
-                              '{}).'.format(destdir),
-        'overwrite'         : 'Delete existing destination directory if it '
-                              'exists, without asking.',
-        'no_env'            : 'Do not modify your shell or MATLAB configuration '
-                              '(implies --no_shell and --no_matlab). When '
-                              'running the installer script as the root user, '
-                              'the root shell profile is never modified.',
-        'no_shell'          : 'Do not modify your shell configuration.',
-        'no_matlab'         : 'Do not modify your MATLAB configuration.',
-        'skip_registration' : 'Do not register this installation with the '
-                              'FSL development team.',
-        'extra'             : 'Install optional FSL components',
-        'fslversion'        : 'Install this specific version of FSL.',
-        'cuda'              : 'Install CUDA libraries which are compatible '
-                              'with this CUDA version (default: install '
-                              'versions of CUDA libraries that are compatible '
-                              'with the GPU on the system, or do not install '
-                              'CUDA libraries on systems without a GPU). Set '
-                              'to "none" to disable installation of CUDA '
-                              'libraries.',
-
+        "version": "Print installer version number and exit.",
+        "listversions": "List available FSL versions and exit.",
+        "dest": "Install FSL into this folder (default: {}).".format(destdir),
+        "overwrite": "Delete existing destination directory if it "
+        "exists, without asking.",
+        "no_env": "Do not modify your shell or MATLAB configuration "
+        "(implies --no_shell and --no_matlab). When "
+        "running the installer script as the root user, "
+        "the root shell profile is never modified.",
+        "no_shell": "Do not modify your shell configuration.",
+        "no_matlab": "Do not modify your MATLAB configuration.",
+        "skip_registration": "Do not register this installation with the "
+        "FSL development team.",
+        "extra": "Install optional FSL components",
+        "fslversion": "Install this specific version of FSL.",
+        "cuda": "Install CUDA libraries which are compatible "
+        "with this CUDA version (default: install "
+        "versions of CUDA libraries that are compatible "
+        "with the GPU on the system, or do not install "
+        "CUDA libraries on systems without a GPU). Set "
+        'to "none" to disable installation of CUDA '
+        "libraries.",
         # Configure conda to skip SSL verification.
         # Not recommended.
-        'skip_ssl_verify' : argparse.SUPPRESS,
-
+        "skip_ssl_verify": argparse.SUPPRESS,
         # Limit the number of simultaneous package
         # downloads - may be needed when installing
         # over unreliable network connection.
-        'throttle_downloads' : argparse.SUPPRESS,
-
+        "throttle_downloads": argparse.SUPPRESS,
         # Number of times to re-try a failed
         # installation, if it appears that
         # the installation failed due to a
         # download error.
-        'num_retries' : argparse.SUPPRESS,
-
+        "num_retries": argparse.SUPPRESS,
         # Enable verbose output when calling
         # mamba/conda.
-        'debug' : argparse.SUPPRESS,
-
+        "debug": argparse.SUPPRESS,
         # Direct the installer log to this file
         # (default: file in $TMPDIR)
-        'logfile' : argparse.SUPPRESS,
-
+        "logfile": argparse.SUPPRESS,
         # Username / password for accessing
         # internal FSL conda channel, if an
         # internal/development release is being
         # installed. If not set, will be read from
         # FSLCONDA_USERNAME/FSLCONDA_PASSWORD
         # environment variables.
-        'username' : argparse.SUPPRESS,
-        'password' : argparse.SUPPRESS,
-
+        "username": argparse.SUPPRESS,
+        "password": argparse.SUPPRESS,
         # Do not automatically update the installer script,
-        'no_self_update' : argparse.SUPPRESS,
-
+        "no_self_update": argparse.SUPPRESS,
         # Install a development release. This
         # option will cause the installer to
         # download the devrelreases.txt file,
@@ -3880,13 +4036,11 @@ def parse_args(argv=None, include=None, parser=None):
         # --manifest option. If --devlatest
         # is used, the most recent developmet
         # release is automatically selected.
-        'devrelease' : argparse.SUPPRESS,
-        'devlatest' : argparse.SUPPRESS,
-
+        "devrelease": argparse.SUPPRESS,
+        "devlatest": argparse.SUPPRESS,
         # Path/URL to alternative FSL release
         # manifest.
-        'manifest' : argparse.SUPPRESS,
-
+        "manifest": argparse.SUPPRESS,
         # Source packages from additional conda
         # channels. Can be used multiple times.
         # Channels specified with this argument
@@ -3901,8 +4055,7 @@ def parse_args(argv=None, include=None, parser=None):
         #   - B
         #   - https://fsl.fmrib..../fslconda/public
         #   - conda-forge
-        'channel' : argparse.SUPPRESS,
-
+        "channel": argparse.SUPPRESS,
         # Install miniconda from this path/URL,
         # instead of the one specified in the
         # FSL release manifest.
@@ -3939,8 +4092,7 @@ def parse_args(argv=None, include=None, parser=None):
         # different path, e.g.:
         #
         #   fslinstaller.py --miniconda ~/miniconda3/ -d ~/fsl/
-        'miniconda' : argparse.SUPPRESS,
-
+        "miniconda": argparse.SUPPRESS,
         # Directory in which to create child
         # environments for additional FSL
         # modules. Defaults to destdir/envs/
@@ -3948,44 +4100,37 @@ def parse_args(argv=None, include=None, parser=None):
         # destdir is a base miniconda environment.
         # Must be specified when destdir is an
         # existing miniconda installation.
-        'extras_dir' : argparse.SUPPRESS,
-
+        "extras_dir": argparse.SUPPRESS,
         # Use conda and not mamba, and install
         # miniconda and not micromamba if the
         # latter is an option.
-        'conda' : argparse.SUPPRESS,
-
+        "conda": argparse.SUPPRESS,
         # Disable SHA256 checksum validation
         # of downloaded files
-        'no_checksum' : argparse.SUPPRESS,
-
+        "no_checksum": argparse.SUPPRESS,
         # Store temp files in this directory
         # rather than in a temporary directory
-        'workdir' : argparse.SUPPRESS,
-
+        "workdir": argparse.SUPPRESS,
         # Treat this directory as user's home
         # directory, for the purposes of shell
         # configuration. Must already exist.
-        'homedir' : argparse.SUPPRESS,
-
+        "homedir": argparse.SUPPRESS,
         # Do not install packages matching this
         # fnmatch-style wildcard pattern. Can
         # be used multiple times.
-        'exclude_package' : argparse.SUPPRESS,
-
+        "exclude_package": argparse.SUPPRESS,
         # If the installer is run as root, the
         # --no_env flag is automatically enabled
         # UNLESS this flag is also provided.
-        'root_env' : argparse.SUPPRESS,
-
+        "root_env": argparse.SUPPRESS,
         # File to send progress information to.
-        'progress_file' : argparse.SUPPRESS,
+        "progress_file": argparse.SUPPRESS,
     }
 
     # parse args
     for option in include:
         shortflag, kwargs = options[option]
-        flags             = ['--{}'.format(option)]
+        flags = ["--{}".format(option)]
         if shortflag is not None:
             flags.insert(0, shortflag)
         parser.add_argument(*flags, help=helps[option], **kwargs)
@@ -3995,13 +4140,15 @@ def parse_args(argv=None, include=None, parser=None):
     # but will be parsed after self_update
     args = parser.parse_known_args(argv)[0]
 
-    if getattr(args, 'fslversion', 'latest') != 'latest':
-        if Version(args.fslversion) < Version('6.0.6'):
+    if getattr(args, "fslversion", "latest") != "latest":
+        if Version(args.fslversion) < Version("6.0.6"):
             printmsg(
-                'This script can only be used to install FSL 6.0.6 or newer. '
-                'Visit https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation '
-                'for information on installing older versions.', ERROR,
-                EMPHASIS)
+                "This script can only be used to install FSL 6.0.6 or newer. "
+                "Visit https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FslInstallation "
+                "for information on installing older versions.",
+                ERROR,
+                EMPHASIS,
+            )
             sys.exit(1)
 
     # add placeholder values for excluded args
@@ -4013,27 +4160,31 @@ def parse_args(argv=None, include=None, parser=None):
     if args.homedir is not None:
         args.homedir = op.abspath(args.homedir)
         if not op.isdir(args.homedir):
-            printmsg('Home directory {} does not exist!'.format(args.homedir),
-                     ERROR, EMPHASIS)
+            printmsg(
+                "Home directory {} does not exist!".format(args.homedir),
+                ERROR,
+                EMPHASIS,
+            )
             sys.exit(1)
 
     # convert --cuda X.Y into
     # a tuple of (X, Y) ints
     if args.cuda is not None:
-
         # User does not want CUDA
-        if args.cuda.lower() == 'none':
-            args.cuda = 'none'
+        if args.cuda.lower() == "none":
+            args.cuda = "none"
         else:
             try:
-                major, minor = args.cuda.split('.')
-                major        = int(major)
-                minor        = int(minor)
-                args.cuda    = (major, minor)
+                major, minor = args.cuda.split(".")
+                major = int(major)
+                minor = int(minor)
+                args.cuda = (major, minor)
             except Exception:
-                printmsg('Invalid CUDA version specified: '
-                         '{}'.format(args.cuda),
-                         ERROR, EMPHASIS)
+                printmsg(
+                    "Invalid CUDA version specified: {}".format(args.cuda),
+                    ERROR,
+                    EMPHASIS,
+                )
                 sys.exit(1)
 
     # --no-env is automatically enabled
@@ -4043,7 +4194,7 @@ def parse_args(argv=None, include=None, parser=None):
 
     # don't modify shell profile
     if args.no_env:
-        args.no_shell  = True
+        args.no_shell = True
         args.no_matlab = True
 
     # use workdir rather than a tempdir
@@ -4061,7 +4212,7 @@ def parse_args(argv=None, include=None, parser=None):
     # manifest takes priority over devrelease/devlatest
     if args.manifest is not None:
         args.devrelease = False
-        args.devlatest  = False
+        args.devlatest = False
 
     if args.manifest is None:
         args.manifest = FSL_RELEASE_MANIFEST
@@ -4099,7 +4250,7 @@ def parse_args(argv=None, include=None, parser=None):
     return args
 
 
-def config_logging(prefix='fslinstaller_', logdir=None, logfile=None):
+def config_logging(prefix="fslinstaller_", logdir=None, logfile=None):
     """Configures logging. If a logfile is not specified, log messages are
     directed to $TMPDIR/fslinstaller_<unique_token>.log, or
     logdir/fslinstaller_<unique_token>.log
@@ -4111,14 +4262,13 @@ def config_logging(prefix='fslinstaller_', logdir=None, logfile=None):
 
         # Use a unique name for the log file
         # (important for multi-user systems)
-        logfilef, logfile = tempfile.mkstemp(prefix=prefix,
-                                             suffix='.log',
-                                             dir=logdir)
+        logfilef, logfile = tempfile.mkstemp(prefix=prefix, suffix=".log", dir=logdir)
         os.close(logfilef)
 
-    handler   = logging.FileHandler(logfile)
+    handler = logging.FileHandler(logfile)
     formatter = logging.Formatter(
-        '%(asctime)s %(filename)s:%(lineno)4d: %(message)s', '%H:%M:%S')
+        "%(asctime)s %(filename)s:%(lineno)4d: %(message)s", "%H:%M:%S"
+    )
     handler.setFormatter(formatter)
     log.addHandler(handler)
     log.setLevel(logging.DEBUG)
@@ -4137,43 +4287,46 @@ def handle_error(ctx):
         yield
 
     except Exception as e:
-        printmsg('\nERROR occurred during installation!', ERROR, EMPHASIS)
-        printmsg('    {}\n'.format(e), INFO)
+        printmsg("\nERROR occurred during installation!", ERROR, EMPHASIS)
+        printmsg("    {}\n".format(e), INFO)
 
         # send traceback to log file
         tb = traceback.format_tb(sys.exc_info()[2])
-        log.debug(''.join(tb))
+        log.debug("".join(tb))
 
         # send env to logfile
-        log.debug('Environment variables:')
+        log.debug("Environment variables:")
         for k in sorted(os.environ.keys()):
-            log.debug('{}={}'.format(k, os.environ[k]))
+            log.debug("{}={}".format(k, os.environ[k]))
 
         if op.exists(ctx.destdir):
-            printmsg('Removing failed installation directory '
-                     '{}'.format(ctx.destdir), WARNING)
-            ctx.run(Process.check_call, 'rm -r ' + ctx.destdir)
+            printmsg(
+                "Removing failed installation directory {}".format(ctx.destdir), WARNING
+            )
+            ctx.run(Process.check_call, "rm -r " + ctx.destdir)
 
         # overwrite_destdir moves the existing
         # destdir to a temp location, so we can
         # restore it if the installation fails
         if not op.exists(ctx.destdir) and (ctx.old_destdir is not None):
-            printmsg('Restoring contents of {}'.format(ctx.destdir),
-                     WARNING)
-            ctx.run(Process.check_call,
-                    'mv {} {}'.format(ctx.old_destdir, ctx.destdir))
+            printmsg("Restoring contents of {}".format(ctx.destdir), WARNING)
+            ctx.run(Process.check_call, "mv {} {}".format(ctx.old_destdir, ctx.destdir))
 
         # copy log file to ~/ so it is
         # easier for the user to access
-        date    = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
-        logfile = 'fsl_installation_{}.log'.format(date)
-        logfile = op.join(op.expanduser('~'), logfile)
+        date = datetime.datetime.today().strftime("%Y%m%d%H%M%S")
+        logfile = "fsl_installation_{}.log".format(date)
+        logfile = op.join(op.expanduser("~"), logfile)
         shutil.copy(ctx.logfile, logfile)
 
-        printmsg('\nFSL installation failed!\n', ERROR, EMPHASIS)
-        printmsg('Please check the log file - it may contain some '
-                 'more information to help you diagnose the problem: '
-                 '{}\n'.format(logfile), WARNING, EMPHASIS)
+        printmsg("\nFSL installation failed!\n", ERROR, EMPHASIS)
+        printmsg(
+            "Please check the log file - it may contain some "
+            "more information to help you diagnose the problem: "
+            "{}\n".format(logfile),
+            WARNING,
+            EMPHASIS,
+        )
         sys.exit(1)
 
 
@@ -4182,29 +4335,36 @@ def main(argv=None):
     configures the user's environment.
     """
 
-    printmsg('FSL installer version:', EMPHASIS, UNDERLINE, end='')
-    printmsg(' {}'.format(__version__))
-    printmsg('Press CTRL+C at any time to cancel installation', INFO)
+    printmsg("FSL installer version:", EMPHASIS, UNDERLINE, end="")
+    printmsg(" {}".format(__version__))
+    printmsg("Press CTRL+C at any time to cancel installation", INFO)
 
     if os.getuid() == 0:
-        printmsg('Running the installer script as root user is discouraged! '
-                 'You should run this script as a regular user - you will be '
-                 'asked for your administrator password if required.',
-                 WARNING, EMPHASIS)
+        printmsg(
+            "Running the installer script as root user is discouraged! "
+            "You should run this script as a regular user - you will be "
+            "asked for your administrator password if required.",
+            WARNING,
+            EMPHASIS,
+        )
 
-    args    = parse_args(argv)
+    args = parse_args(argv)
     logfile = config_logging(logdir=args.workdir, logfile=args.logfile)
 
-    log.debug(' '.join(sys.argv))
-    log.debug('Python: %s %s', sys.executable, str(PYVER))
-    printmsg('Installation log file: {}\n'.format(logfile), INFO)
+    log.debug(" ".join(sys.argv))
+    log.debug("Python: %s %s", sys.executable, str(PYVER))
+    printmsg("Installation log file: {}\n".format(logfile), INFO)
 
-    ctx         = Context(args)
+    ctx = Context(args)
     ctx.logfile = logfile
 
     if not args.no_self_update:
-        self_update(ctx.manifest, args.workdir, not args.no_checksum,
-                    ssl_verify=(not args.skip_ssl_verify))
+        self_update(
+            ctx.manifest,
+            args.workdir,
+            not args.no_checksum,
+            ssl_verify=(not args.skip_ssl_verify),
+        )
 
     if args.listversions:
         list_available_versions(ctx.manifest)
@@ -4213,18 +4373,21 @@ def main(argv=None):
     agree_to_license(ctx)
 
     if (not args.skip_registration) and (ctx.registration_url is not None):
-        printmsg('During the installation process, please note that some '
-                 'system details will be automatically sent to the FSL '
-                 'development team. These details are extremely basic and '
-                 'cannot be used in any way to identify individual users. If '
-                 'you do not want any information to be sent, please cancel '
-                 'this installation by pressing CTRL+C, and re-run the '
-                 'installer with the --skip_registration option.\n', INFO)
+        printmsg(
+            "During the installation process, please note that some "
+            "system details will be automatically sent to the FSL "
+            "development team. These details are extremely basic and "
+            "cannot be used in any way to identify individual users. If "
+            "you do not want any information to be sent, please cancel "
+            "this installation by pressing CTRL+C, and re-run the "
+            "installer with the --skip_registration option.\n",
+            INFO,
+        )
 
     try:
         ctx.finalise_settings()
     except Exception as e:
-        printmsg('An error has occurred: {}'.format(e), ERROR)
+        printmsg("An error has occurred: {}".format(e), ERROR)
         sys.exit(1)
 
     # Check if using x86 emulation on an Apple
@@ -4237,7 +4400,6 @@ def main(argv=None):
     # deleted within the post_install_cleanup
     # function.
     with tempdir(args.workdir, delete=False) as tmpdir:
-
         if args.workdir is not None:
             tmpdir = None
 
@@ -4246,31 +4408,36 @@ def main(argv=None):
         overwrite_destdir(ctx)
 
         download_fsl_environment_files(ctx)
-        printmsg('\nInstalling FSL in {}\n'.format(ctx.destdir), EMPHASIS)
+        printmsg("\nInstalling FSL in {}\n".format(ctx.destdir), EMPHASIS)
 
         with handle_error(ctx):
-
             # These are the main steps of the installation,
             # which perform downloading and/or installing.
             # We iterate over them so we can show the user
             # a step number and a total, e.g. "Step 2 of 4".
             steps = [
-                (download_miniconda,      ctx),
-                (install_miniconda,       ctx),
+                (download_miniconda, ctx),
+                (install_miniconda, ctx),
                 (install_wrapper_scripts, ctx),
-                (install_fsl,             ctx)]
+                (install_fsl, ctx),
+            ]
 
             for name in args.extra:
                 if name not in ctx.extra_environment_files:
-                    printmsg('There is no extra FSL component called {} - '
-                             'ignoring'.format(name), WARNING, EMPHASIS)
+                    printmsg(
+                        "There is no extra FSL component called {} - ignoring".format(
+                            name
+                        ),
+                        WARNING,
+                        EMPHASIS,
+                    )
                     continue
                 steps.append((install_extra, ctx, name))
 
             for i, step in enumerate(steps):
-                func     = step[0]
+                func = step[0]
                 funcargs = step[1:]
-                prefix   = '{} / {}'.format(i + 1, len(steps))
+                prefix = "{} / {}".format(i + 1, len(steps))
                 func(*funcargs, prefix=prefix)
 
             finalise_installation(ctx)
@@ -4282,11 +4449,14 @@ def main(argv=None):
     if not args.no_matlab:
         configure_matlab(args.homedir, ctx.destdir)
 
-    printmsg('\nFSL successfully installed\n', IMPORTANT)
+    printmsg("\nFSL successfully installed\n", IMPORTANT)
     if not args.no_shell:
-        printmsg('Open a new terminal, or log out and log back in, '
-                 'for the environment changes to take effect.', INFO)
+        printmsg(
+            "Open a new terminal, or log out and log back in, "
+            "for the environment changes to take effect.",
+            INFO,
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

@@ -1,5 +1,5 @@
 import redis
-from celery.result import AsyncResult
+
 
 def batch_read_redis_keys_and_values(redis_host, redis_port, redis_db, batch_size=100):
     # 连接到 Redis
@@ -33,7 +33,9 @@ if __name__ == "__main__":
 
     r = redis.StrictRedis(host=redis_host, port=redis_port, db=redis_db)
 
-    for batch in batch_read_redis_keys_and_values(redis_host, redis_port, redis_db, batch_size):
+    for batch in batch_read_redis_keys_and_values(
+        redis_host, redis_port, redis_db, batch_size
+    ):
         for key, value in batch:
             key_type = r.type(key).decode()
             print(f"Key: {key}, Type: {key_type}")
@@ -45,4 +47,3 @@ if __name__ == "__main__":
             print(f"Decoded Redis Result: {redis_result}")
             break
         break
-

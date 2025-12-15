@@ -39,10 +39,14 @@ def _task_key(task_name: Union[InferenceEnum, str]) -> str:
 
 
 def _ensure_enum(task_name: Union[InferenceEnum, str]) -> InferenceEnum:
-    return task_name if isinstance(task_name, InferenceEnum) else InferenceEnum(task_name)
+    return (
+        task_name if isinstance(task_name, InferenceEnum) else InferenceEnum(task_name)
+    )
 
 
-def load_config(config_path: Optional[Union[str, os.PathLike[str]]] = None) -> Dict[str, Any]:
+def load_config(
+    config_path: Optional[Union[str, os.PathLike[str]]] = None,
+) -> Dict[str, Any]:
     path = pathlib.Path(config_path) if config_path else DEFAULT_CONFIG_PATH
     with path.open("r", encoding="utf-8") as file:
         data = yaml.safe_load(file) or {}
@@ -156,10 +160,14 @@ def _resolve_infarct_dicom_inputs(
     study_id: str,
 ) -> Tuple[Optional[str], Optional[List[str]]]:
     default_basename = _choose_default_infarct_basename(task)
-    default_path = _build_dicom_series_path(dicom_study_path, nifti_study_path, default_basename)
+    default_path = _build_dicom_series_path(
+        dicom_study_path, nifti_study_path, default_basename
+    )
     default_dir = str(default_path) if default_path else None
 
-    candidate_names = [_extract_basename_from_path(path) for path in task.input_path_list]
+    candidate_names = [
+        _extract_basename_from_path(path) for path in task.input_path_list
+    ]
     dicom_dirs: List[str] = []
     missing_reason: Optional[str] = None
 
@@ -168,7 +176,9 @@ def _resolve_infarct_dicom_inputs(
         if not matched_name:
             missing_reason = f"missing series {series}"
             break
-        dicom_path = _build_dicom_series_path(dicom_study_path, nifti_study_path, matched_name)
+        dicom_path = _build_dicom_series_path(
+            dicom_study_path, nifti_study_path, matched_name
+        )
         if not dicom_path or not dicom_path.exists():
             missing_reason = f"dicom path not found for {matched_name}"
             break
@@ -193,7 +203,9 @@ def _resolve_dicom_inputs(
     study_id: str,
 ) -> Tuple[Optional[str], Optional[List[str]]]:
     if key == InferenceEnum.Infarct:
-        return _resolve_infarct_dicom_inputs(task, nifti_study_path, dicom_study_path, study_id)
+        return _resolve_infarct_dicom_inputs(
+            task, nifti_study_path, dicom_study_path, study_id
+        )
     if not task.input_path_list:
         return None, None
     basename = _extract_basename_from_path(task.input_path_list[0])
@@ -214,19 +226,25 @@ def check_study_mapping_inference(
     config_path: Optional[Union[str, os.PathLike[str]]] = None,
 ) -> Optional[Dict[str, Dict[str, List[str]]]]:
     config = load_config(config_path)
-    model_mapping_series_dict = resolve_enum_mapping_series(config.get("model_mapping_series", {}))
+    model_mapping_series_dict = resolve_enum_mapping_series(
+        config.get("model_mapping_series", {})
+    )
     nifti_files = _iter_nifti_files(study_path)
     if not nifti_files:
         return None
 
     df_file = pd.DataFrame(nifti_files, columns=["file_path"])
-    df_file["file_name"] = df_file["file_path"].map(lambda path: replace_suffix(path.name, ""))
+    df_file["file_name"] = df_file["file_path"].map(
+        lambda path: replace_suffix(path.name, "")
+    )
 
     model_mapping_dict: Dict[str, List[str]] = {}
     for model_enum, model_mapping_series_list in model_mapping_series_dict.items():
         for mapping_series in model_mapping_series_list:
             expected_names = [enum_member.value for enum_member in mapping_series]
-            result = np.intersect1d(df_file["file_name"], expected_names, return_indices=True)
+            result = np.intersect1d(
+                df_file["file_name"], expected_names, return_indices=True
+            )
             if result[0].shape[0] >= len(expected_names):
                 df_result = df_file.iloc[result[1]]
                 model_mapping_dict[model_enum.value] = [
@@ -239,7 +257,9 @@ def check_study_mapping_inference(
     return {study_path.name: model_mapping_dict}
 
 
-def _render_once(template: str, base_output_path: str, task_name: Union[InferenceEnum, str]) -> str:
+def _render_once(
+    template: str, base_output_path: str, task_name: Union[InferenceEnum, str]
+) -> str:
     file_name = template.format(task_name=_task_key(task_name))
     return os.path.join(base_output_path, file_name)
 
@@ -254,7 +274,12 @@ def _render_each_input(
     files: List[str] = []
     for input_path in input_paths:
         base_name = os.path.basename(input_path).split(".")[0]
-        files.append(os.path.join(base_output_path, template.format(base_name=base_name, task_name=task_value)))
+        files.append(
+            os.path.join(
+                base_output_path,
+                template.format(base_name=base_name, task_name=task_value),
+            )
+        )
     return files
 
 
@@ -315,7 +340,9 @@ def _legacy_generate_output_files(
                 )
         case InferenceEnum.DWI:
             files.append(
-                os.path.join(base_output_path, f"synthseg_DWI0_original_{task_enum.value}.nii.gz")
+                os.path.join(
+                    base_output_path, f"synthseg_DWI0_original_{task_enum.value}.nii.gz"
+                )
             )
         case InferenceEnum.CMB:
             base_name1 = os.path.basename(input_paths[0]).split(".")[0]
@@ -393,13 +420,17 @@ def generate_output_files(
         special = format_spec.get("special")
 
         if special == "swan_detection":
-            special_file = _render_special_cmb(template, input_paths, base_output_path, task_name)
+            special_file = _render_special_cmb(
+                template, input_paths, base_output_path, task_name
+            )
             if special_file:
                 output_files.append(special_file)
             continue
 
         if apply_to == "each_input":
-            output_files.extend(_render_each_input(template, input_paths, base_output_path, task_name))
+            output_files.extend(
+                _render_each_input(template, input_paths, base_output_path, task_name)
+            )
             continue
 
         output_files.append(_render_once(template, base_output_path, task_name))
@@ -419,31 +450,51 @@ def build_Area(mode, file_dict) -> Tuple[argparse.Namespace, List[pathlib.Path]]
     setattr(args, mode, True)
 
     output_path = pathlib.Path(file_dict["output_path"])
-    args.intput_file_list = [pathlib.Path(path) for path in file_dict["input_path_list"]]
-    args.resample_file_list = prepare_output_file_list(args.intput_file_list, "_resample.nii.gz", output_path)
-    args.synthseg_file_list = prepare_output_file_list(args.resample_file_list, "_synthseg.nii.gz", output_path)
-    args.synthseg33_file_list = prepare_output_file_list(args.resample_file_list, "_synthseg33.nii.gz", output_path)
-    args.david_file_list = prepare_output_file_list(args.resample_file_list, "_david.nii.gz", output_path)
-    args.wm_file_list = prepare_output_file_list(args.resample_file_list, "_wm.nii.gz", output_path)
+    args.intput_file_list = [
+        pathlib.Path(path) for path in file_dict["input_path_list"]
+    ]
+    args.resample_file_list = prepare_output_file_list(
+        args.intput_file_list, "_resample.nii.gz", output_path
+    )
+    args.synthseg_file_list = prepare_output_file_list(
+        args.resample_file_list, "_synthseg.nii.gz", output_path
+    )
+    args.synthseg33_file_list = prepare_output_file_list(
+        args.resample_file_list, "_synthseg33.nii.gz", output_path
+    )
+    args.david_file_list = prepare_output_file_list(
+        args.resample_file_list, "_david.nii.gz", output_path
+    )
+    args.wm_file_list = prepare_output_file_list(
+        args.resample_file_list, "_wm.nii.gz", output_path
+    )
     return args, args.intput_file_list
 
 
-def get_synthseg_args_file(inference_name, file_dict) -> Tuple[Optional[argparse.Namespace], Optional[List[pathlib.Path]]]:
+def get_synthseg_args_file(
+    inference_name, file_dict
+) -> Tuple[Optional[argparse.Namespace], Optional[List[pathlib.Path]]]:
     output_path = pathlib.Path(file_dict["output_path"])
     match inference_name:
         case InferenceEnum.Area | InferenceEnum.Aneurysm:
             return build_Area("wm_file", file_dict)
         case InferenceEnum.WMH_PVS:
             args, file_list = build_Area("wmh", file_dict)
-            args.wmh_file_list = prepare_output_file_list(args.resample_file_list, "_WMHPVS.nii.gz", output_path)
+            args.wmh_file_list = prepare_output_file_list(
+                args.resample_file_list, "_WMHPVS.nii.gz", output_path
+            )
             return args, file_list
         case InferenceEnum.DWI:
             args, file_list = build_Area("dwi", file_dict)
-            args.dwi_file_list = prepare_output_file_list(args.resample_file_list, "_DWI.nii.gz", output_path)
+            args.dwi_file_list = prepare_output_file_list(
+                args.resample_file_list, "_DWI.nii.gz", output_path
+            )
             return args, file_list
         case InferenceEnum.CMB:
             args, file_list = build_Area("cmb", file_dict)
-            args.cmb_file_list = prepare_output_file_list(args.resample_file_list, "_CMB.nii.gz", output_path)
+            args.cmb_file_list = prepare_output_file_list(
+                args.resample_file_list, "_CMB.nii.gz", output_path
+            )
             return args, file_list
         case _:
             return None, None
@@ -462,9 +513,15 @@ def _apply_post_process_rules(
         normalized_expected = []
         for expected in expected_inputs:
             enum_instance = get_enum_by_name(expected)
-            normalized_expected.append(enum_instance.value if enum_instance else expected)
-        normalized_inputs = [replace_suffix(os.path.basename(path), "") for path in processed_paths]
-        result = np.intersect1d(normalized_inputs, normalized_expected, return_indices=True)
+            normalized_expected.append(
+                enum_instance.value if enum_instance else expected
+            )
+        normalized_inputs = [
+            replace_suffix(os.path.basename(path), "") for path in processed_paths
+        ]
+        result = np.intersect1d(
+            normalized_inputs, normalized_expected, return_indices=True
+        )
         if result[0].shape[0] != len(normalized_expected):
             return False
 
@@ -489,22 +546,39 @@ def _legacy_input_post_process(
 ) -> List[str]:
     processed_paths = list(input_paths)
     inference_key = _ensure_enum(model_name)
-    base_names = [replace_suffix(os.path.basename(path), "") for path in processed_paths]
+    base_names = [
+        replace_suffix(os.path.basename(path), "") for path in processed_paths
+    ]
 
-    if inference_key == InferenceEnum.Infarct and set(INFARCT_TARGET_SERIES).issubset(set(base_names)):
-        adc_path = next((path for path in processed_paths if path.endswith("ADC.nii.gz")), None)
+    if inference_key == InferenceEnum.Infarct and set(INFARCT_TARGET_SERIES).issubset(
+        set(base_names)
+    ):
+        adc_path = next(
+            (path for path in processed_paths if path.endswith("ADC.nii.gz")), None
+        )
         if adc_path:
-            processed_paths.append(adc_path.replace("ADC.nii.gz", "synthseg_DWI0_original_DWI.nii.gz"))
+            processed_paths.append(
+                adc_path.replace("ADC.nii.gz", "synthseg_DWI0_original_DWI.nii.gz")
+            )
         return processed_paths
 
-    if inference_key == InferenceEnum.WMH and any(name.startswith("T2FLAIR_AXI") for name in base_names):
-        flair_path = next((path for path in processed_paths if "T2FLAIR_AXI.nii.gz" in path), None)
+    if inference_key == InferenceEnum.WMH and any(
+        name.startswith("T2FLAIR_AXI") for name in base_names
+    ):
+        flair_path = next(
+            (path for path in processed_paths if "T2FLAIR_AXI.nii.gz" in path), None
+        )
         if flair_path:
             processed_paths.append(
-                flair_path.replace("T2FLAIR_AXI.nii.gz", "synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz")
+                flair_path.replace(
+                    "T2FLAIR_AXI.nii.gz",
+                    "synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz",
+                )
             )
             processed_paths.append(
-                flair_path.replace("T2FLAIR_AXI.nii.gz", "synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz")
+                flair_path.replace(
+                    "T2FLAIR_AXI.nii.gz", "synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz"
+                )
             )
         return processed_paths
 
@@ -518,8 +592,12 @@ def build_input_post_process(
 ) -> List[str]:
     processed_paths = list(input_paths)
     config = load_config(config_path)
-    post_process_config = config.get("input_post_process", {}).get(_task_key(model_name))
-    if post_process_config and _apply_post_process_rules(processed_paths, post_process_config):
+    post_process_config = config.get("input_post_process", {}).get(
+        _task_key(model_name)
+    )
+    if post_process_config and _apply_post_process_rules(
+        processed_paths, post_process_config
+    ):
         return processed_paths
     return _legacy_input_post_process(processed_paths, model_name)
 
@@ -537,7 +615,9 @@ def build_analysis(
     task_dict = next(iter(mapping_inference.values()), {})
     for model_name, input_paths in task_dict.items():
         inference_key = _ensure_enum(model_name)
-        processed_inputs = build_input_post_process(list(input_paths), inference_key, config_path)
+        processed_inputs = build_input_post_process(
+            list(input_paths), inference_key, config_path
+        )
         task_output_files = generate_output_files(
             processed_inputs,
             inference_key,
@@ -600,4 +680,3 @@ def build_inference_cmd(
         )
 
     return InferenceCmd(cmd_items=inference_item_list)
-

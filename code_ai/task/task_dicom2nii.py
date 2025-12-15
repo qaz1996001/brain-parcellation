@@ -5,25 +5,46 @@ import shutil
 import os
 import pathlib
 import subprocess
-import traceback
 from typing import List, Dict
 
 import httpx
-import orjson
 import pandas as pd
 import pydicom
-from funboost import BrokerEnum, Booster
+from funboost import Booster
 from pydicom import dcmread
 from pyorthanc import Orthanc, Study
 
-from code_ai.dicom2nii.convert import ModalityProcessingStrategy, MRAcquisitionTypeProcessingStrategy, \
-    MRRenameSeriesProcessingStrategy
-from code_ai.dicom2nii.convert import DwiProcessingStrategy, ADCProcessingStrategy, EADCProcessingStrategy, \
-    SWANProcessingStrategy
-from code_ai.dicom2nii.convert import ESWANProcessingStrategy, MRABrainProcessingStrategy, MRANeckProcessingStrategy
-from code_ai.dicom2nii.convert import MRAVRBrainProcessingStrategy, MRAVRNeckProcessingStrategy, T1ProcessingStrategy
-from code_ai.dicom2nii.convert import T2ProcessingStrategy, ASLProcessingStrategy, DSCProcessingStrategy
-from code_ai.dicom2nii.convert import RestingProcessingStrategy, DTIProcessingStrategy, CVRProcessingStrategy
+from code_ai.dicom2nii.convert import (
+    ModalityProcessingStrategy,
+    MRAcquisitionTypeProcessingStrategy,
+    MRRenameSeriesProcessingStrategy,
+)
+from code_ai.dicom2nii.convert import (
+    DwiProcessingStrategy,
+    ADCProcessingStrategy,
+    EADCProcessingStrategy,
+    SWANProcessingStrategy,
+)
+from code_ai.dicom2nii.convert import (
+    ESWANProcessingStrategy,
+    MRABrainProcessingStrategy,
+    MRANeckProcessingStrategy,
+)
+from code_ai.dicom2nii.convert import (
+    MRAVRBrainProcessingStrategy,
+    MRAVRNeckProcessingStrategy,
+    T1ProcessingStrategy,
+)
+from code_ai.dicom2nii.convert import (
+    T2ProcessingStrategy,
+    ASLProcessingStrategy,
+    DSCProcessingStrategy,
+)
+from code_ai.dicom2nii.convert import (
+    RestingProcessingStrategy,
+    DTIProcessingStrategy,
+    CVRProcessingStrategy,
+)
 from code_ai.dicom2nii.convert import NullEnum
 from code_ai.dicom2nii.convert import MRSeriesRenameEnum
 
@@ -49,7 +70,7 @@ def get_output_study(dicom_ds):
 
 def check_dicom_instance_number_at_last(output_study_instance: pathlib.Path) -> bool:
     if output_study_instance.exists():
-        with open(output_study_instance, mode='rb') as dcm:
+        with open(output_study_instance, mode="rb") as dcm:
             dicom_ds = dcmread(dcm, stop_before_pixels=True)
             # (0020,0013)	Instance Number	187
             # (0020,1002)	Images In Acquisition	192
@@ -63,10 +84,12 @@ def check_dicom_instance_number_at_last(output_study_instance: pathlib.Path) -> 
     return False
 
 
-def get_series_folder_list(study_path: pathlib.Path, exclude_dicom_series) -> List[pathlib.Path]:
+def get_series_folder_list(
+    study_path: pathlib.Path, exclude_dicom_series
+) -> List[pathlib.Path]:
     series_folder_list = []
     for series_folder in study_path.iterdir():
-        if series_folder.is_dir() and series_folder.name != '.meta':
+        if series_folder.is_dir() and series_folder.name != ".meta":
             if series_folder.name not in exclude_dicom_series:
                 series_folder_list.append(series_folder)
     return series_folder_list
@@ -82,20 +105,24 @@ def get_study_folder_name(dicom_ds):
         return None
     else:
         study_date = study_date.value
-    return f'{patient_id}_{study_date}_{modality}_{accession_number}'
+    return f"{patient_id}_{study_date}_{modality}_{accession_number}"
 
 
-def rename_dicom_file(instance_path,
-                      processing_strategy_list,
-                      modality_processing_strategy,
-                      mr_acquisition_type_processing_strategy):
-    with open(instance_path, mode='rb') as dcm:
-        dicom_ds = dcmread(dcm, stop_before_pixels=True,force=True)
+def rename_dicom_file(
+    instance_path,
+    processing_strategy_list,
+    modality_processing_strategy,
+    mr_acquisition_type_processing_strategy,
+):
+    with open(instance_path, mode="rb") as dcm:
+        dicom_ds = dcmread(dcm, stop_before_pixels=True, force=True)
     if dicom_ds is None:
-        return tuple(['', ''])
+        return tuple(["", ""])
     # Simulating renaming logic
     modality_enum = modality_processing_strategy.process(dicom_ds=dicom_ds)
-    mr_acquisition_type_enum = mr_acquisition_type_processing_strategy.process(dicom_ds=dicom_ds)
+    mr_acquisition_type_enum = mr_acquisition_type_processing_strategy.process(
+        dicom_ds=dicom_ds
+    )
     for processing_strategy in processing_strategy_list:
         if modality_enum == processing_strategy.modality:
             for mr_acquisition_type in processing_strategy.mr_acquisition_type:
@@ -113,100 +140,135 @@ def copy_dicom_file(input_tuple, instance_path, output_path):
     rename_series = input_tuple[0]
     output_study = input_tuple[1]
     output_study_series = output_path.joinpath(output_study, rename_series)
-    output_study_instance: pathlib.Path = output_study_series.joinpath(instance_path.name)
+    output_study_instance: pathlib.Path = output_study_series.joinpath(
+        instance_path.name
+    )
     if output_study_instance.exists():
         return json.dumps((str(instance_path), str(output_study_instance)))
     output_study_series.mkdir(exist_ok=True, parents=True)
     if output_study_series.is_dir():
-        with open(instance_path, mode='rb') as instance:
-            with open(output_study_instance, 'wb+') as output_instance:
+        with open(instance_path, mode="rb") as instance:
+            with open(output_study_instance, "wb+") as output_instance:
                 shutil.copyfileobj(instance, output_instance)
         return json.dumps((str(instance_path), str(output_study_instance)))
-            # return output_study_instance
+        # return output_study_instance
     return None
 
 
 def file_processing(func_params: Dict[str, any]):
-    study_folder_path = func_params.get('study_folder_path')
-    post_process_manager = func_params.get('post_process_manager')
+    study_folder_path = func_params.get("study_folder_path")
+    post_process_manager = func_params.get("post_process_manager")
     if study_folder_path is None:
         return
     post_process_manager.post_process(study_folder_path)
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='post_httpx_queue',
-                                 qps=5, ))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="post_httpx_queue",
+        qps=5,
+    )
+)
 def call_post_httpx(func_params: Dict[str, any]):
-    url         = func_params['url']
-    data        = func_params['data']
+    url = func_params["url"]
+    data = func_params["data"]
     with httpx.Client(timeout=300) as clinet:
-        if isinstance(data,list):
-            dcop_event_list = [ DCOPEventRequest.model_validate_json(temp).model_dump() for temp in data]
-            rep = clinet.post(url=url,json=dcop_event_list)
+        if isinstance(data, list):
+            dcop_event_list = [
+                DCOPEventRequest.model_validate_json(temp).model_dump() for temp in data
+            ]
+            rep = clinet.post(url=url, json=dcop_event_list)
         else:
             dcop_event = DCOPEventRequest.model_validate_json(data).model_dump()
             rep = clinet.post(url=url, json=[dcop_event])
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
-                                 qps=10, ))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="call_dcm2niix_queue",
+        user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+        qps=10,
+    )
+)
 def call_dcm2niix(func_params: Dict[str, any]):
-    task_params = intput_params.CallDcm2niixParams.model_validate(func_params,
-                                                                  strict=False)
+    task_params = intput_params.CallDcm2niixParams.model_validate(
+        func_params, strict=False
+    )
     output_series_file_path = task_params.output_series_file_path
     output_series_path = task_params.output_series_path
     series_path = task_params.series_path
     output_series_path.parent.mkdir(exist_ok=True, parents=True)
-    cmd_str = f'dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}'
-    process = subprocess.Popen(args=cmd_str, cwd='/', shell=True,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    cmd_str = f"dcm2niix -z y -f {output_series_path.name} -o {output_series_path.parent} {series_path}"
+    process = subprocess.Popen(
+        args=cmd_str,
+        cwd="/",
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     stdout, stderr = process.communicate()
 
     pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
     match_result = pattern.search(stdout.decode())
 
     if match_result is None:
-        return f'call_dcm2niix {stdout.decode()}'
+        return f"call_dcm2niix {stdout.decode()}"
     else:
         str_result = match_result.groups()[0]
-        dcm2niix_output_path = pathlib.Path(f'{str_result}.nii.gz')
+        dcm2niix_output_path = pathlib.Path(f"{str_result}.nii.gz")
         if dcm2niix_output_path.name != output_series_path:
             try:
                 # Rename the output file and corresponding JSON file
                 dcm2niix_output_path.rename(output_series_file_path)
-                dcm2niix_json_path = pathlib.Path(str(dcm2niix_output_path).replace('.nii.gz', '.json'))
-                output_series_json_path = pathlib.Path(str(output_series_file_path).replace('.nii.gz', '.json'))
+                dcm2niix_json_path = pathlib.Path(
+                    str(dcm2niix_output_path).replace(".nii.gz", ".json")
+                )
+                output_series_json_path = pathlib.Path(
+                    str(output_series_file_path).replace(".nii.gz", ".json")
+                )
                 if dcm2niix_json_path.exists():
                     dcm2niix_json_path.unlink()
                 if output_series_json_path.exists():
                     output_series_json_path.unlink()
             except FileExistsError:
-                print(rf'FileExistsError {series_path}')
+                print(rf"FileExistsError {series_path}")
         return output_series_path.name
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_file_queue',
-                                 qps=10, ))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="dicom_2_nii_file_queue",
+        qps=10,
+    )
+)
 def dicom_2_nii_file(func_params: Dict[str, any]):
-    task_params = intput_params.Dicom2NiiFileParams.model_validate(func_params,
-                                                                   strict=False)
+    task_params = intput_params.Dicom2NiiFileParams.model_validate(
+        func_params, strict=False
+    )
     dicom_study_folder_path = task_params.dicom_study_folder_path
     output_nifti_path = task_params.output_nifti_path
     FILE_SIZE = 500
     if dicom_study_folder_path is None:
         return
-    series_list = list(filter(lambda series_path: series_path.name != '.meta', dicom_study_folder_path.iterdir()))
+    series_list = list(
+        filter(
+            lambda series_path: series_path.name != ".meta",
+            dicom_study_folder_path.iterdir(),
+        )
+    )
     workflows = []
     for series_path in series_list:
         if series_path.name in Dicm2NiixConverter.exclude_set:
             continue
         output_series_path = pathlib.Path(
-            f'{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}')
-        output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
-        call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
-                                                                output_series_path=output_series_path,
-                                                                series_path=series_path)
+            f"{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}"
+        )
+        output_series_file_path = pathlib.Path(f"{str(output_series_path)}.nii.gz")
+        call_dcm2niix_params = intput_params.CallDcm2niixParams(
+            output_series_file_path=output_series_file_path,
+            output_series_path=output_series_path,
+            series_path=series_path,
+        )
         if output_series_file_path.exists():
             if output_series_file_path.stat().st_size < FILE_SIZE:
                 output_series_file_path.unlink()
@@ -221,18 +283,26 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
             workflows.append(result)
     result_list = [async_result.result for async_result in workflows]
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
-    file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
-                                     post_process_manager=ConvertManager.nifti_post_process_manager))
+    file_processing(
+        func_params=dict(
+            study_folder_path=nifti_study_folder_path,
+            post_process_manager=ConvertManager.nifti_post_process_manager,
+        )
+    )
     return nifti_study_folder_path
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='raw_dicom_2_rename_dicom_queue',
-                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
-                                 qps=10,))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="raw_dicom_2_rename_dicom_queue",
+        user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+        qps=10,
+    )
+)
 def raw_dicom_2_rename_dicom(func_params: Dict[str, any]):
-
-    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
-                                                               strict=False)
+    task_params = intput_params.Dicom2NiiParams.model_validate(
+        func_params, strict=False
+    )
     # 1. raw dicom -> rename dicom
     if task_params.sub_dir is not None:
         result = process_dir.push(func_params)
@@ -242,33 +312,44 @@ def raw_dicom_2_rename_dicom(func_params: Dict[str, any]):
     return None
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_series_queue',
-                                 qps=10, ))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="dicom_2_nii_series_queue",
+        qps=10,
+    )
+)
 def dicom_2_nii_series(func_params: Dict[str, any]):
     task_params = intput_params.Dicom2NiiSeriesParams.model_validate(func_params)
-    output_dicom_path       = task_params.output_dicom_path
+    output_dicom_path = task_params.output_dicom_path
     dicom_study_folder_path = output_dicom_path.parent
-    output_nifti_path       = task_params.output_nifti_path
-    series_path             = output_dicom_path
+    output_nifti_path = task_params.output_nifti_path
+    series_path = output_dicom_path
     FILE_SIZE = 500
 
     UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
-    if (series_path.name in Dicm2NiixConverter.exclude_set) or (output_dicom_path is None):
-        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
-                                      series_uid=task_params.series_uid,
-                                      ope_no=DCOPStatus.SERIES_CONVERSION_SKIP.value,
-                                      study_id=series_path.parent.name,
-                                      tool_id='NIFTI_TOOL',
-                                      params_data = task_params.get_str_dict(),
-                                      result_data = None)
+    if (series_path.name in Dicm2NiixConverter.exclude_set) or (
+        output_dicom_path is None
+    ):
+        dcop_event = DCOPEventRequest(
+            study_uid=task_params.study_uid,
+            series_uid=task_params.series_uid,
+            ope_no=DCOPStatus.SERIES_CONVERSION_SKIP.value,
+            study_id=series_path.parent.name,
+            tool_id="NIFTI_TOOL",
+            params_data=task_params.get_str_dict(),
+            result_data=None,
+        )
     else:
         output_series_path = pathlib.Path(
-            f'{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}')
-        output_series_file_path = pathlib.Path(f'{str(output_series_path)}.nii.gz')
-        call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
-                                                                output_series_path=output_series_path,
-                                                                series_path=series_path)
+            f"{str(series_path).replace(str(dicom_study_folder_path.parent), str(output_nifti_path))}"
+        )
+        output_series_file_path = pathlib.Path(f"{str(output_series_path)}.nii.gz")
+        call_dcm2niix_params = intput_params.CallDcm2niixParams(
+            output_series_file_path=output_series_file_path,
+            output_series_path=output_series_path,
+            series_path=series_path,
+        )
         if output_series_file_path.exists():
             if output_series_file_path.stat().st_size < FILE_SIZE:
                 output_series_file_path.unlink()
@@ -277,67 +358,86 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
             async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
         result = async_result.result
 
-        file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
-                                         post_process_manager=ConvertManager.nifti_post_process_manager))
-        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
-                                      series_uid=task_params.series_uid,
-                                      ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
-                                      study_id=series_path.parent.name,
-                                      tool_id='NIFTI_TOOL',
-                                      params_data=task_params.get_str_dict(),
-                                      result_data={'result':result})
+        file_processing(
+            func_params=dict(
+                study_folder_path=nifti_study_folder_path,
+                post_process_manager=ConvertManager.nifti_post_process_manager,
+            )
+        )
+        dcop_event = DCOPEventRequest(
+            study_uid=task_params.study_uid,
+            series_uid=task_params.series_uid,
+            ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
+            study_id=series_path.parent.name,
+            tool_id="NIFTI_TOOL",
+            params_data=task_params.get_str_dict(),
+            result_data={"result": result},
+        )
 
     dcop_event_list_json = dcop_event.model_dump_json()
-    call_post_httpx.push({'url' :"{}{}".format(UPLOAD_DATA_API_URL,sync_urls.SYNC_PROT_OPE_NO),
-                          'data':dcop_event_list_json
-                          })
+    call_post_httpx.push(
+        {
+            "url": "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
+            "data": dcop_event_list_json,
+        }
+    )
     return nifti_study_folder_path
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='process_instances_queue',
-                                 qps=100,
-                                 log_level=logging.WARNING,
-                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy
-                                 ))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="process_instances_queue",
+        qps=100,
+        log_level=logging.WARNING,
+        # user_custom_record_process_info_func=save_result_status_to_sqlalchemy
+    )
+)
 def process_instances(func_params: Dict[str, any]):
-    task_params = intput_params.ProcessInstancesParams.model_validate(func_params,
-                                                                      strict=False)
+    task_params = intput_params.ProcessInstancesParams.model_validate(
+        func_params, strict=False
+    )
     instance = task_params.instance
     output_dicom_path = task_params.output_dicom_path
-    rename_dicom_file_tuple = rename_dicom_file(instance,
-                                                ConvertManager.processing_strategy_list,
-                                                ConvertManager.modality_processing_strategy,
-                                                ConvertManager.mr_acquisition_type_processing_strategy)
-    copy_dicom_file_tuple = copy_dicom_file(rename_dicom_file_tuple,
-                                            instance,
-                                            output_dicom_path)
+    rename_dicom_file_tuple = rename_dicom_file(
+        instance,
+        ConvertManager.processing_strategy_list,
+        ConvertManager.modality_processing_strategy,
+        ConvertManager.mr_acquisition_type_processing_strategy,
+    )
+    copy_dicom_file_tuple = copy_dicom_file(
+        rename_dicom_file_tuple, instance, output_dicom_path
+    )
     if copy_dicom_file_tuple:
         return copy_dicom_file_tuple
     return None
 
 
 def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
-    instances_list = list(sub_dir.rglob('*.dcm'))
+    instances_list = list(sub_dir.rglob("*.dcm"))
     if len(instances_list) == 0:
-        instances_list = sorted(sub_dir.rglob('*'))
+        instances_list = sorted(sub_dir.rglob("*"))
         instances_list = list(filter(lambda x: x.is_file(), instances_list))
         instance_path: pathlib.Path = instances_list[0]
     else:
         instance_path: pathlib.Path = instances_list[0]
 
-    with open(instance_path, mode='rb') as dcm:
+    with open(instance_path, mode="rb") as dcm:
         dicom_ds = dcmread(dcm, stop_before_pixels=True)
         study_folder_name = get_study_folder_name(dicom_ds)
         study_folder_path = output_dicom_path.joinpath(study_folder_name)
-        file_processing(func_params=dict(study_folder_path=study_folder_path,
-                                         post_process_manager=ConvertManager.dicom_post_process_manager))
+        file_processing(
+            func_params=dict(
+                study_folder_path=study_folder_path,
+                post_process_manager=ConvertManager.dicom_post_process_manager,
+            )
+        )
         dicom_study_folder_path = study_folder_path
     return dicom_study_folder_path
 
 
-def get_orthanc_study_uid_series_uid(instance_path_str:str):
+def get_orthanc_study_uid_series_uid(instance_path_str: str):
     instance_path = pathlib.Path(instance_path_str)
-    with open(instance_path_str,mode='rb') as f:
+    with open(instance_path_str, mode="rb") as f:
         dicom_ds = pydicom.dcmread(f)
 
     # (0020,000E)	Series Instance UID	1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703
@@ -347,121 +447,159 @@ def get_orthanc_study_uid_series_uid(instance_path_str:str):
     # ./raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/10089413 GUO HSIOU HUA/21002010079 MRI Stroke Wall C C/MR 3D Ax SWAN/*.dcm
     client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
     study_uid = instance_path.parent.parent.parent.parent.name
-    study = Study(study_uid,client=client)
-    series_filter = list(filter(lambda series: series.uid == series_sop_uid , study.series))
+    study = Study(study_uid, client=client)
+    series_filter = list(
+        filter(lambda series: series.uid == series_sop_uid, study.series)
+    )
     if series_filter:
-        return str(study_uid),str(series_filter[0].id_)
+        return str(study_uid), str(series_filter[0].id_)
     else:
         return None
 
 
-def get_orthanc_series_uid(study_uid: str,
-                           series_dir_set: set):
+def get_orthanc_series_uid(study_uid: str, series_dir_set: set):
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
     client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
     series_sop_uid_list = []
     for series_dir in series_dir_set:
-        series_path_list = list(series_dir.rglob('*.dcm'))
+        series_path_list = list(series_dir.rglob("*.dcm"))
         instance_path_str = series_path_list[0]
-        with open(instance_path_str, mode='rb') as f:
+        with open(instance_path_str, mode="rb") as f:
             dicom_ds = pydicom.dcmread(f)
         series_sop_uid = dicom_ds[0x0020, 0x000E].value
         series_sop_uid_list.append(series_sop_uid)
     study = Study(study_uid, client=client)
-    series_dict_list = list(map(lambda x: {'series_sop_uid': x.uid,
-                                           'uid': x.id_,
-                                           'description': x.description, }, study.series))
-    df  = pd.DataFrame(series_sop_uid_list, columns=['file_series_sop_uid'])
+    series_dict_list = list(
+        map(
+            lambda x: {
+                "series_sop_uid": x.uid,
+                "uid": x.id_,
+                "description": x.description,
+            },
+            study.series,
+        )
+    )
+    df = pd.DataFrame(series_sop_uid_list, columns=["file_series_sop_uid"])
     df1 = pd.DataFrame(series_dict_list)
-    df2 = pd.merge(df, df1, left_on='file_series_sop_uid', right_on='series_sop_uid')
+    df2 = pd.merge(df, df1, left_on="file_series_sop_uid", right_on="series_sop_uid")
     return df2
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
-                                 qps=10,))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="process_dir_queue",
+        user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+        qps=10,
+    )
+)
 def process_dir(func_params: Dict[str, any]):
     UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
-    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
-                                                               strict=False)
+    task_params = intput_params.Dicom2NiiParams.model_validate(
+        func_params, strict=False
+    )
     sub_dir = task_params.sub_dir
     output_dicom_path = task_params.output_dicom_path
-    instances_list = sorted(sub_dir.rglob('*.dcm'))
+    instances_list = sorted(sub_dir.rglob("*.dcm"))
     if len(instances_list) > 0:
-        async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance=instances,
-                                                                                         output_dicom_path=output_dicom_path).get_str_dict())
-                             for instances in instances_list]
+        async_result_list = [
+            process_instances.push(
+                intput_params.ProcessInstancesParams(
+                    instance=instances, output_dicom_path=output_dicom_path
+                ).get_str_dict()
+            )
+            for instances in instances_list
+        ]
     else:
-        instances_list = sorted(sub_dir.rglob('*'))
+        instances_list = sorted(sub_dir.rglob("*"))
         instances_list = list(filter(lambda x: x.is_file(), instances_list))
-        async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance=instances,
-                                                                                         output_dicom_path=output_dicom_path).get_str_dict())
-                             for instances in instances_list]
+        async_result_list = [
+            process_instances.push(
+                intput_params.ProcessInstancesParams(
+                    instance=instances, output_dicom_path=output_dicom_path
+                ).get_str_dict()
+            )
+            for instances in instances_list
+        ]
     for async_result in async_result_list:
         async_result.set_timeout(3600)
 
     result_list = [async_result.result for async_result in async_result_list]
 
     dicom_study_folder_path = process_dir_next(sub_dir, output_dicom_path)
-    result_filter_list = list(filter(lambda x: x is not None,result_list))
-    result_dict_list = list(map(lambda x:json.loads(x),result_filter_list))
-    df = pd.DataFrame(result_dict_list,columns=['instance_path_str','rename_dicom_path'])
-    df['instance_dir_path'] = df['instance_path_str'].map(lambda x:os.path.dirname(x))
+    result_filter_list = list(filter(lambda x: x is not None, result_list))
+    result_dict_list = list(map(lambda x: json.loads(x), result_filter_list))
+    df = pd.DataFrame(
+        result_dict_list, columns=["instance_path_str", "rename_dicom_path"]
+    )
+    df["instance_dir_path"] = df["instance_path_str"].map(lambda x: os.path.dirname(x))
     # 先不去重，保留所有記錄以便後續處理
-    df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
-    df['series_sop_uid'] = df['instance_path_str'].map(lambda x:pydicom.dcmread(x)[0x0020, 0x000E].value)
-    df['study_uid'] = df['instance_path_str'].map(lambda x:pathlib.Path(x).parent.parent.parent.parent.name)
-    df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
+    df["instance_dir_path"] = df["instance_dir_path"].map(lambda x: pathlib.Path(x))
+    df["series_sop_uid"] = df["instance_path_str"].map(
+        lambda x: pydicom.dcmread(x)[0x0020, 0x000E].value
+    )
+    df["study_uid"] = df["instance_path_str"].map(
+        lambda x: pathlib.Path(x).parent.parent.parent.parent.name
+    )
+    df["study_id"] = df["rename_dicom_path"].map(
+        lambda x: pathlib.Path(x).parent.parent.name
+    )
     # 根據 rename_dicom_path 去重，確保每個 rename 路徑只保留一筆記錄
-    df.drop_duplicates(subset=['rename_dicom_path'], inplace=True)
+    df.drop_duplicates(subset=["rename_dicom_path"], inplace=True)
 
-    study_uid_unique = df['study_uid'].unique()
+    study_uid_unique = df["study_uid"].unique()
     dcop_event_list = []
     for study_uid in study_uid_unique:
-        df_study = df[df['study_uid'] == study_uid]
+        df_study = df[df["study_uid"] == study_uid]
         # df 已經根據 rename_dicom_path 去重，所以 df_study 中每個 rename 路徑只有一筆記錄
         # 收集所有需要的 instance_dir_path（用於查詢 Orthanc）
-        series_dir_set = set(df_study['instance_dir_path'].to_list())
+        series_dir_set = set(df_study["instance_dir_path"].to_list())
         df2 = get_orthanc_series_uid(study_uid=study_uid, series_dir_set=series_dir_set)
-        
+
         # 建立 series_sop_uid -> series_uid 的映射
         series_uid_map = {
-            record['file_series_sop_uid']: record['uid']
-            for record in df2.to_dict(orient='records')
+            record["file_series_sop_uid"]: record["uid"]
+            for record in df2.to_dict(orient="records")
         }
         if not series_uid_map:
             logger.warning("study %s 沒有對應的 Orthanc series", study_uid)
             continue
-        
+
         # 為每個 rename_dicom_path 產生事件（df_study 已經去重，每個 rename 路徑只有一筆）
         for _, row in df_study.iterrows():
-            series_sop_uid = row['series_sop_uid']
+            series_sop_uid = row["series_sop_uid"]
             series_uid = series_uid_map.get(series_sop_uid)
             if not series_uid:
-                logger.warning("找不到 series_sop_uid=%s 在 study=%s 的 Orthanc mapping，已略過該 rename 路徑 %s",
-                               series_sop_uid, study_uid, row['rename_dicom_path'])
+                logger.warning(
+                    "找不到 series_sop_uid=%s 在 study=%s 的 Orthanc mapping，已略過該 rename 路徑 %s",
+                    series_sop_uid,
+                    study_uid,
+                    row["rename_dicom_path"],
+                )
                 continue
-            raw_parent = str(pathlib.Path(row['instance_dir_path']).parent)
-            rename_parent = str(pathlib.Path(row['rename_dicom_path']).parent)
+            raw_parent = str(pathlib.Path(row["instance_dir_path"]).parent)
+            rename_parent = str(pathlib.Path(row["rename_dicom_path"]).parent)
             # 在 params_data 中包含 rename_dicom_path，以便後續查詢時可以區分不同的 rename 路徑
             dcop_event = DCOPEventRequest(
                 study_uid=study_uid,
                 series_uid=series_uid,
                 ope_no=DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
-                study_id=row['study_id'],
-                tool_id='DICOM_TOOL',
+                study_id=row["study_id"],
+                tool_id="DICOM_TOOL",
                 params_data={
-                    'rename_dicom_path': rename_parent,  # 在 params_data 中包含 rename_dicom_path
+                    "rename_dicom_path": rename_parent,  # 在 params_data 中包含 rename_dicom_path
                 },
                 result_data={
-                    'raw_dicom_path': raw_parent,
-                    'rename_dicom_path': rename_parent,
-                }
+                    "raw_dicom_path": raw_parent,
+                    "rename_dicom_path": rename_parent,
+                },
             )
             dcop_event_list.append(dcop_event.model_dump_json())
-    call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
-                          'data':dcop_event_list
-                          })
+    call_post_httpx.push(
+        {
+            "url": "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
+            "data": dcop_event_list,
+        }
+    )
     return dicom_study_folder_path
 
     # for result in df.to_dict(orient='records'):
@@ -537,13 +675,17 @@ def process_dir(func_params: Dict[str, any]):
     # return dicom_study_folder_path
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
-                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
-                                 qps=10,))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="dicom_to_nii_queue",
+        user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+        qps=10,
+    )
+)
 def dicom_to_nii(func_params: Dict[str, any]):
-
-    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
-                                                               strict=False)
+    task_params = intput_params.Dicom2NiiParams.model_validate(
+        func_params, strict=False
+    )
     # 1. raw dicom -> rename dicom
     if task_params.sub_dir is not None:
         result = process_dir.push(func_params)
@@ -553,7 +695,8 @@ def dicom_to_nii(func_params: Dict[str, any]):
         # rename dicom -> rename nifti
         dicom_2_nii_file_param = intput_params.Dicom2NiiFileParams(
             dicom_study_folder_path=task_params.output_dicom_path,
-            output_nifti_path=task_params.output_nifti_path)
+            output_nifti_path=task_params.output_nifti_path,
+        )
         result = dicom_2_nii_file.push(dicom_2_nii_file_param.get_str_dict())
         result.set_timeout(3600)
         data = result.get()
@@ -563,33 +706,42 @@ def dicom_to_nii(func_params: Dict[str, any]):
 
 # @Booster('dicom_rename_queue',
 #          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
-@Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_rename_queue',
-                                 qps=10,))
+@Booster(
+    BoosterParamsMyRABBITMQ(
+        queue_name="dicom_rename_queue",
+        qps=10,
+    )
+)
 def dicom_rename(func_params: Dict[str, any]):
     process_dir_result = process_dir.push(func_params)
     return process_dir_result
 
 
-
 class ConvertManager:
-    modality_processing_strategy: ModalityProcessingStrategy = ModalityProcessingStrategy()
-    mr_acquisition_type_processing_strategy: MRAcquisitionTypeProcessingStrategy = MRAcquisitionTypeProcessingStrategy()
-    processing_strategy_list: List[MRRenameSeriesProcessingStrategy] = [DwiProcessingStrategy(),
-                                                                        ADCProcessingStrategy(),
-                                                                        EADCProcessingStrategy(),
-                                                                        SWANProcessingStrategy(),
-                                                                        ESWANProcessingStrategy(),
-                                                                        MRABrainProcessingStrategy(),
-                                                                        MRANeckProcessingStrategy(),
-                                                                        MRAVRBrainProcessingStrategy(),
-                                                                        MRAVRNeckProcessingStrategy(),
-                                                                        T1ProcessingStrategy(),
-                                                                        T2ProcessingStrategy(),
-                                                                        ASLProcessingStrategy(),
-                                                                        DSCProcessingStrategy(),
-                                                                        RestingProcessingStrategy(),
-                                                                        CVRProcessingStrategy(),
-                                                                        DTIProcessingStrategy()]
+    modality_processing_strategy: ModalityProcessingStrategy = (
+        ModalityProcessingStrategy()
+    )
+    mr_acquisition_type_processing_strategy: MRAcquisitionTypeProcessingStrategy = (
+        MRAcquisitionTypeProcessingStrategy()
+    )
+    processing_strategy_list: List[MRRenameSeriesProcessingStrategy] = [
+        DwiProcessingStrategy(),
+        ADCProcessingStrategy(),
+        EADCProcessingStrategy(),
+        SWANProcessingStrategy(),
+        ESWANProcessingStrategy(),
+        MRABrainProcessingStrategy(),
+        MRANeckProcessingStrategy(),
+        MRAVRBrainProcessingStrategy(),
+        MRAVRNeckProcessingStrategy(),
+        T1ProcessingStrategy(),
+        T2ProcessingStrategy(),
+        ASLProcessingStrategy(),
+        DSCProcessingStrategy(),
+        RestingProcessingStrategy(),
+        CVRProcessingStrategy(),
+        DTIProcessingStrategy(),
+    ]
     dicom_post_process_manager = dicom_rename_mr_postprocess.PostProcessManager()
     nifti_post_process_manager = convert_nifti_postprocess.PostProcessManager()
 
@@ -598,7 +750,6 @@ class Dicm2NiixConverter:
     exclude_set = {
         MRSeriesRenameEnum.MRAVR_BRAIN.value,
         MRSeriesRenameEnum.MRAVR_NECK.value,
-
         # DSCSeriesRenameEnum.DSC.value,
         # DSCSeriesRenameEnum.rCBV.value,
         # DSCSeriesRenameEnum.rCBF.value,

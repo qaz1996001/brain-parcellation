@@ -3,7 +3,7 @@ class WorkingBokehDashboard:
     完全可用的 Bokeh 儀錶板，專為百萬資料點優化
     """
 
-    def __init__(self, df_pandas,df_outlier, webgl_threshold=25000):
+    def __init__(self, df_pandas, df_outlier, webgl_threshold=25000):
         self.df_original = df_pandas.copy()
         self.df_outlier = df_outlier.copy()
         self.webgl_threshold = webgl_threshold
@@ -11,6 +11,7 @@ class WorkingBokehDashboard:
 
         # 檢查 Bokeh 版本
         import bokeh
+
         self.bokeh_version = bokeh.__version__
 
         # 初始化資料來源
@@ -25,20 +26,20 @@ class WorkingBokehDashboard:
         self.plots = {}
 
         self.axis_mapping = {
-            'X': '低頻',
-            'Y': '高頻',
-            'Z': '特高頻',
+            "X": "低頻",
+            "Y": "高頻",
+            "Z": "特高頻",
         }
 
     def _create_data_layers(self):
         """創建多層次資料來源"""
 
         layer_configs = {
-            'ultra_fast': 5000,
-            'fast': 15000,
-            'medium': 50000,
-            'detailed': 150000,
-            'full': self.total_points
+            "ultra_fast": 5000,
+            "fast": 15000,
+            "medium": 50000,
+            "detailed": 150000,
+            "full": self.total_points,
         }
 
         for layer_name, max_points in layer_configs.items():
@@ -54,7 +55,9 @@ class WorkingBokehDashboard:
                 # 對異常點數據進行智能採樣
                 if len(self.df_outlier) > 0:
                     # 方法1：保留在採樣範圍內的異常點
-                    sampled_outlier_mask = self.df_outlier['Time'].isin(layer_df['Time'])
+                    sampled_outlier_mask = self.df_outlier["Time"].isin(
+                        layer_df["Time"]
+                    )
                     # sampled_outlier_mask = self.df_outlier.index.isin(indices)
                     layer_outlier = self.df_outlier[sampled_outlier_mask].copy()
 
@@ -65,58 +68,79 @@ class WorkingBokehDashboard:
             # 為主數據添加輔助列
             if len(layer_df) > 0:
                 layer_df = layer_df.copy()  # 確保不修改原始數據
-                layer_df['time_str'] = layer_df['Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                layer_df['index'] = range(len(layer_df))
-                layer_df['magnitude'] = np.sqrt(
-                    layer_df['X_Value'] ** 2 +
-                    layer_df['Y_Value'] ** 2 +
-                    layer_df['Z_Value'] ** 2
+                layer_df["time_str"] = layer_df["Time"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                layer_df["index"] = range(len(layer_df))
+                layer_df["magnitude"] = np.sqrt(
+                    layer_df["X_Value"] ** 2
+                    + layer_df["Y_Value"] ** 2
+                    + layer_df["Z_Value"] ** 2
                 )
 
                 # 創建主數據源
-                self.data_sources[layer_name] = ColumnDataSource(data=dict(
-                    x=layer_df['Time'],
-                    x_value=layer_df['X_Value'],
-                    y_value=layer_df['Y_Value'],
-                    z_value=layer_df['Z_Value'],
-                    time_str=layer_df['time_str'],
-                    index=layer_df['index'],
-                    magnitude=layer_df['magnitude']
-                ))
+                self.data_sources[layer_name] = ColumnDataSource(
+                    data=dict(
+                        x=layer_df["Time"],
+                        x_value=layer_df["X_Value"],
+                        y_value=layer_df["Y_Value"],
+                        z_value=layer_df["Z_Value"],
+                        time_str=layer_df["time_str"],
+                        index=layer_df["index"],
+                        magnitude=layer_df["magnitude"],
+                    )
+                )
             else:
                 # 處理空數據的情況
-                self.data_sources[layer_name] = ColumnDataSource(data=dict(
-                    x=[], x_value=[], y_value=[], z_value=[],
-                    time_str=[], index=[], magnitude=[]
-                ))
+                self.data_sources[layer_name] = ColumnDataSource(
+                    data=dict(
+                        x=[],
+                        x_value=[],
+                        y_value=[],
+                        z_value=[],
+                        time_str=[],
+                        index=[],
+                        magnitude=[],
+                    )
+                )
 
             # 為異常點數據添加輔助列
             if len(layer_outlier) > 0:
                 layer_outlier = layer_outlier.copy()  # 確保不修改原始數據
-                layer_outlier['time_str'] = layer_outlier['Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
-                layer_outlier['index'] = range(len(layer_outlier))
-                layer_outlier['magnitude'] = np.sqrt(
-                    layer_outlier['X_Value'] ** 2 +
-                    layer_outlier['Y_Value'] ** 2 +
-                    layer_outlier['Z_Value'] ** 2
+                layer_outlier["time_str"] = layer_outlier["Time"].dt.strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                layer_outlier["index"] = range(len(layer_outlier))
+                layer_outlier["magnitude"] = np.sqrt(
+                    layer_outlier["X_Value"] ** 2
+                    + layer_outlier["Y_Value"] ** 2
+                    + layer_outlier["Z_Value"] ** 2
                 )
 
                 # 創建異常點數據源
-                self.data_sources_label[layer_name] = ColumnDataSource(data=dict(
-                    x=layer_outlier['Time'],
-                    x_value=layer_outlier['X_Value'],
-                    y_value=layer_outlier['Y_Value'],
-                    z_value=layer_outlier['Z_Value'],
-                    time_str=layer_outlier['time_str'],
-                    index=layer_outlier['index'],
-                    magnitude=layer_outlier['magnitude'],
-                    label = layer_outlier['label'],
-                ))
+                self.data_sources_label[layer_name] = ColumnDataSource(
+                    data=dict(
+                        x=layer_outlier["Time"],
+                        x_value=layer_outlier["X_Value"],
+                        y_value=layer_outlier["Y_Value"],
+                        z_value=layer_outlier["Z_Value"],
+                        time_str=layer_outlier["time_str"],
+                        index=layer_outlier["index"],
+                        magnitude=layer_outlier["magnitude"],
+                        label=layer_outlier["label"],
+                    )
+                )
             else:
                 # 處理空異常點數據的情況
-                self.data_sources_label[layer_name] = ColumnDataSource(data=dict(
-                    x=[], x_value=[], y_value=[], z_value=[],
-                    time_str=[], index=[], magnitude=[]))
+                self.data_sources_label[layer_name] = ColumnDataSource(
+                    data=dict(
+                        x=[],
+                        x_value=[],
+                        y_value=[],
+                        z_value=[],
+                        time_str=[],
+                        index=[],
+                        magnitude=[],
+                    )
+                )
 
             # WebGL 配置
             self.webgl_config[layer_name] = len(layer_df) > self.webgl_threshold
@@ -132,9 +156,9 @@ class WorkingBokehDashboard:
             width=width,
             height=height,
             tools="pan,wheel_zoom,box_zoom,reset,save",
-            x_axis_type='datetime',
+            x_axis_type="datetime",
             title=title,
-            output_backend="webgl" if use_webgl else "canvas"
+            output_backend="webgl" if use_webgl else "canvas",
         )
 
         # 安全設置滾輪縮放
@@ -151,48 +175,60 @@ class WorkingBokehDashboard:
         """創建詳細圖表"""
 
         p, source, label_source = self.create_plot(
-            'medium',
+            "medium",
             height=500,
-            title=f"詳細資料分析 ({len(self.data_sources['medium'].data['x']):,} 點)"
+            title=f"詳細資料分析 ({len(self.data_sources['medium'].data['x']):,} 點)",
         )
 
-        colors = ['#e74c3c', '#2ecc71', '#3498db']
+        colors = ["#e74c3c", "#2ecc71", "#3498db"]
         labels = list(self.axis_mapping.values())
 
         # 創建線條渲染器
         line_renderers = []
         circle_renderers = []
         for i, (color, label) in enumerate(zip(colors, labels)):
-            key = ['x_value', 'y_value', 'z_value'][i]
-            line = p.line('x', key, source=source, line_color=color,
-                          line_width=1.5, alpha=0.9, legend_label=label)
+            key = ["x_value", "y_value", "z_value"][i]
+            line = p.line(
+                "x",
+                key,
+                source=source,
+                line_color=color,
+                line_width=1.5,
+                alpha=0.9,
+                legend_label=label,
+            )
             line_renderers.append(line)
-            circle = p.circle('x', key, source=label_source,
-                              line_color=color, fill_color=color,
-                              size=8, line_width=2, alpha=0.9,
-                              legend_label=f"{label} 異常點")
+            circle = p.circle(
+                "x",
+                key,
+                source=label_source,
+                line_color=color,
+                fill_color=color,
+                size=8,
+                line_width=2,
+                alpha=0.9,
+                legend_label=f"{label} 異常點",
+            )
             circle_renderers.append(circle)
-
 
         # 存儲渲染器供後續使用
 
-        self.plots['detailed_lines']  = line_renderers
-        self.plots['detailed_circle'] = circle_renderers
+        self.plots["detailed_lines"] = line_renderers
+        self.plots["detailed_circle"] = circle_renderers
 
         # 懸停工具
-        hover = HoverTool(tooltips=[
-            ('時間', '@time_str'),
-            (self.axis_mapping['X'], '@x_value{0.0000}'),
-            (self.axis_mapping['Y'], '@y_value{0.0000}'),
-            (self.axis_mapping['Z'], '@z_value{0.0000}'),
-            ('幅度', '@magnitude{0.0000}')
-        ])
+        hover = HoverTool(
+            tooltips=[
+                ("時間", "@time_str"),
+                (self.axis_mapping["X"], "@x_value{0.0000}"),
+                (self.axis_mapping["Y"], "@y_value{0.0000}"),
+                (self.axis_mapping["Z"], "@z_value{0.0000}"),
+                ("幅度", "@magnitude{0.0000}"),
+            ]
+        )
         p.add_tools(hover)
         p.legend.location = "top_left"
         p.legend.click_policy = "hide"
-
-
-
 
         return p
 
@@ -202,36 +238,49 @@ class WorkingBokehDashboard:
         plots = {}
         line_renderers = {}
         circle_renderers = {}
-        colors = ['#e74c3c', '#2ecc71', '#3498db']
-        axes = ['x', 'y', 'z']
-        labels = ['低頻', '高頻', '特高頻']
+        colors = ["#e74c3c", "#2ecc71", "#3498db"]
+        axes = ["x", "y", "z"]
+        labels = ["低頻", "高頻", "特高頻"]
 
         for axis, color, label in zip(axes, colors, labels):
             p, source, label_source = self.create_plot(
-                'detailed',
-                height=350,
-                title=f"{label} 資料分析"
+                "detailed", height=350, title=f"{label} 資料分析"
             )
 
             # 創建主數據線條
-            line = p.line('x', f'{axis}_value', source=source,
-                          line_color=color, line_width=2, alpha=0.8,
-                          legend_label=f"{label} 數據")
+            line = p.line(
+                "x",
+                f"{axis}_value",
+                source=source,
+                line_color=color,
+                line_width=2,
+                alpha=0.8,
+                legend_label=f"{label} 數據",
+            )
             line_renderers[axis] = line
 
             # 創建異常點圓圈
-            circle = p.circle('x', f'{axis}_value', source=label_source,
-                              line_color=color, fill_color=color,
-                              size=10, line_width=2, alpha=0.9,
-                              legend_label=f"{label} 異常點")
+            circle = p.circle(
+                "x",
+                f"{axis}_value",
+                source=label_source,
+                line_color=color,
+                fill_color=color,
+                size=10,
+                line_width=2,
+                alpha=0.9,
+                legend_label=f"{label} 異常點",
+            )
             circle_renderers[axis] = circle
 
             # 添加懸停工具
-            hover = HoverTool(tooltips=[
-                ('時間', '@time_str'),
-                (f'{label}值', f'@{axis}_value{{0.0000}}'),
-                ('幅度', '@magnitude{0.0000}')
-            ])
+            hover = HoverTool(
+                tooltips=[
+                    ("時間", "@time_str"),
+                    (f"{label}值", f"@{axis}_value{{0.0000}}"),
+                    ("幅度", "@magnitude{0.0000}"),
+                ]
+            )
             p.add_tools(hover)
 
             # 圖例設置
@@ -241,21 +290,20 @@ class WorkingBokehDashboard:
             plots[axis] = p
 
         # 存儲渲染器供後續使用
-        self.plots['single_axis_lines'] = line_renderers
-        self.plots['single_axis_circles'] = circle_renderers
+        self.plots["single_axis_lines"] = line_renderers
+        self.plots["single_axis_circles"] = circle_renderers
 
         return plots
-
 
     def create_advanced_statistics_table(self):
         """創建進階統計表格 - 包含更多統計指標"""
         # 計算進階統計資料
         stats_data = []
-        colors = ['🔴', '🟢', '🔵']
-        color_codes = ['#e74c3c', '#2ecc71', '#3498db']
+        colors = ["🔴", "🟢", "🔵"]
+        color_codes = ["#e74c3c", "#2ecc71", "#3498db"]
 
         for i, (axis, value) in enumerate(self.axis_mapping.items()):
-            col_name = f'{axis}_Value'
+            col_name = f"{axis}_Value"
             data_series = self.df_original[col_name]
 
             # 計算百分位數
@@ -263,34 +311,60 @@ class WorkingBokehDashboard:
             q75 = np.percentile(data_series, 75)
             iqr = q75 - q25
 
-            stats_data.append({
-                'axis_icon': colors[i],
-                'axis_name': value,
-                'count': len(data_series),
-                'mean': round(data_series.mean(), 4),
-                'std': round(data_series.std(), 4),
-                'min': round(data_series.min(), 4),
-                'q25': round(q25, 4),
-                'median': round(data_series.median(), 4),
-                'q75': round(q75, 4),
-                'max': round(data_series.max(), 4),
-                'iqr': round(iqr, 4),
-                'skewness': round(data_series.skew(), 4),
-                'kurtosis': round(data_series.kurtosis(), 4),
-                'cv': round((data_series.std() / data_series.mean()) * 100, 2) if data_series.mean() != 0 else 0
-            })
+            stats_data.append(
+                {
+                    "axis_icon": colors[i],
+                    "axis_name": value,
+                    "count": len(data_series),
+                    "mean": round(data_series.mean(), 4),
+                    "std": round(data_series.std(), 4),
+                    "min": round(data_series.min(), 4),
+                    "q25": round(q25, 4),
+                    "median": round(data_series.median(), 4),
+                    "q75": round(q75, 4),
+                    "max": round(data_series.max(), 4),
+                    "iqr": round(iqr, 4),
+                    "skewness": round(data_series.skew(), 4),
+                    "kurtosis": round(data_series.kurtosis(), 4),
+                    "cv": round((data_series.std() / data_series.mean()) * 100, 2)
+                    if data_series.mean() != 0
+                    else 0,
+                }
+            )
 
         # 創建資料來源
-        source = ColumnDataSource(data={key: [row[key] for row in stats_data] for key in stats_data[0].keys()})
+        source = ColumnDataSource(
+            data={key: [row[key] for row in stats_data] for key in stats_data[0].keys()}
+        )
 
         # 基本統計表格
         basic_columns = [
             TableColumn(field="axis_icon", title="", width=30, sortable=False),
             TableColumn(field="axis_name", title="軸向", width=80, sortable=False),
-            TableColumn(field="count", title="數量", formatter=NumberFormatter(format="0,0"), width=70),
-            TableColumn(field="mean", title="平均值", formatter=NumberFormatter(format="0.0000"), width=80),
-            TableColumn(field="std", title="標準差", formatter=NumberFormatter(format="0.0000"), width=80),
-            TableColumn(field="cv", title="變異係數%", formatter=NumberFormatter(format="0.00"), width=90)
+            TableColumn(
+                field="count",
+                title="數量",
+                formatter=NumberFormatter(format="0,0"),
+                width=70,
+            ),
+            TableColumn(
+                field="mean",
+                title="平均值",
+                formatter=NumberFormatter(format="0.0000"),
+                width=80,
+            ),
+            TableColumn(
+                field="std",
+                title="標準差",
+                formatter=NumberFormatter(format="0.0000"),
+                width=80,
+            ),
+            TableColumn(
+                field="cv",
+                title="變異係數%",
+                formatter=NumberFormatter(format="0.00"),
+                width=90,
+            ),
         ]
 
         basic_table = DataTable(
@@ -300,18 +374,48 @@ class WorkingBokehDashboard:
             height=150,
             index_position=None,
             sortable=True,
-            sizing_mode="fixed"
+            sizing_mode="fixed",
         )
 
         # 分佈統計表格
         distribution_columns = [
             TableColumn(field="axis_icon", title="", width=30, sortable=False),
-            TableColumn(field="min", title="最小值", formatter=NumberFormatter(format="0.0000"), width=70),
-            TableColumn(field="q25", title="Q1", formatter=NumberFormatter(format="0.0000"), width=70),
-            TableColumn(field="median", title="中位數", formatter=NumberFormatter(format="0.0000"), width=70),
-            TableColumn(field="q75", title="Q3", formatter=NumberFormatter(format="0.0000"), width=70),
-            TableColumn(field="max", title="最大值", formatter=NumberFormatter(format="0.0000"), width=70),
-            TableColumn(field="iqr", title="IQR", formatter=NumberFormatter(format="0.0000"), width=70)
+            TableColumn(
+                field="min",
+                title="最小值",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
+            TableColumn(
+                field="q25",
+                title="Q1",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
+            TableColumn(
+                field="median",
+                title="中位數",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
+            TableColumn(
+                field="q75",
+                title="Q3",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
+            TableColumn(
+                field="max",
+                title="最大值",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
+            TableColumn(
+                field="iqr",
+                title="IQR",
+                formatter=NumberFormatter(format="0.0000"),
+                width=70,
+            ),
         ]
 
         distribution_table = DataTable(
@@ -321,15 +425,25 @@ class WorkingBokehDashboard:
             height=150,
             index_position=None,
             sortable=True,
-            sizing_mode="fixed"
+            sizing_mode="fixed",
         )
 
         # 形狀統計表格
         shape_columns = [
             TableColumn(field="axis_icon", title="", width=30, sortable=False),
             TableColumn(field="axis_name", title="軸向", width=80, sortable=False),
-            TableColumn(field="skewness", title="偏度", formatter=NumberFormatter(format="0.0000"), width=80),
-            TableColumn(field="kurtosis", title="峰度", formatter=NumberFormatter(format="0.0000"), width=80)
+            TableColumn(
+                field="skewness",
+                title="偏度",
+                formatter=NumberFormatter(format="0.0000"),
+                width=80,
+            ),
+            TableColumn(
+                field="kurtosis",
+                title="峰度",
+                formatter=NumberFormatter(format="0.0000"),
+                width=80,
+            ),
         ]
 
         shape_table = DataTable(
@@ -339,7 +453,7 @@ class WorkingBokehDashboard:
             height=150,
             index_position=None,
             sortable=True,
-            sizing_mode="fixed"
+            sizing_mode="fixed",
         )
 
         # 創建標題組件
@@ -350,7 +464,8 @@ class WorkingBokehDashboard:
                 <strong>📈 基本統計</strong>
             </div>
             """,
-            width=450, height=70
+            width=450,
+            height=70,
         )
 
         distribution_title = Div(
@@ -360,7 +475,8 @@ class WorkingBokehDashboard:
                 <strong>📊 分佈統計</strong>
             </div>
             """,
-            width=450, height=70
+            width=450,
+            height=70,
         )
 
         shape_title = Div(
@@ -370,7 +486,8 @@ class WorkingBokehDashboard:
                 <strong>📐 形狀統計</strong>
             </div>
             """,
-            width=450, height=70
+            width=450,
+            height=70,
         )
 
         # 組合佈局
@@ -380,7 +497,7 @@ class WorkingBokehDashboard:
             column(distribution_title, distribution_table, width=450),
             Div(text="", width=10, height=20),  # 間距
             column(shape_title, shape_table, width=270),
-            sizing_mode="fixed"
+            sizing_mode="fixed",
         )
         # 總標題
         # 總標題 - 修正：移除 style 參數，將樣式直接寫在 HTML 中
@@ -394,24 +511,38 @@ class WorkingBokehDashboard:
                 </h3>
             </div>
             """,
-            width=1200, height=80  # 調整高度以適應內容
+            width=1200,
+            height=80,  # 調整高度以適應內容
         )
 
         return column(main_title, tables_row, sizing_mode="scale_width")
 
     def create_data_outlier_table(self):
-        source = self.data_sources_label['full']  # 使用中等精度資料
+        source = self.data_sources_label["full"]  # 使用中等精度資料
 
         columns = [
             TableColumn(field="time_str", title="時間", width=150),
-            TableColumn(field="x_value", title=self.axis_mapping['X'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="y_value", title=self.axis_mapping['Y'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="z_value", title=self.axis_mapping['Z'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="label", title="異常軸",
-                        formatter=StringFormatter(), width=100),
+            TableColumn(
+                field="x_value",
+                title=self.axis_mapping["X"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="y_value",
+                title=self.axis_mapping["Y"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="z_value",
+                title=self.axis_mapping["Z"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="label", title="異常軸", formatter=StringFormatter(), width=100
+            ),
         ]
 
         return DataTable(
@@ -419,25 +550,40 @@ class WorkingBokehDashboard:
             columns=columns,
             width=2400,
             height=400,
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
-
 
     def create_data_table(self):
         """創建資料表格"""
 
-        source = self.data_sources['medium']  # 使用中等精度資料
+        source = self.data_sources["medium"]  # 使用中等精度資料
 
         columns = [
             TableColumn(field="time_str", title="時間", width=150),
-            TableColumn(field="x_value", title=self.axis_mapping['X'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="y_value", title=self.axis_mapping['Y'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="z_value", title=self.axis_mapping['Z'],
-                        formatter=NumberFormatter(format="0.0000"), width=100),
-            TableColumn(field="magnitude", title="幅度",
-                        formatter=NumberFormatter(format="0.0000"), width=100)
+            TableColumn(
+                field="x_value",
+                title=self.axis_mapping["X"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="y_value",
+                title=self.axis_mapping["Y"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="z_value",
+                title=self.axis_mapping["Z"],
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
+            TableColumn(
+                field="magnitude",
+                title="幅度",
+                formatter=NumberFormatter(format="0.0000"),
+                width=100,
+            ),
         ]
 
         return DataTable(
@@ -445,7 +591,7 @@ class WorkingBokehDashboard:
             columns=columns,
             width=2400,
             height=400,
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
 
     def detailed_plot_bind_data_outlier_table(self, detailed_plot, data_outlier_table):
@@ -455,13 +601,9 @@ class WorkingBokehDashboard:
         """
 
         # 創建用於視野內異常點的新數據源
-        viewport_outlier_source = ColumnDataSource(data=dict(
-            time_str=[],
-            x_value=[],
-            y_value=[],
-            z_value=[],
-            label=[]
-        ))
+        viewport_outlier_source = ColumnDataSource(
+            data=dict(time_str=[], x_value=[], y_value=[], z_value=[], label=[])
+        )
 
         # 更新表格的數據源為視野數據源
         data_outlier_table.source = viewport_outlier_source
@@ -470,12 +612,14 @@ class WorkingBokehDashboard:
         self.viewport_outlier_source = viewport_outlier_source
 
         # 創建視野變化回調函數
-        viewport_callback = CustomJS(args=dict(
-            full_outlier_source=self.data_sources_label['full'],
-            viewport_outlier_source=viewport_outlier_source,
-            x_range=detailed_plot.x_range,
-            y_range=detailed_plot.y_range
-        ), code="""
+        viewport_callback = CustomJS(
+            args=dict(
+                full_outlier_source=self.data_sources_label["full"],
+                viewport_outlier_source=viewport_outlier_source,
+                x_range=detailed_plot.x_range,
+                y_range=detailed_plot.y_range,
+            ),
+            code="""
             // 獲取當前視野範圍
             const x_start = x_range.start;
             const x_end = x_range.end;
@@ -554,19 +698,22 @@ class WorkingBokehDashboard:
             // 在控制台輸出調試信息
             console.log(`視野範圍: X(${new Date(x_start).toLocaleString()} - ${new Date(x_end).toLocaleString()}), Y(${y_start.toFixed(2)} - ${y_end.toFixed(2)})`);
             console.log(`視野內異常點數量: ${viewport_time_str.length}`);
-        """)
+        """,
+        )
 
         # 將回調綁定到視野變化事件
-        detailed_plot.x_range.js_on_change('start', viewport_callback)
-        detailed_plot.x_range.js_on_change('end', viewport_callback)
-        detailed_plot.y_range.js_on_change('start', viewport_callback)
-        detailed_plot.y_range.js_on_change('end', viewport_callback)
+        detailed_plot.x_range.js_on_change("start", viewport_callback)
+        detailed_plot.x_range.js_on_change("end", viewport_callback)
+        detailed_plot.y_range.js_on_change("start", viewport_callback)
+        detailed_plot.y_range.js_on_change("end", viewport_callback)
 
         # 初始化視野表格（顯示所有異常點）
-        initial_viewport_callback = CustomJS(args=dict(
-            full_outlier_source=self.data_sources_label['full'],
-            viewport_outlier_source=viewport_outlier_source
-        ), code="""
+        initial_viewport_callback = CustomJS(
+            args=dict(
+                full_outlier_source=self.data_sources_label["full"],
+                viewport_outlier_source=viewport_outlier_source,
+            ),
+            code="""
             const full_data = full_outlier_source.data;
             viewport_outlier_source.data = {
                 'time_str': full_data['time_str'],
@@ -576,12 +723,16 @@ class WorkingBokehDashboard:
                 'label': full_data['label']
             };
             viewport_outlier_source.change.emit();
-        """)
+        """,
+        )
 
         # 在創建完成後執行初始化
         from bokeh.io import curdoc
+
         if curdoc().session_context:
-            curdoc().add_next_tick_callback(lambda: exec(initial_viewport_callback.code))
+            curdoc().add_next_tick_callback(
+                lambda: exec(initial_viewport_callback.code)
+            )
 
     def create_controls(self):
         """
@@ -597,10 +748,10 @@ class WorkingBokehDashboard:
                 ("fast", "🚀 快速 (15K)"),
                 ("medium", "⚖️ 中等 (50K)"),
                 ("detailed", "🔍 詳細 (150K)"),
-                ("full", "💎 完整資料")
+                ("full", "💎 完整資料"),
             ],
             width=220,
-            height=60
+            height=60,
         )
 
         axis_check = CheckboxButtonGroup(
@@ -616,30 +767,21 @@ class WorkingBokehDashboard:
             active=True,
             width=150,
             height=60,
-            button_type="warning"
+            button_type="warning",
         )
 
         # 修改後的匯出按鈕
         export_all_outliers = Button(
-            label="📥 匯出全部異常點",
-            width=180,
-            height=60,
-            button_type="success"
+            label="📥 匯出全部異常點", width=180, height=60, button_type="success"
         )
 
         # 修改這個按鈕的功能 - 匯出視野內的異常點
         export_viewport_outliers = Button(
-            label="🔍 匯出視野異常點",
-            width=180,
-            height=60,
-            button_type="primary"
+            label="🔍 匯出視野異常點", width=180, height=60, button_type="primary"
         )
 
         export_all_data = Button(
-            label="📊 匯出全部資料",
-            width=180,
-            height=60,
-            button_type="default"
+            label="📊 匯出全部資料", width=180, height=60, button_type="default"
         )
 
         # 狀態顯示
@@ -651,7 +793,7 @@ class WorkingBokehDashboard:
             </div>
             """,
             width=800,
-            height=60
+            height=60,
         )
 
         export_status_div = Div(
@@ -662,7 +804,7 @@ class WorkingBokehDashboard:
             </div>
             """,
             width=600,
-            height=40
+            height=40,
         )
 
         # JavaScript 函數保持不變
@@ -716,10 +858,14 @@ class WorkingBokehDashboard:
         """
 
         # 匯出視野內異常點的回調函數（新增）
-        export_viewport_callback = CustomJS(args=dict(
-            viewport_outlier_source=self.viewport_outlier_source if hasattr(self, 'viewport_outlier_source') else None,
-            export_status_div=export_status_div
-        ), code=f"""
+        export_viewport_callback = CustomJS(
+            args=dict(
+                viewport_outlier_source=self.viewport_outlier_source
+                if hasattr(self, "viewport_outlier_source")
+                else None,
+                export_status_div=export_status_div,
+            ),
+            code=f"""
             {csv_export_js}
 
             window.export_status_div = export_status_div;
@@ -768,13 +914,16 @@ class WorkingBokehDashboard:
             setTimeout(() => {{
                 downloadCSV(viewport_data, filename);
             }}, 500);
-        """)
+        """,
+        )
 
         # 匯出全部異常點回調（保持不變）
-        export_all_callback = CustomJS(args=dict(
-            label_sources=self.data_sources_label,
-            export_status_div=export_status_div
-        ), code=f"""
+        export_all_callback = CustomJS(
+            args=dict(
+                label_sources=self.data_sources_label,
+                export_status_div=export_status_div,
+            ),
+            code=f"""
             {csv_export_js}
             window.export_status_div = export_status_div;
 
@@ -812,40 +961,46 @@ class WorkingBokehDashboard:
             setTimeout(() => {{
                 downloadCSV(full_outlier_data.data, filename);
             }}, 500);
-        """)
+        """,
+        )
 
         # 其他回調函數保持不變...（省略以節省空間）
 
         # 綁定回調函數
         export_all_outliers.js_on_click(export_all_callback)
-        export_viewport_outliers.js_on_click(export_viewport_callback)  # 綁定新的視野匯出功能
+        export_viewport_outliers.js_on_click(
+            export_viewport_callback
+        )  # 綁定新的視野匯出功能
 
         # 存儲控制元件引用
         self.controls = {
-            'data_select': data_select,
-            'axis_check': axis_check,
-            'outlier_toggle': outlier_toggle,
-            'export_all_outliers': export_all_outliers,
-            'export_viewport_outliers': export_viewport_outliers,  # 更新引用名稱
-            'export_all_data': export_all_data,
-            'status_div': status_div,
-            'export_status_div': export_status_div
+            "data_select": data_select,
+            "axis_check": axis_check,
+            "outlier_toggle": outlier_toggle,
+            "export_all_outliers": export_all_outliers,
+            "export_viewport_outliers": export_viewport_outliers,  # 更新引用名稱
+            "export_all_data": export_all_data,
+            "status_div": status_div,
+            "export_status_div": export_status_div,
         }
 
         # 創建匯出按鈕區域（更新按鈕）
         export_buttons_section = column(
-            Div(text="<h4 style='margin: 5px 0; color: #495057;'>💾 資料匯出</h4>",
-                width=600, height=25),
+            Div(
+                text="<h4 style='margin: 5px 0; color: #495057;'>💾 資料匯出</h4>",
+                width=600,
+                height=25,
+            ),
             row(
                 export_all_outliers,
                 Div(text="", width=10, height=20),
                 export_viewport_outliers,  # 使用新的視野匯出按鈕
                 Div(text="", width=10, height=20),
                 export_all_data,
-                sizing_mode="scale_width"
+                sizing_mode="scale_width",
             ),
             export_status_div,
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
 
         # 其餘佈局代碼保持不變...
@@ -855,7 +1010,7 @@ class WorkingBokehDashboard:
             axis_check,
             Div(text="", width=20, height=20),
             outlier_toggle,
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
 
         controls_section = column(
@@ -863,11 +1018,10 @@ class WorkingBokehDashboard:
             Div(text="", width=20, height=10),
             row(controls_row1, export_buttons_section),
             Div(text="", width=20, height=15),
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
 
         return controls_section
-
 
     def create_dashboard(self, name, output_file_path="working_bokeh_dashboard.html"):
         """創建完整儀錶板"""
@@ -879,16 +1033,14 @@ class WorkingBokehDashboard:
         data_table = self.create_data_table()
         data_outlier_table = self.create_data_outlier_table()
 
-
         # 存儲表格引用以便 JavaScript 控制
-        self.plots['data_table'] = data_table
-        self.plots['data_outlier_table'] = data_outlier_table
+        self.plots["data_table"] = data_table
+        self.plots["data_outlier_table"] = data_outlier_table
 
         self.detailed_plot_bind_data_outlier_table(detailed_plot, data_table)
 
         # 創建控制台（必須在所有圖表創建之後）
         controls = self.create_controls()
-
 
         # 其餘代碼保持不變...
         # 標題
@@ -925,50 +1077,46 @@ class WorkingBokehDashboard:
         title_div = Div(text=title_html, width=2400, height=120)
 
         # 控制台區域
-        control_section = column(
-            controls,
-            Div(text="<hr>", width=2400, height=20)
-        )
+        control_section = column(controls, Div(text="<hr>", width=2400, height=20))
 
         # 其餘佈局代碼保持不變...
         # 主要圖表區域
         main_charts = column(
             Div(text="<h3>📊 主要圖表</h3>", width=2400, height=40),
             detailed_plot,
-            Div(text="<hr>", width=2400, height=20)
+            Div(text="<hr>", width=2400, height=20),
         )
 
         # 單軸分析區域
         single_axis_section = column(
             Div(text="<h3>📈 單軸分析</h3>", width=2400, height=40),
-            single_plots['x'],
-            single_plots['y'],
-            single_plots['z'],
-            Div(text="<hr>", width=2400, height=20)
+            single_plots["x"],
+            single_plots["y"],
+            single_plots["z"],
+            Div(text="<hr>", width=2400, height=20),
         )
 
         # 高級分析區域
         advanced_section = column(
             Div(text="<h3>🎯 高級分析</h3>", width=2400, height=40),
             stats_table,
-            Div(text="<hr>", width=2400, height=20)
+            Div(text="<hr>", width=2400, height=20),
         )
 
         # 原始資料區域
         data_section = column(
-            Div(text="<h3>📋 原始資料</h3>", width=2400, height=40),
-            data_table
+            Div(text="<h3>📋 原始資料</h3>", width=2400, height=40), data_table
         )
 
         # 組合最終佈局
         layout = column(
             title_div,
             control_section,
-            bokeh_row(main_charts,data_outlier_table) ,
+            bokeh_row(main_charts, data_outlier_table),
             single_axis_section,
             advanced_section,
             data_section,
-            sizing_mode="scale_width"
+            sizing_mode="scale_width",
         )
 
         # 輸出

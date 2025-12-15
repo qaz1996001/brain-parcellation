@@ -1,14 +1,18 @@
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, TypeVar, Generic, AsyncGenerator, Callable, Any
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction, async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    AsyncSessionTransaction,
+    async_sessionmaker,
+)
 from sqlalchemy.exc import SQLAlchemyError
 from advanced_alchemy.extensions.fastapi import service
 import logging
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class SessionManager:
@@ -63,8 +67,7 @@ class SessionManager:
 
     @asynccontextmanager
     async def use_session(
-            self,
-            session: Optional[AsyncSession] = None
+        self, session: Optional[AsyncSession] = None
     ) -> AsyncGenerator[AsyncSession, None]:
         """
         Use an existing session or create a new one if none provided.
@@ -92,9 +95,7 @@ class SessionManager:
 
     @asynccontextmanager
     async def transaction(
-            self,
-            session: AsyncSession,
-            nested: bool = True
+        self, session: AsyncSession, nested: bool = True
     ) -> AsyncGenerator[AsyncSessionTransaction, None]:
         """
         Create a transaction within the given session.
@@ -132,13 +133,13 @@ class SessionManager:
                     raise
 
     async def execute_with_retry(
-            self,
-            func: Callable,
-            *args,
-            max_retries: int = 3,
-            retry_delay: float = 0.1,
-            session: Optional[AsyncSession] = None,
-            **kwargs
+        self,
+        func: Callable,
+        *args,
+        max_retries: int = 3,
+        retry_delay: float = 0.1,
+        session: Optional[AsyncSession] = None,
+        **kwargs,
     ) -> Any:
         """
         Execute a function with automatic retry on transient failures.
@@ -210,10 +211,12 @@ class SessionManager:
         return len(self._active_sessions)
 
 
-ModelT = TypeVar('ModelT')
+ModelT = TypeVar("ModelT")
 
 
-class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Generic[ModelT]):
+class BaseRepositoryService(
+    service.SQLAlchemyAsyncRepositoryService[ModelT], Generic[ModelT]
+):
     """
     Enhanced Service base class providing unified Session management.
 
@@ -240,27 +243,28 @@ class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Ge
         session_factory = None
 
         # First, check if repository has a direct session_factory attribute
-        if hasattr(self.repository, '_sessionmaker'):
+        if hasattr(self.repository, "_sessionmaker"):
             session_factory = self.repository._sessionmaker
-        elif hasattr(self.repository, 'session_factory'):
+        elif hasattr(self.repository, "session_factory"):
             session_factory = self.repository.session_factory
         else:
             # If not found directly, we need to create one from the engine
             # The repository.session is an AsyncSession instance
             # We can get the bind (engine) from it and create a sessionmaker
-            if hasattr(self.repository, 'session') and hasattr(self.repository.session, 'bind'):
+            if hasattr(self.repository, "session") and hasattr(
+                self.repository.session, "bind"
+            ):
                 from sqlalchemy.ext.asyncio import async_sessionmaker
+
                 engine = self.repository.session.bind
 
                 # Create a new session factory with the same engine
                 session_factory = async_sessionmaker(
-                    bind=engine,
-                    class_=AsyncSession,
-                    expire_on_commit=False
+                    bind=engine, class_=AsyncSession, expire_on_commit=False
                 )
             else:
                 # Last resort: try to get from the class attribute if available
-                if hasattr(self.repository.__class__, 'session_factory'):
+                if hasattr(self.repository.__class__, "session_factory"):
                     session_factory = self.repository.__class__.session_factory
 
         if session_factory is None:
@@ -283,11 +287,7 @@ class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Ge
         return self._session_manager
 
     async def execute_in_transaction(
-            self,
-            func: Callable,
-            *args,
-            session: Optional[AsyncSession] = None,
-            **kwargs
+        self, func: Callable, *args, session: Optional[AsyncSession] = None, **kwargs
     ) -> Any:
         """
         Execute a function within a database transaction.
@@ -322,10 +322,10 @@ class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Ge
                 return await func(*args, session=db_session, **kwargs)
 
     async def execute_batch_operations(
-            self,
-            operations: list[tuple[Callable, tuple, dict]],
-            session: Optional[AsyncSession] = None,
-            stop_on_error: bool = True
+        self,
+        operations: list[tuple[Callable, tuple, dict]],
+        session: Optional[AsyncSession] = None,
+        stop_on_error: bool = True,
     ) -> list[tuple[bool, Any]]:
         """
         Execute multiple operations within a single transaction.
@@ -356,8 +356,8 @@ class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Ge
                 for func, args, kwargs in operations:
                     try:
                         # Ensure session is passed to the function
-                        if 'session' not in kwargs:
-                            kwargs['session'] = db_session
+                        if "session" not in kwargs:
+                            kwargs["session"] = db_session
 
                         result = await func(*args, **kwargs)
                         results.append((True, result))
@@ -407,5 +407,5 @@ class BaseRepositoryService(service.SQLAlchemyAsyncRepositoryService[ModelT], Ge
         """
         return {
             "active_sessions": self.session_manager.get_active_session_count(),
-            "session_factory": str(self._session_factory)
+            "session_factory": str(self._session_factory),
         }

@@ -11,4 +11,6 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     commit_mode="autocommit",
     create_all=True,
 )
-alchemy = AdvancedAlchemy(config=sqlalchemy_config,)
+alchemy = AdvancedAlchemy(
+    config=sqlalchemy_config,
+)

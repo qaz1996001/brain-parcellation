@@ -1,36 +1,31 @@
 import argparse
-import pathlib
-import subprocess
-from typing import List
 
 import nibabel as nib
 import numpy as np
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import tensorflow as tf
-    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-    tf.config.experimental.set_visible_devices(devices=gpus, device_type='GPU')
+
+    gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
+    tf.config.experimental.set_visible_devices(devices=gpus, device_type="GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
     from code_ai.task import CMBProcess, DWIProcess, run_wmh
     from code_ai.utils_inference import InferenceEnum
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--synthseg_file', type=str, required=True,
-                        help='synthseg_file')
-    parser.add_argument('--david_file', type=str, required=True,
-                        help='david_file')
-    parser.add_argument('--wm_file', type=str, required=True,
-                        help='wm_file')
-    parser.add_argument('--depth_number', type=int, default=5,
-                        help='depth_number')
-    parser.add_argument('--save_mode', type=str, required=True,
-                        help='save_mode')
-    parser.add_argument('--save_file_path', type=str, required=True,
-                        help='save_file_path')
+    parser.add_argument(
+        "--synthseg_file", type=str, required=True, help="synthseg_file"
+    )
+    parser.add_argument("--david_file", type=str, required=True, help="david_file")
+    parser.add_argument("--wm_file", type=str, required=True, help="wm_file")
+    parser.add_argument("--depth_number", type=int, default=5, help="depth_number")
+    parser.add_argument("--save_mode", type=str, required=True, help="save_mode")
+    parser.add_argument(
+        "--save_file_path", type=str, required=True, help="save_file_path"
+    )
 
-    parser.add_argument('--cmb_file_list', type=str,nargs='+',
-                        help='cmb_file_list')
+    parser.add_argument("--cmb_file_list", type=str, nargs="+", help="cmb_file_list")
 
     args = parser.parse_args()
     synthseg_file = args.synthseg_file
@@ -45,14 +40,16 @@ if __name__ == '__main__':
     seg_array = np.array(david_nii.dataobj)
     affine = synthseg_nii.affine
     header = synthseg_nii.header
-    print('save_mode',save_mode)
+    print("save_mode", save_mode)
     match save_mode:
         case InferenceEnum.CMB:
             result_array = CMBProcess.run(seg_array)
         case InferenceEnum.WMH_PVS:
             synthseg_wm_nii = nib.load(wm_file)
             synthseg_array_wm = np.array(synthseg_wm_nii.dataobj)
-            result_array = run_wmh(np.array(synthseg_nii.dataobj), synthseg_array_wm, depth_number)
+            result_array = run_wmh(
+                np.array(synthseg_nii.dataobj), synthseg_array_wm, depth_number
+            )
         case InferenceEnum.DWI:
             result_array = DWIProcess.run(seg_array)
         case _:

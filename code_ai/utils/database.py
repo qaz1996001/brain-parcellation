@@ -4,9 +4,20 @@ import asyncio
 import logging
 import threading
 from contextlib import asynccontextmanager
+import functools
 from importlib import import_module
-from typing import Any, AsyncGenerator, Awaitable, Callable, List, Optional, Sequence, TypeVar, cast
-from sqlalchemy import select
+from typing import (
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    List,
+    Optional,
+    Sequence,
+    TypeVar,
+    cast,
+)
+from sqlalchemy import create_engine, select
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -21,6 +32,16 @@ Serialization = cast(
     getattr(import_module("funboost.core.serialization"), "Serialization"),
 )
 
+try:
+    _db_libs_module = import_module("db_libs.sqla_lib")
+except ImportError:  # pragma: no cover - optional dependency
+    SqlaReflectHelper = cast(
+        Any,
+        getattr(import_module("db_libs.sqla_lib"), "SqlaReflectHelper"),
+    )
+else:  # pragma: no cover - imported successfully
+    SqlaReflectHelper = cast(Any, getattr(_db_libs_module, "SqlaReflectHelper"))
+
 logger = logging.getLogger(__name__)
 
 ASYNC_DRIVER_MAP = {
@@ -32,11 +53,7 @@ ASYNC_DRIVER_MAP = {
 T = TypeVar("T")
 
 
-def _build_async_database_url() -> str:
-    raw_url = getattr(funboost_config_deafult.BrokerConnConfig, "SQLACHEMY_ENGINE_URL", "")
-    if not raw_url:
-        raw_url = "sqlite:///./funboost.db"
-
+def _build_async_database_url(raw_url: str) -> str:
     parsed_url = make_url(raw_url)
     drivername = parsed_url.drivername
     if "+" in drivername:
@@ -54,7 +71,13 @@ def _build_async_database_url() -> str:
     return str(parsed_url.set(drivername=f"{dialect}+{async_driver}"))
 
 
-DATABASE_URL = _build_async_database_url()
+RAW_DATABASE_URL = getattr(
+    funboost_config_deafult.BrokerConnConfig, "SQLACHEMY_ENGINE_URL", ""
+)
+if not RAW_DATABASE_URL:
+    RAW_DATABASE_URL = "sqlite:///./funboost.db"
+
+DATABASE_URL = _build_async_database_url(RAW_DATABASE_URL)
 
 engine_kwargs: dict[str, Any] = {
     "echo": False,
@@ -71,6 +94,26 @@ else:
 
 engine = create_async_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+sync_engine_kwargs: dict[str, Any] = {
+    "pool_pre_ping": True,
+}
+
+if RAW_DATABASE_URL.startswith("sqlite"):
+    sync_engine_kwargs["connect_args"] = {"timeout": 30, "check_same_thread": False}
+else:
+    sync_engine_kwargs["pool_size"] = 20
+    sync_engine_kwargs["max_overflow"] = 10
+    sync_engine_kwargs["pool_recycle"] = 600
+
+
+@functools.lru_cache()
+def get_sqla_helper() -> tuple[Any, SqlaReflectHelper]:
+    """Backwards-compatible helper returning a sync engine and SqlaReflectHelper."""
+    sync_engine = create_engine(RAW_DATABASE_URL, **sync_engine_kwargs)
+    sqla_helper = SqlaReflectHelper(sync_engine)
+    Base.metadata.create_all(sync_engine)
+    return sync_engine, sqla_helper
 
 
 def _run_sync(coro_factory: Callable[[], Awaitable[T]]) -> T:
@@ -159,7 +202,9 @@ async def save_result_status_batch(status_list: Sequence[FunctionResultStatus]) 
             raise
 
 
-def save_result_status_to_sqlalchemy(function_result_status: FunctionResultStatus) -> None:
+def save_result_status_to_sqlalchemy(
+    function_result_status: FunctionResultStatus,
+) -> None:
     """Sync wrapper required by funboost hooks."""
     _run_sync(lambda: save_result_status(function_result_status))
 
@@ -170,7 +215,9 @@ def save_result_status_to_sqlalchemy_by_batch(
     _run_sync(lambda: save_result_status_batch(list(function_result_status_list)))
 
 
-async def query_result_status(queue_name: str, limit: int = 100) -> List[FunboostConsumeResult]:
+async def query_result_status(
+    queue_name: str, limit: int = 100
+) -> List[FunboostConsumeResult]:
     """Return the latest consume results for the specified queue."""
     async with get_session() as session:
         stmt = (
@@ -183,5 +230,7 @@ async def query_result_status(queue_name: str, limit: int = 100) -> List[Funboos
         return list(result.scalars())
 
 
-def query_result_status_to_sqlalchemy(queue_name: str, limit: int = 100) -> List[FunboostConsumeResult]:
+def query_result_status_to_sqlalchemy(
+    queue_name: str, limit: int = 100
+) -> List[FunboostConsumeResult]:
     return _run_sync(lambda: query_result_status(queue_name, limit))

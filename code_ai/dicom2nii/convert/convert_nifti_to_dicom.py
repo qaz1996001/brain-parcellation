@@ -5,19 +5,20 @@ import re
 from typing import Union
 
 import numpy as np
-from pydicom import dcmread, FileDataset, Dataset, DataElement
+from pydicom import Dataset
 import nibabel as nib
 import orjson
 
-from concurrent.futures import ProcessPoolExecutor, Executor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-from tqdm import tqdm
 
 from config import MRSeriesRenameEnum
 
 
 class Nifti2DicmConverter:
-    study_folder_name_pattern = re.compile('^(\d{8})_(\d{8})_(MR|CT)_(.*)$', re.IGNORECASE)
+    study_folder_name_pattern = re.compile(
+        "^(\d{8})_(\d{8})_(MR|CT)_(.*)$", re.IGNORECASE
+    )
 
     def __init__(self, input_path, output_path):
         """
@@ -39,21 +40,19 @@ class Nifti2DicmConverter:
             MRSeriesRenameEnum.DTI64D,
             MRSeriesRenameEnum.RESTING,
             MRSeriesRenameEnum.RESTING2000,
-
             # Add more excluded values as needed
         }
 
     @staticmethod
     def get_study_folder_name(input_path: pathlib.Path):
-
-        if input_path.name.endswith('nii.gz'):
+        if input_path.name.endswith("nii.gz"):
             return input_path.parent.name
         else:
             if input_path.is_dir():
                 match_result = input_path.match(input_path.name)
                 if match_result:
                     return input_path.name
-        return ValueError('input path is not study folder')
+        return ValueError("input path is not study folder")
 
     def run(self, executor: Union[ThreadPoolExecutor, None] = None):
         """Run the Nifti file to DICOM process.
@@ -68,54 +67,78 @@ class Nifti2DicmConverter:
             print(study_path_list)
             print(self.output_path)
             for study_path in study_path_list:
-                nifti_file_path_list = list(filter(lambda x: x.name.endswith('nii.gz'), study_path.iterdir()))
+                nifti_file_path_list = list(
+                    filter(lambda x: x.name.endswith("nii.gz"), study_path.iterdir())
+                )
                 for i in range(len(nifti_file_path_list)):
-                    meta_file_name = nifti_file_path_list[i].name.replace('nii.gz', 'jsonlines')
-                    meta_folder_path = nifti_file_path_list[i].parent.joinpath('.meta')
+                    meta_file_name = nifti_file_path_list[i].name.replace(
+                        "nii.gz", "jsonlines"
+                    )
+                    meta_folder_path = nifti_file_path_list[i].parent.joinpath(".meta")
                     meta_file_path = meta_folder_path.joinpath(meta_file_name)
                     if meta_file_path.stem in self.exclude_set:
                         continue
-                    output_folder_path = self.output_path.joinpath(nifti_file_path_list[i].parent.name)
+                    output_folder_path = self.output_path.joinpath(
+                        nifti_file_path_list[i].parent.name
+                    )
                     print(output_folder_path)
-                    self.nii_to_dicom(nifti_file_path=nifti_file_path_list[i],
-                                      meta_file_path=meta_file_path,
-                                      output_folder_path=output_folder_path)
+                    self.nii_to_dicom(
+                        nifti_file_path=nifti_file_path_list[i],
+                        meta_file_path=meta_file_path,
+                        output_folder_path=output_folder_path,
+                    )
         else:
             study_path = self.input_path
-            nifti_file_path_list = list(filter(lambda x: x.name.endswith('nii.gz'), study_path.iterdir()))
+            nifti_file_path_list = list(
+                filter(lambda x: x.name.endswith("nii.gz"), study_path.iterdir())
+            )
             # meta_file_path_list = list(
             # filter(lambda x: x.name.endswith('jsonlines'), study_path.joinpath('.meta').iterdir()))
             for i in range(len(nifti_file_path_list)):
-                meta_file_name = nifti_file_path_list[i].name.replace('nii.gz', 'jsonlines')
-                meta_folder_path = nifti_file_path_list[i].parent.joinpath('.meta')
+                meta_file_name = nifti_file_path_list[i].name.replace(
+                    "nii.gz", "jsonlines"
+                )
+                meta_folder_path = nifti_file_path_list[i].parent.joinpath(".meta")
                 meta_file_path = meta_folder_path.joinpath(meta_file_name)
                 if meta_file_path.stem in self.exclude_set:
                     continue
-                output_folder_path = self.output_path.joinpath(nifti_file_path_list[i].parent.name)
-                self.nii_to_dicom(nifti_file_path=nifti_file_path_list[i],
-                                  meta_file_path=meta_file_path,
-                                  output_folder_path=output_folder_path)
+                output_folder_path = self.output_path.joinpath(
+                    nifti_file_path_list[i].parent.name
+                )
+                self.nii_to_dicom(
+                    nifti_file_path=nifti_file_path_list[i],
+                    meta_file_path=meta_file_path,
+                    output_folder_path=output_folder_path,
+                )
 
-    def nii_to_dicom(self,
-                     nifti_file_path: pathlib.Path,
-                     meta_file_path: pathlib.Path,
-                     output_folder_path: pathlib.Path):
-        if 'COR' in nifti_file_path.name or 'SAG' in nifti_file_path.name:
+    def nii_to_dicom(
+        self,
+        nifti_file_path: pathlib.Path,
+        meta_file_path: pathlib.Path,
+        output_folder_path: pathlib.Path,
+    ):
+        if "COR" in nifti_file_path.name or "SAG" in nifti_file_path.name:
             return
         nifti_obj = nib.load(str(nifti_file_path))
         nifti_array = nifti_obj.get_fdata().round(0).astype(np.int16)
-        nifti_obj_axcodes = tuple(nib.aff2axcodes(nifti_obj.affine))  # ('R', 'A', 'S') ('L', 'A', 'S')
-        pixdim = nifti_obj.header.get('pixdim')
+        nifti_obj_axcodes = tuple(
+            nib.aff2axcodes(nifti_obj.affine)
+        )  # ('R', 'A', 'S') ('L', 'A', 'S')
+        pixdim = nifti_obj.header.get("pixdim")
         if pixdim[0] == -1:
-            nifti_array = self.do_reorientation(nifti_array, nifti_obj_axcodes, ('S', 'P', 'L'))
-        elif pixdim[0] == 1 and nifti_obj_axcodes == ('R', 'A', 'S'):
-            nifti_array = self.do_reorientation(nifti_array, nifti_obj_axcodes, ('S', 'P', 'L'))
+            nifti_array = self.do_reorientation(
+                nifti_array, nifti_obj_axcodes, ("S", "P", "L")
+            )
+        elif pixdim[0] == 1 and nifti_obj_axcodes == ("R", "A", "S"):
+            nifti_array = self.do_reorientation(
+                nifti_array, nifti_obj_axcodes, ("S", "P", "L")
+            )
             # nifti_array       = do_reorientation(nifti_array, nifti_obj_axcodes, ('I', 'P', 'L'))
 
-        with open(f'{meta_file_path}', encoding='utf8') as file:
+        with open(f"{meta_file_path}", encoding="utf8") as file:
             orjson_dict = orjson.loads(file.read())
         dicom_header_list = []
-        exclude_dicom_tag_set = {'0018A001', '00081070', '00081110'}
+        exclude_dicom_tag_set = {"0018A001", "00081070", "00081110"}
         for key, value in orjson_dict.items():
             if len(value) == nifti_array.shape[0]:
                 dicom_header_list.append(Dataset.from_json(value[0]))
@@ -134,21 +157,25 @@ class Nifti2DicmConverter:
                 # break
                 break
         if dicom_header_list[0].get((0x0020, 0x0032)):
-            new_list = sorted(dicom_header_list, key=lambda x: x[0x0020, 0x0032].value[-1])
+            new_list = sorted(
+                dicom_header_list, key=lambda x: x[0x0020, 0x0032].value[-1]
+            )
             # new_list = sorted(value, key=lambda x: x['00200032']['Value'][-1])
         else:
             new_list = sorted(dicom_header_list, key=lambda x: x[0x0020, 0x0013].value)
-        os.makedirs(f'{output_folder_path}/{meta_file_path.stem}', exist_ok=True)
+        os.makedirs(f"{output_folder_path}/{meta_file_path.stem}", exist_ok=True)
         for i in range(len(new_list)):
             ds = new_list[i]
             arr = nifti_array[i]
             ds.PixelData = arr.tobytes()
             ds.is_little_endian = True
             ds.is_implicit_VR = True
-            ds.save_as(f"{output_folder_path}/{meta_file_path.stem}/{ds.SOPInstanceUID}.dcm")
+            ds.save_as(
+                f"{output_folder_path}/{meta_file_path.stem}/{ds.SOPInstanceUID}.dcm"
+            )
 
     @classmethod
-    def compute_orientation(cls,init_axcodes, final_axcodes):
+    def compute_orientation(cls, init_axcodes, final_axcodes):
         """
         A thin wrapper around ``nib.orientations.ornt_transform``
 
@@ -164,7 +191,7 @@ class Nifti2DicmConverter:
         return ornt_transf, ornt_init, ornt_fin
 
     @classmethod
-    def do_reorientation(cls,data_array, init_axcodes, final_axcodes):
+    def do_reorientation(cls, data_array, init_axcodes, final_axcodes):
         """
         source: https://niftynet.readthedocs.io/en/dev/_modules/niftynet/io/misc_io.html#do_reorientation
         Performs the reorientation (changing order of axes)
@@ -174,7 +201,9 @@ class Nifti2DicmConverter:
         :param final_axcodes: Target orientation
         :return data_reoriented: New data array in its reoriented form
         """
-        ornt_transf, ornt_init, ornt_fin = cls.compute_orientation(init_axcodes, final_axcodes)
+        ornt_transf, ornt_init, ornt_fin = cls.compute_orientation(
+            init_axcodes, final_axcodes
+        )
         if np.array_equal(ornt_init, ornt_fin):
             return data_array
 
@@ -183,18 +212,35 @@ class Nifti2DicmConverter:
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', dest='input', type=str, required=True,
-                        help="input rename nifti folder.\r\n or input rename nifti file")
-    parser.add_argument('-o', '--output', dest='output', type=str, required=True,
-                        help="output rename dicom folder.\r\n"
-                             "Example: python convert_nifti.py -i input_path -o output_path")
-    parser.add_argument('--work', dest='work', type=int, default=4,
-                        help="Process cont max values is 8 .\r\n"
-                             "Example: python convert_nifti.py -i input_path -o output_path --work 8")
+    parser.add_argument(
+        "-i",
+        "--input",
+        dest="input",
+        type=str,
+        required=True,
+        help="input rename nifti folder.\r\n or input rename nifti file",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        type=str,
+        required=True,
+        help="output rename dicom folder.\r\n"
+        "Example: python convert_nifti.py -i input_path -o output_path",
+    )
+    parser.add_argument(
+        "--work",
+        dest="work",
+        type=int,
+        default=4,
+        help="Process cont max values is 8 .\r\n"
+        "Example: python convert_nifti.py -i input_path -o output_path --work 8",
+    )
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_arguments()
     work = min(2, max(1, args.work))
     executor = ProcessPoolExecutor(max_workers=work)

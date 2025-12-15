@@ -7,6 +7,7 @@ Created on Tue Nov  7 11:44:17 2023
 
 import numpy as np
 
+
 def revise2d(target, mask_array, miss_target=[0, 1, 14, 15, 16, 24]):
     """
 
@@ -27,9 +28,11 @@ def revise2d(target, mask_array, miss_target=[0, 1, 14, 15, 16, 24]):
             center_x = row[0]
             center_y = row[1]
             center_z = row[2]
-            neighborhood = mask_array[center_x - half_window:center_x + half_window + 1,
-                           center_y - half_window:center_y + half_window + 1,
-                           center_z]
+            neighborhood = mask_array[
+                center_x - half_window : center_x + half_window + 1,
+                center_y - half_window : center_y + half_window + 1,
+                center_z,
+            ]
             for i in miss_target:
                 neighborhood = np.where(neighborhood == i, np.nan, neighborhood)
             unique, counts = np.unique(neighborhood, return_counts=True)
@@ -61,9 +64,11 @@ def revise3d(target, mask_array, miss_target=[0, 1, 14, 15, 16, 24]):
             center_x = row[0]
             center_y = row[1]
             center_z = row[2]
-            neighborhood = mask_array[center_x - half_window:center_x + half_window + 1,
-                           center_y - half_window:center_y + half_window + 1,
-                           center_z - half_window:center_z + half_window + 1, ]
+            neighborhood = mask_array[
+                center_x - half_window : center_x + half_window + 1,
+                center_y - half_window : center_y + half_window + 1,
+                center_z - half_window : center_z + half_window + 1,
+            ]
             for i in miss_target:
                 neighborhood = np.where(neighborhood == i, np.nan, neighborhood)
             unique, counts = np.unique(neighborhood, return_counts=True)
@@ -75,8 +80,8 @@ def revise3d(target, mask_array, miss_target=[0, 1, 14, 15, 16, 24]):
     return temp_array
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     synthseg_array[(synthseg33_array_left_mask & synthseg_array_right_mask)] = 100
     revise3d(100, synthseg_array, miss_target=[0, 1, 14, 15, 16, 24])
 
-    #基本上是這樣。
+    # 基本上是這樣。

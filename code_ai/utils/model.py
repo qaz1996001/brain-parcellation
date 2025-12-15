@@ -49,7 +49,9 @@ class FunboostConsumeResult(Base):
     total_thread: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     utime: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     exception: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    rpc_result_expire_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    rpc_result_expire_seconds: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
     run_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     @property
@@ -71,9 +73,7 @@ class FunboostConsumeResult(Base):
         self.params = json.dumps(value) if value is not None else None
 
     def __repr__(self) -> str:
-        return (
-            f"<FunboostConsumeResult(id='{self._id}', function='{self.function}', task_id='{self.task_id}')>"
-        )
+        return f"<FunboostConsumeResult(id='{self._id}', function='{self.function}', task_id='{self.task_id}')>"
 
 
 class RawDicomToNiiInference(Base):
