@@ -66,7 +66,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
         from code_ai import load_dotenv
         load_dotenv()
-        check_url_set = set()
+        # 按 URL 分組 dcop_event，確保每個 URL 只發送對應的 events
+        check_url_events_map = {}  # {url: [dcop_event_list]}
         # async with AsyncSession(self.repository.session.bind) as session:
         async with self.session_manager.get_session() as session:
             for dcop_event in data:
@@ -90,11 +91,16 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case _:
                         url = None
-                if url is not None and url not in check_url_set:
-                    check_url_set.add(url)
+                if url is not None:
+                    # 將對應的 dcop_event 加入到該 URL 的事件列表中
+                    if url not in check_url_events_map:
+                        check_url_events_map[url] = []
+                    check_url_events_map[url].append(dcop_event)
         async with httpx.AsyncClient(timeout=180) as client:
-            for url in check_url_set:
-                rep = await client.post(url)
+            for url, dcop_event_list in check_url_events_map.items():
+                # 發送 POST 請求時傳入對應的 dcop_event_list，確保只處理指定的 study
+                dcop_event_dump_list = [dcop_event.model_dump() for dcop_event in dcop_event_list]
+                rep = await client.post(url, json=dcop_event_dump_list)
         return
 
     async def check_study_series_transfer_complete(self, data: Optional[List[DCOPEventRequest]] = None):
