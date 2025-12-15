@@ -151,7 +151,6 @@ class DCOPEventModel(base.DefaultBase):
         params_data: Dict[str, str],
         session: Session | AsyncSession = None,
     ):
-    ):
         """
         根據 ope_no/工具資訊建立事件，通常用於外部回報。
 
