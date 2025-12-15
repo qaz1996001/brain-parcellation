@@ -543,13 +543,34 @@ def process_dir(func_params: Dict[str, any]):
     df["study_id"] = df["rename_dicom_path"].map(
         lambda x: pathlib.Path(x).parent.parent.name
     )
-    # 根據 rename_dicom_path 去重，確保每個 rename 路徑只保留一筆記錄
-    df.drop_duplicates(subset=["rename_dicom_path"], inplace=True)
+
+    if df.empty:
+        logger.warning("process_dir 沒有可用的 rename 資料，sub_dir=%s", sub_dir)
+        return dicom_study_folder_path
+
+    df["rename_parent"] = df["rename_dicom_path"].map(
+        lambda x: str(pathlib.Path(x).parent)
+    )
+    raw_counts_by_study = (
+        df.groupby("study_uid")
+        .size()
+        .to_dict()
+    )
+    # 以 study + series_sop_uid + rename_parent 去重，一個 series 只保留一筆記錄
+    df.drop_duplicates(
+        subset=["study_uid", "series_sop_uid", "rename_parent"], inplace=True
+    )
 
     study_uid_unique = df["study_uid"].unique()
     dcop_event_list = []
     for study_uid in study_uid_unique:
         df_study = df[df["study_uid"] == study_uid]
+        logger.info(
+            "process_dir study=%s instance_count=%s series_count=%s",
+            study_uid,
+            raw_counts_by_study.get(study_uid, len(df_study)),
+            len(df_study),
+        )
         # df 已經根據 rename_dicom_path 去重，所以 df_study 中每個 rename 路徑只有一筆記錄
         # 收集所有需要的 instance_dir_path（用於查詢 Orthanc）
         series_dir_set = set(df_study["instance_dir_path"].to_list())
@@ -577,7 +598,7 @@ def process_dir(func_params: Dict[str, any]):
                 )
                 continue
             raw_parent = str(pathlib.Path(row["instance_dir_path"]).parent)
-            rename_parent = str(pathlib.Path(row["rename_dicom_path"]).parent)
+            rename_parent = row["rename_parent"]
             # 在 params_data 中包含 rename_dicom_path，以便後續查詢時可以區分不同的 rename 路徑
             dcop_event = DCOPEventRequest(
                 study_uid=study_uid,

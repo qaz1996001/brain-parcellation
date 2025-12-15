@@ -1,70 +1,65 @@
-{
-    "cmd_items": [
-        {
-            "study_id": "10089413_20210201_MR_21002010079",
-            "name": "Aneurysm",
-            "cmd_str": "cd /mnt/e/pipeline/chuan/code && bash /mnt/e/pipeline/chuan/code/pipeline_aneurysm.sh 10089413_20210201_MR_21002010079 /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/MRA_BRAIN.nii.gz /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/MRA_BRAIN /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079",
-            "input_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/MRA_BRAIN.nii.gz"
-            ],
-            "output_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Aneurysm.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Prob_Aneurysm.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Aneurysm_Vessel.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Aneurysm.json",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Aneurysm_Vessel16.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_MRA_BRAIN_original_synthseg33.nii.gz"
-            ],
-            "input_dicom_dir": "/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/MRA_BRAIN"
-        },
-        {
-            "study_id": "10089413_20210201_MR_21002010079",
-            "name": "CMB",
-            "cmd_str": "export PYTHONPATH=/mnt/d/00_Chen/Task04_git && /opt/miniconda3/envs/tf_2_14/bin/python3 code_ai/pipeline/pipeline_cmb_tensorflow.py --ID 10089413_20210201_MR_21002010079 --Inputs /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/SWAN.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/T1FLAIR_AXI.nii.gz --Output_folder /mnt/e/pipeline/sean/rename_nifti --InputsDicomDir /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/SWAN",
-            "input_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/SWAN.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/T1FLAIR_AXI.nii.gz"
-            ],
-            "output_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_SWAN_original_CMB_from_synthseg_T1FLAIR_AXI_original_CMB.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_CMB.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_CMB.json"
-            ],
-            "input_dicom_dir": "/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/SWAN"
-        },
-        {
-            "study_id": "10089413_20210201_MR_21002010079",
-            "name": "Infarct",
-            "cmd_str": "cd /mnt/e/pipeline/chuan/code && bash /mnt/e/pipeline/chuan/code/pipeline_infarct.sh 10089413_20210201_MR_21002010079 /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/ADC.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/DWI0.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/DWI1000.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/ .nii.gz /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/ADC /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/DWI0 /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/DWI1000 /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079",
-            "input_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/ADC.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/DWI0.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/DWI1000.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/ .nii.gz"
-            ],
-            "output_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Infarct.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Infarct_ADCth.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Infarct_synthseg.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_Infarct.json"
-            ],
-            "input_dicom_dir": "/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/DWI0"
-        },
-        {
-            "study_id": "10089413_20210201_MR_21002010079",
-            "name": "WMH",
-            "cmd_str": "cd /mnt/e/pipeline/chuan/code && bash /mnt/e/pipeline/chuan/code/pipeline_wmh.sh 10089413_20210201_MR_21002010079 /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/T2FLAIR_AXI.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz /mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/T2FLAIR_AXI /mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079",
-            "input_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/T2FLAIR_AXI.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz"
-            ],
-            "output_list": [
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_WMH.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_WMH_synthseg.nii.gz",
-                "/mnt/e/pipeline/sean/rename_nifti/10089413_20210201_MR_21002010079/Pred_WMH.json"
-            ],
-            "input_dicom_dir": "/mnt/e/pipeline/sean/rename_dicom/10089413_20210201_MR_21002010079/T2FLAIR_AXI"
-        }
-    ]
-}
+[
+    {
+        "study_id": "17913944_20251214_MR_21412140007",
+        "name": "Aneurysm",
+        "cmd_str": "cd /data/4TB1/pipeline/chuan/code  && bash /data/4TB1/pipeline/chuan/code/pipeline_aneurysm.sh 17913944_20251214_MR_21412140007 /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/MRA_BRAIN.nii.gz /data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/MRA_BRAIN /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007 ",
+        "input_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/MRA_BRAIN.nii.gz"
+        ],
+        "output_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Aneurysm.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Prob_Aneurysm.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Aneurysm_Vessel.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Aneurysm.json",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Aneurysm_Vessel16.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/synthseg_MRA_BRAIN_original_synthseg33.nii.gz"
+        ],
+        "input_dicom_dir": "/data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/MRA_BRAIN"
+    },
+    {
+        "study_id": "17913944_20251214_MR_21412140007",
+        "name": "CMB",
+        "cmd_str": "export PYTHONPATH=/var/www/brain-parcellation && /home/tmu/miniconda3/envs/tf_2_14/bin/python3 code_ai/pipeline/pipeline_cmb_tensorflow.py --ID 17913944_20251214_MR_21412140007 --Inputs /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/SWAN.nii.gz /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/T1FLAIR_AXI.nii.gz --Output_folder /data/4TB1/pipeline/sean/rename_nifti --InputsDicomDir /data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/SWAN ",
+        "input_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/SWAN.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/T1FLAIR_AXI.nii.gz"
+        ],
+        "output_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/synthseg_SWAN_original_CMB_from_synthseg_T1FLAIR_AXI_original_CMB.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_CMB.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_CMB.json"
+        ],
+        "input_dicom_dir": "/data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/SWAN"
+    },
+    {
+        "study_id": "17913944_20251214_MR_21412140007",
+        "name": "Infarct",
+        "cmd_str": "cd /data/4TB1/pipeline/chuan/code  && bash /data/4TB1/pipeline/chuan/code/pipeline_infarct.sh 17913944_20251214_MR_21412140007 /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/ADC.nii.gz /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/DWI0.nii.gz /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/DWI1000.nii.gz /data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/DWI0 /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007 ",
+        "input_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/ADC.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/DWI0.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/DWI1000.nii.gz"
+        ],
+        "output_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Infarct.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Infarct_ADCth.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Infarct_synthseg.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_Infarct.json"
+        ],
+        "input_dicom_dir": "/data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/DWI0"
+    },
+    {
+        "study_id": "17913944_20251214_MR_21412140007",
+        "name": "WMH",
+        "cmd_str": "cd /data/4TB1/pipeline/chuan/code  && bash /data/4TB1/pipeline/chuan/code/pipeline_wmh.sh 17913944_20251214_MR_21412140007 /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/T2FLAIR_AXI.nii.gz /data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/T2FLAIR_AXI /data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007 ",
+        "input_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/T2FLAIR_AXI.nii.gz"
+        ],
+        "output_list": [
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_WMH.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_WMH_synthseg.nii.gz",
+            "/data/4TB1/pipeline/sean/rename_nifti/17913944_20251214_MR_21412140007/Pred_WMH.json"
+        ],
+        "input_dicom_dir": "/data/4TB1/pipeline/sean/rename_dicom/17913944_20251214_MR_21412140007/T2FLAIR_AXI"
+    }
+]
