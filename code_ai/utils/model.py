@@ -1,89 +1,89 @@
-import uuid
+from __future__ import annotations
+
 import json
-from typing import Optional
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text
-from sqlalchemy.orm import mapped_column,Mapped
-from sqlalchemy.ext.declarative import declarative_base
+import uuid
+from typing import Any, Optional
 
-Base = declarative_base()
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
-def gen_id():
-    return str(uuid.uuid4().hex)
+class Base(DeclarativeBase):
+    """Application-wide SQLAlchemy declarative base."""
+
+
+def gen_id() -> str:
+    """Generate a deterministic UUID hex string."""
+    return uuid.uuid4().hex
 
 
 class FunboostConsumeResult(Base):
-    __tablename__ = 'funboost_consume_results'
+    """ORM model that mirrors funboost's consume result table."""
 
-    _id = Column(String, primary_key=True)
-    function = Column(String)
-    host_name = Column(String)
-    host_process = Column(String)
-    insert_minutes = Column(String)
-    insert_time = Column(DateTime)
-    insert_time_str = Column(String)
-    msg_dict = Column(Text)  # 存儲為 JSON 字串
-    params = Column(Text)  # 存儲為 JSON 字串
-    params_str = Column(String)
-    process_id = Column(Integer)
-    publish_time = Column(Float)
-    publish_time_str = Column(String)
-    queue_name = Column(String)
-    result = Column(Text)
-    run_times = Column(Integer)
-    script_name = Column(String)
-    script_name_long = Column(String)
-    success = Column(Boolean)  # SQLite INTEGER 轉為 Python Boolean
-    task_id = Column(String)
-    thread_id = Column(Integer)
-    time_cost = Column(Float)
-    time_end = Column(Float)
-    time_start = Column(Float)
-    total_thread = Column(Integer)
-    utime = Column(String)
-    exception = Column(Text)
-    rpc_result_expire_seconds = Column(Integer)
-    run_status = Column(String)
-    # JSON 處理的 helper 方法
+    __tablename__ = "funboost_consume_results"
+
+    _id: Mapped[str] = mapped_column(String, primary_key=True, default=gen_id)
+    function: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    host_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    host_process: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    insert_minutes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    insert_time: Mapped[Optional[DateTime]] = mapped_column(DateTime, nullable=True)
+    insert_time_str: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    msg_dict: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    params: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    params_str: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    process_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    publish_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    publish_time_str: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    queue_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    run_times: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    script_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    script_name_long: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    success: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    task_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    thread_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    time_cost: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    time_end: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    time_start: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    total_thread: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    utime: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    exception: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rpc_result_expire_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    run_status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
     @property
-    def msg_dict_obj(self):
-        """將 JSON 字串轉換為 Python 對象"""
-        if self.msg_dict:
-            return json.loads(self.msg_dict)
-        return None
+    def msg_dict_obj(self) -> Optional[Any]:
+        """Return the JSON-decoded message payload."""
+        return json.loads(self.msg_dict) if self.msg_dict else None
 
     @msg_dict_obj.setter
-    def msg_dict_obj(self, value):
-        """將 Python 對象轉換為 JSON 字串"""
-        if value is not None:
-            self.msg_dict = json.dumps(value)
-        else:
-            self.msg_dict = None
+    def msg_dict_obj(self, value: Any) -> None:
+        self.msg_dict = json.dumps(value) if value is not None else None
 
     @property
-    def params_obj(self):
-        """將 JSON 字串轉換為 Python 對象"""
-        if self.params:
-            return json.loads(self.params)
-        return None
+    def params_obj(self) -> Optional[Any]:
+        """Return the JSON-decoded params payload."""
+        return json.loads(self.params) if self.params else None
 
     @params_obj.setter
-    def params_obj(self, value):
-        """將 Python 對象轉換為 JSON 字串"""
-        if value is not None:
-            self.params = json.dumps(value)
-        else:
-            self.params = None
+    def params_obj(self, value: Any) -> None:
+        self.params = json.dumps(value) if value is not None else None
 
-    def __repr__(self):
-        return f"<FunboostConsumeResult(id='{self._id}', function='{self.function}', task_id='{self.task_id}')>"
+    def __repr__(self) -> str:
+        return (
+            f"<FunboostConsumeResult(id='{self._id}', function='{self.function}', task_id='{self.task_id}')>"
+        )
 
 
 class RawDicomToNiiInference(Base):
-    __tablename__ = 'raw_dicom_to_nii_inference'
-    _id               :Mapped[str] = Column(String,default=gen_id, primary_key=True)
-    name              :Mapped[str] = Column(String)
-    sub_dir           :Mapped[Optional[str]] = Column(String,nullable=True)
-    output_dicom_path :Mapped[Optional[str]] = Column(String,nullable=True)
-    output_nifti_path :Mapped[Optional[str]] = Column(String,nullable=True)
-    created_time      :Mapped[str] = Column(String)
+    """Minimal ORM model that records raw dicom2nii inference metadata."""
+
+    __tablename__ = "raw_dicom_to_nii_inference"
+
+    _id: Mapped[str] = mapped_column(String, primary_key=True, default=gen_id)
+    name: Mapped[str] = mapped_column(String)
+    sub_dir: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    output_dicom_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    output_nifti_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_time: Mapped[str] = mapped_column(String)
