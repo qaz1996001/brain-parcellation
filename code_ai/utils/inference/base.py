@@ -615,9 +615,10 @@ def build_analysis(
     task_dict = next(iter(mapping_inference.values()), {})
     for model_name, input_paths in task_dict.items():
         inference_key = _ensure_enum(model_name)
-        processed_inputs = build_input_post_process(
-            list(input_paths), inference_key, config_path
-        )
+        # processed_inputs = build_input_post_process(
+        #     list(input_paths), inference_key, config_path
+        # )
+        processed_inputs = list(input_paths)
         task_output_files = generate_output_files(
             processed_inputs,
             inference_key,
