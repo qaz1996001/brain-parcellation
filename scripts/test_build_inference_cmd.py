@@ -11,7 +11,7 @@ if __name__ == "__main__":
         help="用於輸入的檔案",
     )
     parser.add_argument(
-        "-output",
+        "--output",
         type=str,
         help="用於輸出結果的資料夾",
     )
