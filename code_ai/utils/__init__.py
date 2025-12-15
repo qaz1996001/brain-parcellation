@@ -1,18 +1,21 @@
+from __future__ import annotations
+
 import pathlib
 import re
 
-# study_id_pattern = re.compile('^[0-9]{8}_[0-9]{8}_(MR|CT|CR|PR).*$', re.IGNORECASE)
-study_id_pattern = re.compile('.*([0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*', re.IGNORECASE)
+STUDY_ID_PATTERN = re.compile(
+    r".*([0-9]{8,11}_[0-9]{8}_(MR|CT|PR|CR)_E?[0-9]{8,14})+.*",
+    re.IGNORECASE,
+)
+study_id_pattern = STUDY_ID_PATTERN
+
+def check_study_id(input_path: pathlib.Path) -> bool:
+    """Return True when the folder name follows the standard study-id format."""
+    if not input_path.is_dir():
+        return False
+    return STUDY_ID_PATTERN.match(input_path.name) is not None
 
 
-def check_study_id(intput_path: pathlib.Path) -> bool:
-    global study_id_pattern
-    if intput_path.is_dir():
-        result = study_id_pattern.match(intput_path.name)
-        if result is not None:
-            return True
-    return False
-
-
-def replace_suffix(filename: str, new_suffix: str, pattern=r'\.nii\.gz$|\.nii$'):
+def replace_suffix(filename: str, new_suffix: str, pattern: str = r"\.nii\.gz$|\.nii$") -> str:
+    """Replace .nii / .nii.gz suffixes with the provided suffix."""
     return re.sub(pattern, new_suffix, filename)
