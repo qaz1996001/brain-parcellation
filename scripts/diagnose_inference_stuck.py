@@ -97,20 +97,30 @@ class InferenceStuckDiagnostic:
                 value = self.redis_client.get(inference_task_key)
                 ttl = self.redis_client.ttl(inference_task_key)
 
-                print(f"🔴 Redis 快取 KEY 存在:")
+                status_emoji = "🟡" if value == "queued" else "🟢" if value == "completed" else "🔴"
+                print(f"{status_emoji} Redis 快取 KEY 存在:")
                 print(f"   Key: {inference_task_key}")
-                print(f"   Value: {value}")
+                print(f"   狀態: {value}")
                 print(f"   TTL: {ttl} 秒 ({ttl/3600:.1f} 小時)")
 
-                if ttl > 18000:  # 超過 5 小時
-                    print(
-                        f"\n⚠️  警告：TTL 過長 ({ttl/3600:.1f} 小時)，"
-                        "這可能導致任務被永久跳過！"
-                    )
-                    print("   建議：手動刪除此 key 以重新執行推理")
-                    print(f"   指令：redis-cli DEL {inference_task_key}")
+                if value == "completed":
+                    print(f"\n✅ 任務已完成")
+                    print(f"   保護期剩餘: {ttl} 秒 ({ttl/3600:.1f} 小時)")
+                    print(f"   {ttl} 秒後將自動允許重新執行")
+                elif value == "queued":
+                    if ttl < 1800:  # 少於 30 分鐘
+                        print(
+                            f"\n⚠️  警告：排隊狀態但 TTL 過低 ({ttl} 秒 = {ttl/60:.0f} 分鐘)"
+                        )
+                        print("   任務可能卡住，系統將自動強制重試")
+                        print("   建議：檢查 funboost consumer 狀態")
+                    else:
+                        print(f"\n🟡 任務正在排隊/執行中")
+                        print(f"   最長等待時間: {ttl} 秒 ({ttl/60:.0f} 分鐘)")
                 else:
-                    print(f"\n✅ TTL 正常 ({ttl/3600:.1f} 小時)，將在到期後自動清除")
+                    print(f"\n🔴 未知狀態: {value}")
+                    print("   建議：手動刪除此 key")
+                    print(f"   指令：redis-cli DEL {inference_task_key}")
             else:
                 print(f"✅ Redis 快取 KEY 不存在: {inference_task_key}")
                 print("   任務可以正常執行")
