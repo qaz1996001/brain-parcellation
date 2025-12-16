@@ -1,7 +1,7 @@
 import argparse
 import os
 import pathlib
-from typing import Optional
+from typing import Callable, List, Optional
 from code_ai.utils import study_id_pattern
 from code_ai.utils.inference import InferenceEnum, Task
 from code_ai.pipeline.upload import upload_json,platform_json
@@ -46,46 +46,78 @@ class PipelineConfig:
         self.script_name = script_name
         self.data_key = data_key
 
-    def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
-        input_path_list = [str(x) for x in task.input_path_list]
-        output_path = os.path.dirname(task.output_path)
-        PATH_ROOT = pathlib.Path(os.getenv('PATH_ROOT'))
-        chuan_root = PATH_ROOT.parent.joinpath('chuan')
+    def generate_cmd(
+        self,
+        study_id: str,
+        task: Task,
+        input_dicom_dir: Optional[str] = None,
+        input_dicom_dirs: Optional[List[str]] = None,
+    ) -> str:
+        input_paths = [str(path) for path in task.input_path_list]
+        dicom_args = self._collect_dicom_args(input_dicom_dir, input_dicom_dirs)
+        builder = self._resolve_command_builder()
+        return builder(study_id, task, input_paths, dicom_args)
+
+    def _collect_dicom_args(
+        self,
+        input_dicom_dir: Optional[str],
+        input_dicom_dirs: Optional[List[str]],
+    ) -> List[str]:
+        if input_dicom_dirs:
+            return [dicom_dir for dicom_dir in input_dicom_dirs if dicom_dir]
+        if input_dicom_dir:
+            return [input_dicom_dir]
+        return []
+
+    def _resolve_command_builder(self) -> Callable[[str, Task, List[str], List[str]], str]:
+        if self.data_key in self.chuan_root_data_key:
+            return self._build_chuan_command
+        return self._build_python_command
+
+    def _build_chuan_command(
+        self,
+        study_id: str,
+        task: Task,
+        input_paths: List[str],
+        dicom_args: List[str],
+    ) -> str:
+        path_root = pathlib.Path(os.getenv('PATH_ROOT'))
+        chuan_root = path_root.parent.joinpath('chuan')
         chuan_code = chuan_root.joinpath('code')
 
-        # PATH_ROOT = / mnt / e / pipeline / sean
-        # if self.data_key == 'Aneurysm':
-        if self.data_key in self.chuan_root_data_key:
-            if input_dicom_dir is None:
-                return (f'cd {str(chuan_code)}  && '
-                        f'bash {str(chuan_code)}/{self.script_name} '
-                        f'{study_id} '
-                        f'{" ".join(input_path_list)} '
-                        f'{task.output_path} '
-                        )
-            else:
-                return (f'cd {str(chuan_code)}  && '
-                        f'bash {str(chuan_code)}/{self.script_name} '
-                        f'{study_id} '
-                        f'{" ".join(input_path_list)} '
-                        f'{input_dicom_dir} '
-                        f'{task.output_path} '
-                        )
-        else:
-            if input_dicom_dir is None:
-                return (f'export PYTHONPATH={self.base_path} && '
-                        f'{self.python3} code_ai/pipeline/{self.script_name} '
-                        f'--ID {study_id} '
-                        f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {output_path} ')
-            else:
-                return (f'export PYTHONPATH={self.base_path} && '
-                        f'{self.python3} code_ai/pipeline/{self.script_name} '
-                        f'--ID {study_id} '
-                        f'--Inputs {" ".join(input_path_list)} '
-                        f'--Output_folder {output_path} '
-                        f'--InputsDicomDir {input_dicom_dir} '
-                        )
+        command_parts = [
+            f'cd {chuan_code}',
+            '&&',
+            f'bash {chuan_code}/{self.script_name}',
+            study_id,
+            *input_paths,
+            *dicom_args,
+            task.output_path,
+        ]
+        return " ".join(command_parts)
+
+    def _build_python_command(
+        self,
+        study_id: str,
+        task: Task,
+        input_paths: List[str],
+        dicom_args: List[str],
+    ) -> str:
+        output_path = os.path.dirname(task.output_path)
+        command_parts = [
+            f'export PYTHONPATH={self.base_path}',
+            '&&',
+            f'{self.python3} code_ai/pipeline/{self.script_name}',
+            f'--ID {study_id}',
+            '--Inputs',
+            *input_paths,
+            f'--Output_folder {output_path}',
+        ]
+
+        if dicom_args:
+            command_parts.extend(['--InputsDicomDir', dicom_args[0]])
+
+        return " ".join(command_parts)
 
 
 pipelines = {
