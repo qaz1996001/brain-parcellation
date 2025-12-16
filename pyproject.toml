@@ -21,6 +21,7 @@ dependencies = [
     "nibabel==5.3.2",
     "pydicom==2.4.3",
     "pydicom-seg==0.4.1",
+    "pyyaml>=6.0.0",
     "pyorthanc[all]>=1.20.0",
     "simpleitk==2.4.1",
     "matplotlib==3.8.2",
@@ -38,6 +39,7 @@ dependencies = [
     "pynvml>=11.5.3",
     "openpyxl>=3.1.5",
     "pgqueuer>=0.24.1",
+    "tomli>=2.0.1",
 ]
 
 [dependency-groups]
@@ -49,6 +51,11 @@ ai = [
     "opencv-python-headless==4.9.0.80"
 ]
 
+dev = [
+    "pytest>=8.3.3",
+]
+
 all = [
     { include-group = "ai" },
+    { include-group = "dev" },
 ]
