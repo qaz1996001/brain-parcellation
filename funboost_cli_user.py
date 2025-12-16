@@ -61,16 +61,16 @@ if __name__ == "__main__":
     fire.Fire(
         BoosterFire,
     )
-    aps_job_adder = ApsJobAdder(add_raw_dicom_to_nii_inference)
+    #aps_job_adder = ApsJobAdder(add_raw_dicom_to_nii_inference)
 
     # 先立即执行一次
-    aps_job_adder.add_push_job(trigger="date")
+    #aps_job_adder.add_push_job(trigger="date")
 
     # 然后设置 cron 任务每 30 分钟执行一次
-    aps_job_adder.add_push_job(
-        trigger="cron",
-        minute="*/30",  # 每 30 分钟执行一次
-    )
+    #aps_job_adder.add_push_job(
+    #    trigger="cron",
+    #    minute="*/30",  # 每 30 分钟执行一次
+    #)
     BoostersManager.multi_process_consume_all_queues(1)
 
 
