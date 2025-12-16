@@ -12,14 +12,16 @@ from .schema import InferenceCmd, InferenceCmdItem, InferenceEnum
 from .schema import Analysis, Task, T1SeriesRenameEnum, T2SeriesRenameEnum, MRSeriesRenameEnum
 
 
-def load_config(config_path: str = "config.yaml") -> Dict[str, Any]:
-    """
-    Load configuration from YAML file.
-    """
-    with open(config_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
+DEFAULT_CONFIG_PATH = pathlib.Path(__file__).parent / "config.yaml"
 
+
+def load_config(
+    config_path: Optional[Union[str, os.PathLike[str]]] = None,
+) -> Dict[str, Any]:
+    path = pathlib.Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+    with path.open("r", encoding="utf-8") as file:
+        data = yaml.safe_load(file) or {}
+    return data
 
 def get_enum_by_name(enum_name: str) -> Any:
     """
