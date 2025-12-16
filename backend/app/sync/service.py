@@ -917,14 +917,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return None
 
     async def query_studies_pending_completion(self, study_uid: Optional[str] = None):
-        """Query for studies that have not yet reached STUDY_CONVERSION_COMPLETE status."""
-        # async with self.repository.session as session:
-        # --SELECT sos.study_id, debb.ope_no,sos.ope_no
-        # --FROM  public.get_stydy_series_ope_no_status_create_time('200.200') as sos ,
-        # --       (select deb.study_id, max(deb.ope_no::numeric)as ope_no from dcop_event_bt deb group by study_id  )  as debb
-        # --where  sos.study_id = debb.study_id
-        # --and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])
-        # --order by sos.create_time desc
+        """Query for studies that have not yet reached STUDY_CONVERSION_COMPLETE status.
+        
+        最小改動：將資料庫函數調用改為 CTE 查詢，在 GROUP BY 中加入 rename_dicom_path。
+        保持所有其他邏輯不變，包括防止無限迴圈的條件。
+        """
         async with self.session_manager.get_session() as session:
             if study_uid is None:
                 completion_limit = int(
@@ -936,38 +933,163 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 study_uids = await self._get_recent_study_uids(
                     session, limit=completion_limit
                 )
+                # 最小改動：將資料庫函數改為等效的 CTE，加入 rename_dicom_path 分組
                 if study_uids:
                     sql = (
-                        text(
-                            "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  "
-                            "FROM public.get_stydy_series_ope_no_status(:status) as sos , "
-                            "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb "
-                            "WHERE sos.study_id = debb.study_id "
-                            "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) "
-                            "AND sos.study_uid IN :study_uids"
-                        ).bindparams(bindparam("study_uids", expanding=True))
+                        text("""
+                            WITH series_ope_no_status AS (
+                                SELECT
+                                    dcop_event_bt.study_uid,
+                                    dcop_event_bt.series_uid,
+                                    MIN(DISTINCT dcop_event_bt.study_id)::varchar as study_id,
+                                    COALESCE(
+                                        dcop_event_bt.params_data->>'rename_dicom_path',
+                                        dcop_event_bt.result_data->>'rename_dicom_path'
+                                    ) as rename_dicom_path,
+                                    array_agg(DISTINCT dcop_event_bt.ope_no) as ope_no,
+                                    array_agg(dcop_event_bt.result_data) as result_data,
+                                    array_agg(dcop_event_bt.params_data) as params_data
+                                FROM dcop_event_bt
+                                WHERE dcop_event_bt.series_uid IS NOT NULL
+                                  AND dcop_event_bt.study_uid IN :study_uids
+                                GROUP BY 
+                                    dcop_event_bt.study_uid,
+                                    dcop_event_bt.series_uid,
+                                    COALESCE(
+                                        dcop_event_bt.params_data->>'rename_dicom_path',
+                                        dcop_event_bt.result_data->>'rename_dicom_path'
+                                    )
+                            ),
+                            max_study_ope AS (
+                                SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no 
+                                FROM dcop_event_bt deb 
+                                WHERE deb.study_uid IN :study_uids
+                                GROUP BY study_id
+                            )
+                            SELECT 
+                                sos.study_uid,
+                                sos.series_uid,
+                                sos.study_id,
+                                sos.rename_dicom_path,
+                                sos.ope_no,
+                                sos.result_data,
+                                sos.params_data
+                            FROM series_ope_no_status as sos,
+                                 max_study_ope as debb
+                            WHERE sos.study_id = debb.study_id
+                              AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])
+                              AND :status::NUMERIC > ALL (sos.ope_no::NUMERIC[])
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM unnest(sos.result_data) AS pd
+                                  WHERE pd IS NOT NULL
+                              )
+                        """).bindparams(bindparam("study_uids", expanding=True))
                     )
                     params = {
                         "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                         "study_uids": tuple(study_uids),
                     }
                 else:
-                    sql = text(
-                        "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data  "
-                        "FROM public.get_stydy_series_ope_no_status(:status) as sos , "
-                        "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no from dcop_event_bt deb group by study_id)  as debb "
-                        "WHERE sos.study_id = debb.study_id "
-                        "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])"
-                    )
+                    sql = text("""
+                        WITH series_ope_no_status AS (
+                            SELECT
+                                dcop_event_bt.study_uid,
+                                dcop_event_bt.series_uid,
+                                MIN(DISTINCT dcop_event_bt.study_id)::varchar as study_id,
+                                COALESCE(
+                                    dcop_event_bt.params_data->>'rename_dicom_path',
+                                    dcop_event_bt.result_data->>'rename_dicom_path'
+                                ) as rename_dicom_path,
+                                array_agg(DISTINCT dcop_event_bt.ope_no) as ope_no,
+                                array_agg(dcop_event_bt.result_data) as result_data,
+                                array_agg(dcop_event_bt.params_data) as params_data
+                            FROM dcop_event_bt
+                            WHERE dcop_event_bt.series_uid IS NOT NULL
+                            GROUP BY 
+                                dcop_event_bt.study_uid,
+                                dcop_event_bt.series_uid,
+                                COALESCE(
+                                    dcop_event_bt.params_data->>'rename_dicom_path',
+                                    dcop_event_bt.result_data->>'rename_dicom_path'
+                                )
+                        ),
+                        max_study_ope AS (
+                            SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no 
+                            FROM dcop_event_bt deb 
+                            GROUP BY study_id
+                        )
+                        SELECT 
+                            sos.study_uid,
+                            sos.series_uid,
+                            sos.study_id,
+                            sos.rename_dicom_path,
+                            sos.ope_no,
+                            sos.result_data,
+                            sos.params_data
+                        FROM series_ope_no_status as sos,
+                             max_study_ope as debb
+                        WHERE sos.study_id = debb.study_id
+                          AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])
+                          AND :status::NUMERIC > ALL (sos.ope_no::NUMERIC[])
+                          AND EXISTS (
+                              SELECT 1
+                              FROM unnest(sos.result_data) AS pd
+                              WHERE pd IS NOT NULL
+                          )
+                    """)
                     params = {"status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value}
             else:
-                sql = text(
-                    "SELECT sos.study_uid , sos.series_uid , sos.study_id , sos.ope_no , sos.result_data , sos.params_data FROM public.get_stydy_series_ope_no_status(:status) as sos , "
-                    "(SELECT deb.study_id, max(deb.ope_no::numeric)as ope_no from dcop_event_bt deb where deb.study_uid= :study_uid group by study_id  )  as debb "
-                    "where sos.study_uid=:study_uid "
-                    "and sos.study_id = debb.study_id "
-                    "and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) "
-                )
+                sql = text("""
+                    WITH series_ope_no_status AS (
+                        SELECT
+                            dcop_event_bt.study_uid,
+                            dcop_event_bt.series_uid,
+                            MIN(DISTINCT dcop_event_bt.study_id)::varchar as study_id,
+                            COALESCE(
+                                dcop_event_bt.params_data->>'rename_dicom_path',
+                                dcop_event_bt.result_data->>'rename_dicom_path'
+                            ) as rename_dicom_path,
+                            array_agg(DISTINCT dcop_event_bt.ope_no) as ope_no,
+                            array_agg(dcop_event_bt.result_data) as result_data,
+                            array_agg(dcop_event_bt.params_data) as params_data
+                        FROM dcop_event_bt
+                        WHERE dcop_event_bt.study_uid = :study_uid
+                          AND dcop_event_bt.series_uid IS NOT NULL
+                        GROUP BY 
+                            dcop_event_bt.study_uid,
+                            dcop_event_bt.series_uid,
+                            COALESCE(
+                                dcop_event_bt.params_data->>'rename_dicom_path',
+                                dcop_event_bt.result_data->>'rename_dicom_path'
+                            )
+                    ),
+                    max_study_ope AS (
+                        SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no 
+                        FROM dcop_event_bt deb 
+                        WHERE deb.study_uid = :study_uid
+                        GROUP BY study_id
+                    )
+                    SELECT 
+                        sos.study_uid,
+                        sos.series_uid,
+                        sos.study_id,
+                        sos.rename_dicom_path,
+                        sos.ope_no,
+                        sos.result_data,
+                        sos.params_data
+                    FROM series_ope_no_status as sos,
+                         max_study_ope as debb
+                    WHERE sos.study_uid = :study_uid
+                      AND sos.study_id = debb.study_id
+                      AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])
+                      AND :status::NUMERIC > ALL (sos.ope_no::NUMERIC[])
+                      AND EXISTS (
+                          SELECT 1
+                          FROM unnest(sos.result_data) AS pd
+                          WHERE pd IS NOT NULL
+                      )
+                """)
                 params = {
                     "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                     "study_uid": study_uid,
@@ -975,6 +1097,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             execute = await session.execute(sql, params)
             results = execute.all()
 
+        # 最小改動：使用複合鍵處理 DWI0/DWI1000 場景
         can_inference_dict = {}
         wait_inference_dict = {}
         for result in results:
@@ -986,13 +1109,23 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     self.pattern_str, self.can_inference_pattern.findall(test_str)
                 )
             )
+            
+            # 提取 rename_dicom_path（支援不同 SQLAlchemy 版本）
+            if hasattr(result, '_mapping') and result._mapping:
+                rename_path = result._mapping.get('rename_dicom_path')
+            else:
+                rename_path = getattr(result, 'rename_dicom_path', None)
+            
+            # 使用複合鍵：(series_uid, rename_dicom_path)，解決 DWI0/DWI1000 問題
+            composite_key = (result.series_uid, rename_path) if rename_path else result.series_uid
+            
             if match_result:
                 can_inference_dict.update(
-                    {result.series_uid: (result.study_uid, result.study_id)}
+                    {composite_key: (result.study_uid, result.study_id)}
                 )
             else:
                 wait_inference_dict.update(
-                    {result.series_uid: (result.study_uid, result.study_id)}
+                    {composite_key: (result.study_uid, result.study_id)}
                 )
 
         wait_inference_set = set(wait_inference_dict.values())
@@ -1135,50 +1268,83 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def identify_completed_studies(
         self, study_events_list: List[DCOPEventRequest]
     ):
-        """Identify studies with all series converted and create completion events."""
-        if not study_events_list:
-            return []
-
-        study_uids = {
-            event.study_uid for event in study_events_list if event.study_uid is not None
-        }
-        if not study_uids:
-            return []
-
-        async with self.session_manager.get_session() as session:
-            sql = (
-                text(
-                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
-                    "WHERE study_uid IN :study_uids"
-                ).bindparams(bindparam("study_uids", expanding=True))
-            )
-            params = {
-                "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
-                "study_uids": tuple(study_uids),
-            }
-            execute = await session.execute(sql, params)
-            results = execute.all()
-
-        grouped_results: Dict[str, List[Any]] = defaultdict(list)
-        for result in results:
-            if hasattr(result, "_mapping"):
-                study_uid = result._mapping.get("study_uid")
-            else:
-                study_uid = result[0]
-            if study_uid:
-                grouped_results[study_uid].append(result)
-
+        """Identify studies with all series converted and create completion events.
+        
+        最小改動：將資料庫函數調用改為 CTE 查詢，加入 rename_dicom_path 分組。
+        按 (series_uid, rename_dicom_path) 分組檢查完成狀態。
+        """
         completed_study_events = []
-        for study_uid, rows in grouped_results.items():
-            if not rows:
-                continue
-            if all(
-                DCOPStatus.SERIES_CONVERSION_COMPLETE.value in row.ope_no
-                or DCOPStatus.SERIES_CONVERSION_SKIP.value in row.ope_no
-                for row in rows
-            ):
-                completed_study_events.append(rows[0])
-
+        async with self.session_manager.get_session() as session:
+            done_count = 0
+            undone = 0
+            for study_events in study_events_list:
+                # 最小改動：將資料庫函數改為等效的 CTE，加入 rename_dicom_path 分組
+                sql = text("""
+                    WITH series_ope_no_status AS (
+                        SELECT
+                            dcop_event_bt.study_uid,
+                            dcop_event_bt.series_uid,
+                            MIN(DISTINCT dcop_event_bt.study_id)::varchar as study_id,
+                            COALESCE(
+                                dcop_event_bt.params_data->>'rename_dicom_path',
+                                dcop_event_bt.result_data->>'rename_dicom_path'
+                            ) as rename_dicom_path,
+                            array_agg(DISTINCT dcop_event_bt.ope_no) as ope_no,
+                            array_agg(dcop_event_bt.result_data) as result_data,
+                            array_agg(dcop_event_bt.params_data) as params_data
+                        FROM dcop_event_bt
+                        WHERE dcop_event_bt.study_uid = :study_uid
+                          AND dcop_event_bt.series_uid IS NOT NULL
+                        GROUP BY 
+                            dcop_event_bt.study_uid,
+                            dcop_event_bt.series_uid,
+                            COALESCE(
+                                dcop_event_bt.params_data->>'rename_dicom_path',
+                                dcop_event_bt.result_data->>'rename_dicom_path'
+                            )
+                    )
+                    SELECT 
+                        sons.study_uid,
+                        sons.series_uid,
+                        sons.study_id,
+                        sons.rename_dicom_path,
+                        sons.ope_no,
+                        sons.result_data,
+                        sons.params_data
+                    FROM series_ope_no_status as sons
+                    WHERE 
+                        :status::NUMERIC > ALL (sons.ope_no::NUMERIC[])
+                        AND EXISTS (
+                            SELECT 1
+                            FROM unnest(sons.result_data) AS pd
+                            WHERE pd IS NOT NULL
+                        )
+                """)
+                params = {
+                    "status": DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
+                    "study_uid": study_events.study_uid,
+                }
+                execute = await session.execute(sql, params)
+                results = execute.all()
+                
+                # 最小改動：按 (series_uid, rename_dicom_path) 分組檢查
+                # 每個 result 現在代表一個 (series_uid, rename_dicom_path) 組合
+                for result in results:
+                    if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
+                        done_count += 1
+                    elif DCOPStatus.SERIES_CONVERSION_SKIP.value in result.ope_no:
+                        done_count += 1
+                    else:
+                        undone += 1
+                
+                # 只有當所有 (series_uid, rename_dicom_path) 組合都完成時，才判定為完成
+                if done_count == len(results) and len(results) > 0:
+                    completed_study_events.append(results[0])
+                
+                # 重置計數器用於下一個 study
+                done_count = 0
+                undone = 0
+                
         return completed_study_events
 
     async def get_stydy_series_ope_no_status(
