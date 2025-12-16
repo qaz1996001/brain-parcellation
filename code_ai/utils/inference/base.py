@@ -93,40 +93,6 @@ def resolve_enum_mapping_series(mapping_config: Dict) -> Dict:
     return resolved_mapping
 
 
-def check_study_mapping_inference(study_path: pathlib.Path,
-                                  config_path: str = "config.yaml") -> Dict[ str, Dict[str, str]]:
-    """
-    Check study mapping inference using configuration from YAML.
-    """
-    config = load_config(config_path)
-    model_mapping_series_config = config.get("model_mapping_series", {})
-
-    # 解析配置中的枚舉值
-    model_mapping_series_dict = resolve_enum_mapping_series(model_mapping_series_config)
-
-    file_list = sorted(study_path.iterdir())
-
-    if any(filter(lambda x: x.name.endswith('nii.gz') or x.name.endswith('nii'), file_list)):
-        df_file = pd.DataFrame(file_list, columns=['file_path'])
-        df_file['file_name'] = df_file['file_path'].map(lambda x: x.name.replace('.nii.gz', ''))
-        model_mapping_dict = {}
-
-        for model_name, model_mapping_series_list in model_mapping_series_dict.items():
-            for mapping_series in model_mapping_series_list:
-                # 將枚舉轉換為其值以進行比較
-                mapping_series_values = [enum.value for enum in mapping_series]
-                result = np.intersect1d(df_file['file_name'], mapping_series_values, return_indices=True)
-
-                if result[0].shape[0] >= len(mapping_series_values):
-                    df_result = df_file.iloc()[result[1]]
-                    file_path = list(map(lambda x: str(x), df_result['file_path'].to_list()))
-                    model_mapping_dict.update({model_name.value: file_path})
-                    break
-
-        return {study_path.name: model_mapping_dict}
-    return None
-
-
 def get_file_list(input_path: pathlib.Path, suffixes: str, filter_name=None) -> List[pathlib.Path]:
     if any(suffix in input_path.suffixes for suffix in suffixes):
         file_list = [input_path]
@@ -150,8 +116,6 @@ def check_study_mapping_inference(study_path: pathlib.Path, config_path: Optiona
     """
     Check study mapping inference using configuration from YAML.
     """
-    if config_path is None:
-        config_path = pathlib.Path(__file__).parent.joinpath('config.yaml')
 
     config = load_config(config_path)
     model_mapping_series_dict = config.get("model_mapping_series", {})
@@ -179,7 +143,7 @@ def check_study_mapping_inference(study_path: pathlib.Path, config_path: Optiona
 
 
 def generate_output_files(input_paths: List[str], task_name: str, base_output_path: str,
-                          config_path: str = "config.yaml") -> List[str]:
+                          config_path: Optional[Union[str, os.PathLike[str]]] = None,) -> List[str]:
     """
     Generate output file names based on input paths, task names, and configuration.
     """
@@ -287,7 +251,7 @@ def get_synthseg_args_file(inference_name, file_dict) -> Tuple:
 
 
 def build_input_post_process(input_paths, model_name,
-                             config_path: str = "config.yaml") -> List[Union[pathlib.Path, str]]:
+                             config_path: Optional[Union[str, os.PathLike[str]]] = None,) -> List[Union[pathlib.Path, str]]:
     """
     Build input post process using configuration.
     """
@@ -334,7 +298,7 @@ def build_input_post_process(input_paths, model_name,
     return input_paths
 
 
-def build_analysis(study_path: pathlib.Path, config_path: str = "config.yaml"):
+def build_analysis(study_path: pathlib.Path, config_path: Optional[Union[str, os.PathLike[str]]] = None,):
     """
     Build analysis using configuration.
     """
