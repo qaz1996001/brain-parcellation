@@ -92,6 +92,7 @@ Example：
     out_array = utils_parcellation.run_dwi(synthseg_array=synthseg_array)
 
 """
+
 import os
 import glob
 import re
@@ -106,6 +107,7 @@ try:
     import cupyx.scipy.ndimage as ndimage
     from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
     from cupyx.scipy.ndimage import iterate_structure, distance_transform_edt
+
     HAS_CUPY = True
     print("Using CuPy backend for GPU acceleration")
 except ImportError:
@@ -113,6 +115,7 @@ except ImportError:
     from scipy import ndimage
     from scipy.ndimage import binary_dilation, generate_binary_structure
     from scipy.ndimage import iterate_structure, distance_transform_edt
+
     HAS_CUPY = False
     print("Using NumPy backend (CuPy not available)")
 
@@ -123,7 +126,7 @@ except ImportError:
 # Utility functions
 def asnumpy(array):
     """Convert to numpy array if using CuPy."""
-    if HAS_CUPY and hasattr(array, 'get'):
+    if HAS_CUPY and hasattr(array, "get"):
         return array.get()
     return array
 
@@ -197,7 +200,7 @@ def loss_distance(index_sub, label_index_sub, decimal_places=8):
 
     # Round for precision
     decimals = 5
-    distances_float = xp.round(distances * 10 ** decimals) / (10 ** decimals)
+    distances_float = xp.round(distances * 10**decimals) / (10**decimals)
     loss_min = xp.min(distances_float, axis=1)
 
     return loss_min
@@ -205,7 +208,7 @@ def loss_distance(index_sub, label_index_sub, decimal_places=8):
 
 class WhiteMatterParcellation:
     synseg_label_freesurfer_GM_mapping = {
-        'left_hemi': {
+        "left_hemi": {
             1003: 1001,
             1032: 1001,
             1012: 1001,
@@ -245,8 +248,9 @@ class WhiteMatterParcellation:
             12: 12,
             13: 13,
             17: 1005,
-            18: None, },
-        'right_hemi': {
+            18: None,
+        },
+        "right_hemi": {
             2003: 2001,
             2012: 2001,
             2014: 2001,
@@ -286,36 +290,38 @@ class WhiteMatterParcellation:
             51: 51,
             52: 52,
             53: 2005,
-            54: None
+            54: None,
         },
     }
     white_matter_mapping = {
-        'left_hemi': {1001: 3001,
-                      1003: 3003,
-                      1004: 3004,
-                      1005: 3005,
-                      1006: 3006,
-                      1007: 3007,
-                      12: 3007,
-                      13: 3007
-                      },
-        'right_hemi': {2001: 4001,
-                       2003: 4003,
-                       2004: 4004,
-                       2005: 4005,
-                       2006: 4006,
-                       2007: 4007,
-                       51: 4007,
-                       52: 4007
-                       }
+        "left_hemi": {
+            1001: 3001,
+            1003: 3003,
+            1004: 3004,
+            1005: 3005,
+            1006: 3006,
+            1007: 3007,
+            12: 3007,
+            13: 3007,
+        },
+        "right_hemi": {
+            2001: 4001,
+            2003: 4003,
+            2004: 4004,
+            2005: 4005,
+            2006: 4006,
+            2007: 4007,
+            51: 4007,
+            52: 4007,
+        },
     }
     cerebral_white_matter = {
-        'left_hemi': 2,
-        'right_hemi': 41,
+        "left_hemi": 2,
+        "right_hemi": 41,
     }
 
     synseg_label_david_mapping = {
-        'left_hemi': {
+        "left_hemi": {
             1003: 112,
             1032: 112,
             1012: 112,
@@ -356,9 +362,8 @@ class WhiteMatterParcellation:
             13: 111,
             17: 115,
             18: 115,
-
         },
-        'right_hemi': {
+        "right_hemi": {
             2003: 212,
             2012: 212,
             2014: 212,
@@ -399,108 +404,113 @@ class WhiteMatterParcellation:
             52: 211,
             53: 215,
             54: 215,
-
-        }
+        },
     }
 
     white_matter_david_mapping = {
-        'left_hemi': {3001: 119,
-                      3006: 120,
-                      3004: 121,
-                      3005: 122,
-                      3003: 123,
-                      3007: 124,
-                      3008: 125,
-                      3009: 126,
-                      3010: 127,
-                      3011: 128,
-                      3031: 129,
-                      3036: 130,
-                      3034: 131,
-                      3035: 132,
-                      },
-        'right_hemi': {4001: 219,
-                       4006: 220,
-                       4004: 221,
-                       4005: 222,
-                       4003: 223,
-                       4007: 224,
-                       4008: 225,
-                       4009: 226,
-                       4010: 227,
-                       4011: 228,
-                       4031: 229,
-                       4036: 230,
-                       4034: 231,
-                       4035: 232,
-                       }
+        "left_hemi": {
+            3001: 119,
+            3006: 120,
+            3004: 121,
+            3005: 122,
+            3003: 123,
+            3007: 124,
+            3008: 125,
+            3009: 126,
+            3010: 127,
+            3011: 128,
+            3031: 129,
+            3036: 130,
+            3034: 131,
+            3035: 132,
+        },
+        "right_hemi": {
+            4001: 219,
+            4006: 220,
+            4004: 221,
+            4005: 222,
+            4003: 223,
+            4007: 224,
+            4008: 225,
+            4009: 226,
+            4010: 227,
+            4011: 228,
+            4031: 229,
+            4036: 230,
+            4034: 231,
+            4035: 232,
+        },
     }
 
     gray_matter_david_mapping = {
-        'left_hemi': {1001: 112,
-                      1006: 113,
-                      1004: 114,
-                      1005: 115,
-                      1003: 116,
-                      1007: 118,
-                      10: 108,
-                      11: 109,
-                      12: 110,
-                      13: 111,
-                      17: 115,
-                      18: 115,
-                      3: 101,
-                      4: 102,
-                      5: 102,
-                      7: 104,
-                      8: 105,
-                      26: 106,
-                      28: 103,
-                      },
-        'right_hemi': {2001: 212,
-                       2006: 213,
-                       2004: 214,
-                       2005: 215,
-                       2003: 216,
-                       2007: 218,
-                       49: 208,
-                       50: 209,
-                       51: 210,
-                       52: 211,
-                       53: 215,
-                       54: 215,
-                       42: 201,
-                       43: 202,
-                       44: 202,
-                       46: 204,
-                       47: 205,
-                       58: 206,
-                       60: 203,
-                       }
+        "left_hemi": {
+            1001: 112,
+            1006: 113,
+            1004: 114,
+            1005: 115,
+            1003: 116,
+            1007: 118,
+            10: 108,
+            11: 109,
+            12: 110,
+            13: 111,
+            17: 115,
+            18: 115,
+            3: 101,
+            4: 102,
+            5: 102,
+            7: 104,
+            8: 105,
+            26: 106,
+            28: 103,
+        },
+        "right_hemi": {
+            2001: 212,
+            2006: 213,
+            2004: 214,
+            2005: 215,
+            2003: 216,
+            2007: 218,
+            49: 208,
+            50: 209,
+            51: 210,
+            52: 211,
+            53: 215,
+            54: 215,
+            42: 201,
+            43: 202,
+            44: 202,
+            46: 204,
+            47: 205,
+            58: 206,
+            60: 203,
+        },
     }
 
     decimal_places = 8
-    scaling_factor = 10 ** decimal_places
+    scaling_factor = 10**decimal_places
 
     re_white_matter_mapping = {
-        'left_hemi': {1001: 3001,
-                      1004: 3004,
-                      1005: 3005,
-                      1006: 3006,
-                      3001: 3001,
-                      3004: 3004,
-                      3005: 3005,
-                      3006: 3006,
-                      },
-        'right_hemi': {2001: 4001,
-                       2004: 4004,
-                       2005: 4005,
-                       2006: 4006,
-                       4001: 4001,
-                       4004: 4004,
-                       4005: 4005,
-                       4006: 4006,
-                       }
+        "left_hemi": {
+            1001: 3001,
+            1004: 3004,
+            1005: 3005,
+            1006: 3006,
+            3001: 3001,
+            3004: 3004,
+            3005: 3005,
+            3006: 3006,
+        },
+        "right_hemi": {
+            2001: 4001,
+            2004: 4004,
+            2005: 4005,
+            2006: 4006,
+            4001: 4001,
+            4004: 4004,
+            4005: 4005,
+            4006: 4006,
+        },
     }
 
     @classmethod
@@ -512,16 +522,18 @@ class WhiteMatterParcellation:
             for key in cls.gray_matter_david_mapping[hemi]:
                 if cls.gray_matter_david_mapping[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.gray_matter_david_mapping[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.gray_matter_david_mapping[hemi][key]
                 # left hemi and right hemi
         for hemi in cls.white_matter_david_mapping:
             # run every synseg label to freesurfer label
             for key in cls.white_matter_david_mapping[hemi]:
                 if cls.white_matter_david_mapping[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.white_matter_david_mapping[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.white_matter_david_mapping[hemi][key]
         return new_label_array
 
     @classmethod
@@ -534,8 +546,9 @@ class WhiteMatterParcellation:
             for key in cls.synseg_label_freesurfer_GM_mapping[hemi]:
                 if cls.synseg_label_freesurfer_GM_mapping[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.synseg_label_freesurfer_GM_mapping[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.synseg_label_freesurfer_GM_mapping[hemi][key]
         return new_label_array
 
     @classmethod
@@ -560,7 +573,9 @@ class WhiteMatterParcellation:
                     index_sub_arg = xp.argwhere(index[:, 2] == j)
                     label_index_sub = label_index[label_index[:, 2] == j]
                     if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                        loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                        loss_min = loss_distance(
+                            index_sub, label_index_sub, cls.decimal_places
+                        )
                         loss_list.append(loss_min)
                         # loss_list.append(loss_min.numpy())
                         index_sub_arg_list.append(index_sub_arg)
@@ -575,8 +590,9 @@ class WhiteMatterParcellation:
             # 指定分類
             for i in xp.unique(new_label):
                 select_index = index[xp.argwhere(new_label == i)].squeeze()
-                new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = \
-                    cls.white_matter_mapping[k][white_matter_mapping_keys[int(i)]]
+                new_label_array[
+                    select_index[:, 0], select_index[:, 1], select_index[:, 2]
+                ] = cls.white_matter_mapping[k][white_matter_mapping_keys[int(i)]]
         return new_label_array
 
     @classmethod
@@ -584,17 +600,17 @@ class WhiteMatterParcellation:
         out_array = synthseg_array_wm.copy()
         for k in CorpusCallosumParcellation.cc_white_matter:
             cc_target = CorpusCallosumParcellation.cc_target[k]
-            base_mask = (out_array == CorpusCallosumParcellation.cc_white_matter[k])
+            base_mask = out_array == CorpusCallosumParcellation.cc_white_matter[k]
             target_mask = xp.isin(synthseg_array_cc, xp.array([cc_target]))
-            diff_mask = xp.logical_and(base_mask,
-                                       xp.logical_not(target_mask))
+            diff_mask = xp.logical_and(base_mask, xp.logical_not(target_mask))
             out_array[diff_mask] = WhiteMatterParcellation.cerebral_white_matter[k]
         for k in ECICParcellation.ec_ic_white_matter:
-            ec_ic_target_list = xp.array(list(set(ECICParcellation.ec_ic_parcellation_mapping[k].values())))
-            base_mask = (out_array == ECICParcellation.ec_ic_white_matter[k])
+            ec_ic_target_list = xp.array(
+                list(set(ECICParcellation.ec_ic_parcellation_mapping[k].values()))
+            )
+            base_mask = out_array == ECICParcellation.ec_ic_white_matter[k]
             target_mask = xp.isin(synthseg_array_ec, ec_ic_target_list)
-            diff_mask = xp.logical_and(base_mask,
-                                       xp.logical_not(target_mask))
+            diff_mask = xp.logical_and(base_mask, xp.logical_not(target_mask))
             out_array[diff_mask] = WhiteMatterParcellation.cerebral_white_matter[k]
         return out_array
 
@@ -619,7 +635,9 @@ class WhiteMatterParcellation:
                     index_sub_arg = xp.argwhere(index[:, 2] == j)
                     label_index_sub = label_index[label_index[:, 2] == j]
                     if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                        loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                        loss_min = loss_distance(
+                            index_sub, label_index_sub, cls.decimal_places
+                        )
                         loss_list.append(loss_min)
                         # loss_list.append(loss_min.numpy())
                         index_sub_arg_list.append(index_sub_arg)
@@ -635,39 +653,149 @@ class WhiteMatterParcellation:
             for i in xp.unique(new_label):
                 select_index = index[xp.argwhere(new_label == i)].squeeze()
                 if select_index.ndim == 2:
-                    new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = \
-                        cls.re_white_matter_mapping[k][white_matter_mapping_keys[int(i)]]
+                    new_label_array[
+                        select_index[:, 0], select_index[:, 1], select_index[:, 2]
+                    ] = cls.re_white_matter_mapping[k][
+                        white_matter_mapping_keys[int(i)]
+                    ]
                 else:
-                    new_label_array[select_index[0], select_index[1], select_index[2]] = \
-                        cls.re_white_matter_mapping[k][white_matter_mapping_keys[int(i)]]
+                    new_label_array[
+                        select_index[0], select_index[1], select_index[2]
+                    ] = cls.re_white_matter_mapping[k][
+                        white_matter_mapping_keys[int(i)]
+                    ]
         return new_label_array
 
     @classmethod
     def run(cls, synthseg_array):
         synthseg_freesurfer_array = cls.synseg_label_to_freesurfer_GM(synthseg_array)
-        synthseg_freesurfer_array_wm = cls.white_matter_parcellation(synthseg_freesurfer_array)
+        synthseg_freesurfer_array_wm = cls.white_matter_parcellation(
+            synthseg_freesurfer_array
+        )
         return synthseg_freesurfer_array_wm
 
 
 class WhiteMatterParcellation2(WhiteMatterParcellation):
-
-    synthseg_left_label = xp.array([2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 17, 18, 26, 28,
-                                    1001, 1002, 1003, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015,
-                                    1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1025, 1026, 1027, 1028, 1029,
-                                    1030, 1031, 1032, 1033, 1034, 1035, ])
-    synthseg_right_label = xp.array([41, 42, 43, 44, 46, 47, 49, 50, 51, 52, 53, 54, 58, 60,
-                                     2001, 2002, 2003, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015,
-                                     2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029,
-                                     2030, 2031, 2032, 2033, 2034, 2035, ])
+    synthseg_left_label = xp.array(
+        [
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            10,
+            11,
+            12,
+            13,
+            17,
+            18,
+            26,
+            28,
+            1001,
+            1002,
+            1003,
+            1005,
+            1006,
+            1007,
+            1008,
+            1009,
+            1010,
+            1011,
+            1012,
+            1013,
+            1014,
+            1015,
+            1016,
+            1017,
+            1018,
+            1019,
+            1020,
+            1021,
+            1022,
+            1023,
+            1024,
+            1025,
+            1026,
+            1027,
+            1028,
+            1029,
+            1030,
+            1031,
+            1032,
+            1033,
+            1034,
+            1035,
+        ]
+    )
+    synthseg_right_label = xp.array(
+        [
+            41,
+            42,
+            43,
+            44,
+            46,
+            47,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            58,
+            60,
+            2001,
+            2002,
+            2003,
+            2005,
+            2006,
+            2007,
+            2008,
+            2009,
+            2010,
+            2011,
+            2012,
+            2013,
+            2014,
+            2015,
+            2016,
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024,
+            2025,
+            2026,
+            2027,
+            2028,
+            2029,
+            2030,
+            2031,
+            2032,
+            2033,
+            2034,
+            2035,
+        ]
+    )
 
     synthseg33_left_label = xp.array([2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 17, 18, 26, 28])
-    synthseg33_right_label = xp.array([41, 42, 43, 44, 46, 47, 49, 50, 51, 52, 53, 54, 58, 60])
+    synthseg33_right_label = xp.array(
+        [41, 42, 43, 44, 46, 47, 49, 50, 51, 52, 53, 54, 58, 60]
+    )
+
     @classmethod
     def hemi_revise(cls, synthseg_array, synthseg33_array):
-        synthseg33_array_right_mask = xp.isin(synthseg33_array, cls.synthseg33_right_label)
-        synthseg33_array_left_mask  = xp.isin(synthseg33_array, cls.synthseg33_left_label)
-        synthseg_array_right_mask   = xp.isin(synthseg_array, cls.synthseg_right_label)
-        synthseg_array_left_mask    = xp.isin(synthseg_array, cls.synthseg_left_label)
+        synthseg33_array_right_mask = xp.isin(
+            synthseg33_array, cls.synthseg33_right_label
+        )
+        synthseg33_array_left_mask = xp.isin(
+            synthseg33_array, cls.synthseg33_left_label
+        )
+        synthseg_array_right_mask = xp.isin(synthseg_array, cls.synthseg_right_label)
+        synthseg_array_left_mask = xp.isin(synthseg_array, cls.synthseg_left_label)
         temp_array = synthseg_array.copy()
 
         temp_array[(synthseg33_array_left_mask & synthseg_array_right_mask)] = 100
@@ -685,65 +813,79 @@ class WhiteMatterParcellation2(WhiteMatterParcellation):
                 center_x = row[0]
                 center_y = row[1]
                 center_z = row[2]
-                neighborhood = temp_array[center_x - half_window:center_x + half_window + 1,
-                               center_y - half_window:center_y + half_window + 1,
-                               center_z - half_window:center_z + half_window + 1, ]
+                neighborhood = temp_array[
+                    center_x - half_window : center_x + half_window + 1,
+                    center_y - half_window : center_y + half_window + 1,
+                    center_z - half_window : center_z + half_window + 1,
+                ]
                 neighborhood = xp.where(neighborhood < 1000, xp.nan, neighborhood)
                 neighborhood = xp.where(neighborhood > 2000, xp.nan, neighborhood)
-                unique, counts = xp.unique(neighborhood, return_counts=True, equal_nan=False)
+                unique, counts = xp.unique(
+                    neighborhood, return_counts=True, equal_nan=False
+                )
                 if len(unique) > 0:
                     if xp.isnan(unique[counts.argmax()]):
                         pass
                     else:
-                        temp_array[center_x, center_y, center_z] = unique[counts.argmax()]
+                        temp_array[center_x, center_y, center_z] = unique[
+                            counts.argmax()
+                        ]
             temp_array_index = xp.argwhere(temp_array == 200)
             for row in temp_array_index:
                 center_x = row[0]
                 center_y = row[1]
                 center_z = row[2]
-                neighborhood = temp_array[center_x - half_window:center_x + half_window + 1,
-                               center_y - half_window:center_y + half_window + 1,
-                               center_z - half_window:center_z + half_window + 1, ]
+                neighborhood = temp_array[
+                    center_x - half_window : center_x + half_window + 1,
+                    center_y - half_window : center_y + half_window + 1,
+                    center_z - half_window : center_z + half_window + 1,
+                ]
                 neighborhood = xp.where(neighborhood < 2000, xp.nan, neighborhood)
                 neighborhood = xp.where(neighborhood > 3000, xp.nan, neighborhood)
-                unique, counts = xp.unique(neighborhood, return_counts=True, equal_nan=False)
+                unique, counts = xp.unique(
+                    neighborhood, return_counts=True, equal_nan=False
+                )
                 if len(unique) > 0:
                     if xp.isnan(unique[counts.argmax()]):
                         pass
                     else:
-                        temp_array[center_x, center_y, center_z] = unique[counts.argmax()]
+                        temp_array[center_x, center_y, center_z] = unique[
+                            counts.argmax()
+                        ]
         return temp_array
 
     @classmethod
     def run(cls, synthseg_array, *args, **kwargs):
-        synthseg33_array = kwargs.get('synthseg33_array')
-        synthseg_array_revise = cls.hemi_revise(synthseg_array=synthseg_array,
-                                                synthseg33_array=synthseg33_array)
-        synthseg_freesurfer_array = cls.synseg_label_to_freesurfer_GM(synthseg_array_revise)
-        synthseg_freesurfer_array_wm = cls.white_matter_parcellation(synthseg_freesurfer_array)
+        synthseg33_array = kwargs.get("synthseg33_array")
+        synthseg_array_revise = cls.hemi_revise(
+            synthseg_array=synthseg_array, synthseg33_array=synthseg33_array
+        )
+        synthseg_freesurfer_array = cls.synseg_label_to_freesurfer_GM(
+            synthseg_array_revise
+        )
+        synthseg_freesurfer_array_wm = cls.white_matter_parcellation(
+            synthseg_freesurfer_array
+        )
 
         return synthseg_freesurfer_array_wm
 
 
 class CorpusCallosumParcellation:
-    cc_prerequisite = {'left_hemi': {'start': 1003,
-                                     'end': None
-                                     },
-                       'right_hemi': {'start': 2003,
-                                      'end': None
-                                      }
-                       }
+    cc_prerequisite = {
+        "left_hemi": {"start": 1003, "end": None},
+        "right_hemi": {"start": 2003, "end": None},
+    }
     lateral_ventricle = {
-        'left_hemi': 4,
-        'right_hemi': 43,
+        "left_hemi": 4,
+        "right_hemi": 43,
     }
     cc_white_matter = {
-        'left_hemi': 3003,
-        'right_hemi': 4003,
+        "left_hemi": 3003,
+        "right_hemi": 4003,
     }
     cc_target = {
-        'left_hemi': 3010,
-        'right_hemi': 4010,
+        "left_hemi": 3010,
+        "right_hemi": 4010,
     }
 
     @classmethod
@@ -768,7 +910,7 @@ class CorpusCallosumParcellation:
     @classmethod
     def get_prerequisite_cluster(cls, measure_np):
         # prerequisite_cluster = ndimage.label(measure_np, connectivity=2)
-        prerequisite_cluster,num_features = ndimage.label(measure_np)
+        prerequisite_cluster, num_features = ndimage.label(measure_np)
         prerequisite_cluster_unique = xp.unique(prerequisite_cluster)
         prerequisite_cluster_index_count = xp.sum(prerequisite_cluster != 0)
         prerequisite_cluster_list = []
@@ -779,12 +921,21 @@ class CorpusCallosumParcellation:
                 else:
                     prerequisite_cluster_i_count = xp.sum(prerequisite_cluster == i)
                     prerequisite_cluster_list.append(
-                        [int(i), float(prerequisite_cluster_i_count / prerequisite_cluster_index_count)])
+                        [
+                            int(i),
+                            float(
+                                prerequisite_cluster_i_count
+                                / prerequisite_cluster_index_count
+                            ),
+                        ]
+                    )
             prerequisite_df = pd.DataFrame(prerequisite_cluster_list)
             prerequisite_df = prerequisite_df.sort_values(by=1)
             del_cluster = asarray(prerequisite_df.iloc()[:-2, 0].to_numpy())
             select_cluster = asarray(prerequisite_df.iloc()[-2:, 0].to_numpy())
-            prerequisite_cluster = xp.where(xp.isin(prerequisite_cluster, del_cluster), 0, prerequisite_cluster)
+            prerequisite_cluster = xp.where(
+                xp.isin(prerequisite_cluster, del_cluster), 0, prerequisite_cluster
+            )
             return prerequisite_cluster, select_cluster
         else:
             return prerequisite_cluster, prerequisite_cluster_unique
@@ -794,50 +945,68 @@ class CorpusCallosumParcellation:
         new_label_array = xp.zeros_like(label_array)
         for k in cls.cc_white_matter:
             index = xp.argwhere(label_array == cls.cc_white_matter[k])
-            prerequisite_start_index = xp.argwhere(label_array == cls.cc_prerequisite[k]['start'])
+            prerequisite_start_index = xp.argwhere(
+                label_array == cls.cc_prerequisite[k]["start"]
+            )
             index_z_unique = xp.unique(index[:, 2])
             prerequisite_index_z_unique = xp.unique(prerequisite_start_index[:, 2])
-            z_aixs_intersect = xp.intersect1d(index_z_unique, prerequisite_index_z_unique)
+            z_aixs_intersect = xp.intersect1d(
+                index_z_unique, prerequisite_index_z_unique
+            )
             z_aixs_intersect = z_aixs_intersect[::-1]
             # Z 軸切片
             start_status = False
             for j in z_aixs_intersect:
                 measure_np = xp.zeros(label_array.shape[:2])
                 index_sub = index[index[:, 2] == j]
-                prerequisite_index_sub = prerequisite_start_index[prerequisite_start_index[:, 2] == j]
-                measure_np[prerequisite_index_sub[:, 0], prerequisite_index_sub[:, 1]] = j
-                prerequisite_cluster, prerequisite_cluster_unique = cls.get_prerequisite_cluster(measure_np)
+                prerequisite_index_sub = prerequisite_start_index[
+                    prerequisite_start_index[:, 2] == j
+                ]
+                measure_np[
+                    prerequisite_index_sub[:, 0], prerequisite_index_sub[:, 1]
+                ] = j
+                prerequisite_cluster, prerequisite_cluster_unique = (
+                    cls.get_prerequisite_cluster(measure_np)
+                )
 
                 if prerequisite_cluster_unique.shape[0] >= 2:
-                    cluster_x_list, cluster_y_list = cls.get_cluster_min_max(prerequisite_cluster)
+                    cluster_x_list, cluster_y_list = cls.get_cluster_min_max(
+                        prerequisite_cluster
+                    )
                     if start_status:
-                        if 'left_hemi' == k:
+                        if "left_hemi" == k:
                             select_index = index_sub[
-                                (index_sub[:, 1] >= cluster_x_list[1]) &
-                                (index_sub[:, 0] >= cluster_y_list[1]) &
-                                (index_sub[:, 0] <= cluster_y_list[-2])]
+                                (index_sub[:, 1] >= cluster_x_list[1])
+                                & (index_sub[:, 0] >= cluster_y_list[1])
+                                & (index_sub[:, 0] <= cluster_y_list[-2])
+                            ]
                         else:
                             select_index = index_sub[
-                                (index_sub[:, 1] <= cluster_x_list[-2]) &
-                                (index_sub[:, 0] >= cluster_y_list[1]) &
-                                (index_sub[:, 0] <= cluster_y_list[-2])]
-                        new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = cls.cc_target[k]
+                                (index_sub[:, 1] <= cluster_x_list[-2])
+                                & (index_sub[:, 0] >= cluster_y_list[1])
+                                & (index_sub[:, 0] <= cluster_y_list[-2])
+                            ]
+                        new_label_array[
+                            select_index[:, 0], select_index[:, 1], select_index[:, 2]
+                        ] = cls.cc_target[k]
                     else:
                         index_x_max = xp.max(index_sub[:, 1])
                         prerequisite_index_x_max = xp.max(prerequisite_index_sub[:, 1])
                         prerequisite_index_x_max = int(prerequisite_index_x_max * 0.97)
                         if index_x_max >= prerequisite_index_x_max:
                             start_status = True
-                            if 'left_hemi' == k:
+                            if "left_hemi" == k:
                                 select_index = index_sub[
-                                    (index_sub[:, 1] >= cluster_x_list[1]) &
-                                    (index_sub[:, 0] >= cluster_y_list[1]) &
-                                    (index_sub[:, 0] <= cluster_y_list[-2])]
+                                    (index_sub[:, 1] >= cluster_x_list[1])
+                                    & (index_sub[:, 0] >= cluster_y_list[1])
+                                    & (index_sub[:, 0] <= cluster_y_list[-2])
+                                ]
                             else:
                                 select_index = index_sub[
-                                    (index_sub[:, 1] <= cluster_x_list[-2]) &
-                                    (index_sub[:, 0] >= cluster_y_list[1]) &
-                                    (index_sub[:, 0] <= cluster_y_list[-2])]
+                                    (index_sub[:, 1] <= cluster_x_list[-2])
+                                    & (index_sub[:, 0] >= cluster_y_list[1])
+                                    & (index_sub[:, 0] <= cluster_y_list[-2])
+                                ]
                             # if 'left_hemi' == k:
                             #     select_index = index_sub[
                             #         (index_sub[:, 1] >= cluster_x_list[1]) &
@@ -847,8 +1016,11 @@ class CorpusCallosumParcellation:
                             #     select_index = index_sub[
                             #         (index_sub[:, 1] <= cluster_x_list[-2]) & (index_sub[:, 0] >= cluster_y_list[1]) & (
                             #                 index_sub[:, 0] <= cluster_y_list[-2])]
-                            new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = cls.cc_target[
-                                k]
+                            new_label_array[
+                                select_index[:, 0],
+                                select_index[:, 1],
+                                select_index[:, 2],
+                            ] = cls.cc_target[k]
         return new_label_array
 
     @classmethod
@@ -859,94 +1031,149 @@ class CorpusCallosumParcellation:
             vector_x = cc_index[cc_index[:, 2] == i][:, 1]
             vector_y = cc_index[cc_index[:, 2] == i][:, 0]
             if vector_x.shape[0] > 1:
-                norm_vector.append([i, vector_x.min(),
-                                    vector_y.max(),
-                                    vector_y.min(), ])
+                norm_vector.append(
+                    [
+                        i,
+                        vector_x.min(),
+                        vector_y.max(),
+                        vector_y.min(),
+                    ]
+                )
         norm_vector = xp.array(norm_vector)
         norm_vector = norm_vector[::-1]
         return norm_vector
 
     @classmethod
-    def _get_df_lateral_ventricle(cls, left_lateral_ventricle_index, right_lateral_ventricle_index):
+    def _get_df_lateral_ventricle(
+        cls, left_lateral_ventricle_index, right_lateral_ventricle_index
+    ):
         lateral_ventricle_vector = []
         left_lateral_ventricle_z_axis = xp.unique(left_lateral_ventricle_index[:, 2])
         right_lateral_ventricle_z_axis = xp.unique(right_lateral_ventricle_index[:, 2])
-        z_axis_intersect = xp.intersect1d(left_lateral_ventricle_z_axis, right_lateral_ventricle_z_axis)
+        z_axis_intersect = xp.intersect1d(
+            left_lateral_ventricle_z_axis, right_lateral_ventricle_z_axis
+        )
         for i in z_axis_intersect:
-            left_vector_x = left_lateral_ventricle_index[left_lateral_ventricle_index[:, 2] == i][:, 1]
-            right_vector_x = right_lateral_ventricle_index[right_lateral_ventricle_index[:, 2] == i][:, 1]
+            left_vector_x = left_lateral_ventricle_index[
+                left_lateral_ventricle_index[:, 2] == i
+            ][:, 1]
+            right_vector_x = right_lateral_ventricle_index[
+                right_lateral_ventricle_index[:, 2] == i
+            ][:, 1]
             # lateral_ventricle_vector.append([i,
             #                                  xp.percentile(left_vector_x, 10, axis=0).astype(int),
             #                                  xp.percentile(right_vector_x, 90, axis=0).astype(int)])
-            lateral_ventricle_vector.append([i,
-                                             xp.percentile(left_vector_x, 20, axis=0).astype(int),
-                                             xp.percentile(right_vector_x, 80, axis=0).astype(int)])
+            lateral_ventricle_vector.append(
+                [
+                    i,
+                    xp.percentile(left_vector_x, 20, axis=0).astype(int),
+                    xp.percentile(right_vector_x, 80, axis=0).astype(int),
+                ]
+            )
 
         intersect_lateral_ventricle_array = xp.array(lateral_ventricle_vector)
-        df_lateral_ventricle = pd.DataFrame(asnumpy(intersect_lateral_ventricle_array), columns=['lateral_ventricle_z',
-                                                                                        'left_lateral_ventricle_x',
-                                                                                        'right_lateral_ventricle_x'])
-        df_lateral_ventricle.index = df_lateral_ventricle['lateral_ventricle_z']
+        df_lateral_ventricle = pd.DataFrame(
+            asnumpy(intersect_lateral_ventricle_array),
+            columns=[
+                "lateral_ventricle_z",
+                "left_lateral_ventricle_x",
+                "right_lateral_ventricle_x",
+            ],
+        )
+        df_lateral_ventricle.index = df_lateral_ventricle["lateral_ventricle_z"]
         return df_lateral_ventricle
 
     @classmethod
     def _get_df_cc(cls, left_cc_index, right_cc_index) -> pd.DataFrame:
         left_cc_axis_vector = cls._get_cc_x_y_axis_index(left_cc_index)
         right_cc_axis_vector = cls._get_cc_x_y_axis_index(right_cc_index)
-        z_axis_intersect = xp.intersect1d(left_cc_axis_vector[:, 0], right_cc_axis_vector[:, 0])[::-1]
+        z_axis_intersect = xp.intersect1d(
+            left_cc_axis_vector[:, 0], right_cc_axis_vector[:, 0]
+        )[::-1]
         z_axis_intersect = z_axis_intersect.reshape(-1, 1)
-        intersect_cc_array = xp.concatenate([z_axis_intersect,
-                                             left_cc_axis_vector[
-                                                 xp.isin(left_cc_axis_vector[:, 0], z_axis_intersect)][:, 1:],
-                                             right_cc_axis_vector[
-                                                 xp.isin(right_cc_axis_vector[:, 0], z_axis_intersect)][:, 1:], ],
-                                            axis=1)
-        df_cc = pd.DataFrame(asnumpy(intersect_cc_array), columns=['cc_z',
-                                                          'left_cc_x', 'left_cc_y_max', 'left_cc_y_min',
-                                                          'right_cc_x', 'right_cc_y_max', 'right_cc_y_min'])
-        df_cc.index = df_cc['cc_z']
+        intersect_cc_array = xp.concatenate(
+            [
+                z_axis_intersect,
+                left_cc_axis_vector[
+                    xp.isin(left_cc_axis_vector[:, 0], z_axis_intersect)
+                ][:, 1:],
+                right_cc_axis_vector[
+                    xp.isin(right_cc_axis_vector[:, 0], z_axis_intersect)
+                ][:, 1:],
+            ],
+            axis=1,
+        )
+        df_cc = pd.DataFrame(
+            asnumpy(intersect_cc_array),
+            columns=[
+                "cc_z",
+                "left_cc_x",
+                "left_cc_y_max",
+                "left_cc_y_min",
+                "right_cc_x",
+                "right_cc_y_max",
+                "right_cc_y_min",
+            ],
+        )
+        df_cc.index = df_cc["cc_z"]
         return df_cc
 
     @classmethod
     def cc_adapt(cls, cc_array, label_array):
         new_label_array = xp.zeros_like(label_array)
-        left_cc_index = xp.argwhere(cc_array == cls.cc_target['left_hemi'])
-        right_cc_index = xp.argwhere(cc_array == cls.cc_target['right_hemi'])
-        left_lateral_ventricle_index = xp.argwhere(label_array == cls.lateral_ventricle['left_hemi'])
-        right_lateral_ventricle_index = xp.argwhere(label_array == cls.lateral_ventricle['right_hemi'])
+        left_cc_index = xp.argwhere(cc_array == cls.cc_target["left_hemi"])
+        right_cc_index = xp.argwhere(cc_array == cls.cc_target["right_hemi"])
+        left_lateral_ventricle_index = xp.argwhere(
+            label_array == cls.lateral_ventricle["left_hemi"]
+        )
+        right_lateral_ventricle_index = xp.argwhere(
+            label_array == cls.lateral_ventricle["right_hemi"]
+        )
 
-        df_cc = cls._get_df_cc(left_cc_index=left_cc_index, right_cc_index=right_cc_index)
-        df_lateral_ventricle = cls._get_df_lateral_ventricle(left_lateral_ventricle_index=left_lateral_ventricle_index,
-                                                             right_lateral_ventricle_index=right_lateral_ventricle_index
-                                                             )
-        df = df_cc.join(df_lateral_ventricle, how='inner')
-        df = df.drop(columns=['lateral_ventricle_z'])
+        df_cc = cls._get_df_cc(
+            left_cc_index=left_cc_index, right_cc_index=right_cc_index
+        )
+        df_lateral_ventricle = cls._get_df_lateral_ventricle(
+            left_lateral_ventricle_index=left_lateral_ventricle_index,
+            right_lateral_ventricle_index=right_lateral_ventricle_index,
+        )
+        df = df_cc.join(df_lateral_ventricle, how="inner")
+        df = df.drop(columns=["lateral_ventricle_z"])
 
-        left_index = xp.argwhere(label_array == cls.cc_white_matter['left_hemi'])
-        right_index = xp.argwhere(label_array == cls.cc_white_matter['right_hemi'])
+        left_index = xp.argwhere(label_array == cls.cc_white_matter["left_hemi"])
+        right_index = xp.argwhere(label_array == cls.cc_white_matter["right_hemi"])
         for row in df.index:
-            cc_z = df.loc()[row, 'cc_z']
-            left_lateral_ventricle_x = df.loc()[row, 'left_lateral_ventricle_x']
-            right_lateral_ventricle_x = df.loc()[row, 'right_lateral_ventricle_x']
+            cc_z = df.loc()[row, "cc_z"]
+            left_lateral_ventricle_x = df.loc()[row, "left_lateral_ventricle_x"]
+            right_lateral_ventricle_x = df.loc()[row, "right_lateral_ventricle_x"]
 
-            left_cc_y_max = df.loc()[row, 'left_cc_y_max']
-            left_cc_y_min = df.loc()[row, 'left_cc_y_min']
-            right_cc_y_max = df.loc()[row, 'right_cc_y_max']
-            right_cc_y_min = df.loc()[row, 'right_cc_y_min']
+            left_cc_y_max = df.loc()[row, "left_cc_y_max"]
+            left_cc_y_min = df.loc()[row, "left_cc_y_min"]
+            right_cc_y_max = df.loc()[row, "right_cc_y_max"]
+            right_cc_y_min = df.loc()[row, "right_cc_y_min"]
 
-            select_left_index = left_index[(left_index[:, 2] == cc_z) & (left_index[:, 1] > left_lateral_ventricle_x) &
-                                           (left_index[:, 0] >= left_cc_y_min) & (left_index[:, 0] <= left_cc_y_max)
-                                           ]
+            select_left_index = left_index[
+                (left_index[:, 2] == cc_z)
+                & (left_index[:, 1] > left_lateral_ventricle_x)
+                & (left_index[:, 0] >= left_cc_y_min)
+                & (left_index[:, 0] <= left_cc_y_max)
+            ]
             select_right_index = right_index[
-                (right_index[:, 2] == cc_z) & (right_index[:, 1] < right_lateral_ventricle_x) &
-                (right_index[:, 0] >= right_cc_y_min) & (right_index[:, 0] <= right_cc_y_max)
-                ]
-            new_label_array[select_left_index[:, 0],
-            select_left_index[:, 1],
-            select_left_index[:, 2]] = cls.cc_target['left_hemi']
-            new_label_array[select_right_index[:, 0],
-            select_right_index[:, 1],
-            select_right_index[:, 2]] = cls.cc_target['right_hemi']
+                (right_index[:, 2] == cc_z)
+                & (right_index[:, 1] < right_lateral_ventricle_x)
+                & (right_index[:, 0] >= right_cc_y_min)
+                & (right_index[:, 0] <= right_cc_y_max)
+            ]
+            new_label_array[
+                select_left_index[:, 0],
+                select_left_index[:, 1],
+                select_left_index[:, 2],
+            ] = cls.cc_target["left_hemi"]
+            new_label_array[
+                select_right_index[:, 0],
+                select_right_index[:, 1],
+                select_right_index[:, 2],
+            ] = cls.cc_target["right_hemi"]
         return new_label_array
 
     @classmethod
@@ -962,61 +1189,72 @@ class CorpusCallosumParcellation:
 
 class ECICParcellation:
     ec_ic_parcellation_mapping = {
-        'left_hemi': {1007: 3008,
-                      11: 3009,
-                      10: 3009,
-                      13: 3009,
-                      26: 3009,
-                      },
-        'right_hemi': {2007: 4008,
-                       49: 4009,
-                       50: 4009,
-                       52: 4009,
-                       58: 4009,
-                       }
+        "left_hemi": {
+            1007: 3008,
+            11: 3009,
+            10: 3009,
+            13: 3009,
+            26: 3009,
+        },
+        "right_hemi": {
+            2007: 4008,
+            49: 4009,
+            50: 4009,
+            52: 4009,
+            58: 4009,
+        },
     }
-    ec_ic_prerequisite = {'left_hemi': {'start': 12,
-                                        'end': 13
-                                        },
-                          'right_hemi': {'start': 51,
-                                         'end': 52
-                                         }
-                          }
+    ec_ic_prerequisite = {
+        "left_hemi": {"start": 12, "end": 13},
+        "right_hemi": {"start": 51, "end": 52},
+    }
 
     ec_ic_white_matter = {
-        'left_hemi': 3007,
-        'right_hemi': 4007,
+        "left_hemi": 3007,
+        "right_hemi": 4007,
     }
 
     decimal_places = 8
-    scaling_factor = 10 ** decimal_places
+    scaling_factor = 10**decimal_places
 
     @classmethod
     def ec_ic_parcellation(cls, label_array):
         new_label_array = xp.zeros_like(label_array, dtype=xp.int64)
         for k in cls.ec_ic_white_matter:
             # 取出putamen開始與停止層
-            prerequisite_start_index = xp.argwhere(label_array == cls.ec_ic_prerequisite[k]['start'])
-            prerequisite_end_index = xp.argwhere(label_array == cls.ec_ic_prerequisite[k]['end'])
+            prerequisite_start_index = xp.argwhere(
+                label_array == cls.ec_ic_prerequisite[k]["start"]
+            )
+            prerequisite_end_index = xp.argwhere(
+                label_array == cls.ec_ic_prerequisite[k]["end"]
+            )
             prerequisite_end_index = prerequisite_end_index[:, 2].min()
             unique_prerequisite_index = xp.unique(prerequisite_start_index[:, 2])
 
             # 計算距離的各群
-            ec_ic_parcellation_mapping_keys = list(cls.ec_ic_parcellation_mapping[k].keys())
+            ec_ic_parcellation_mapping_keys = list(
+                cls.ec_ic_parcellation_mapping[k].keys()
+            )
 
             # 被分類的
             index = xp.argwhere(label_array == cls.ec_ic_white_matter[k])
             unique_label_index = xp.unique(index[:, 2])
 
             # 被分類的Z軸索引與 putamen
-            z_aixs_intersect = xp.intersect1d(unique_prerequisite_index, unique_label_index)
-            z_aixs_intersect = z_aixs_intersect[z_aixs_intersect >= prerequisite_end_index]
+            z_aixs_intersect = xp.intersect1d(
+                unique_prerequisite_index, unique_label_index
+            )
+            z_aixs_intersect = z_aixs_intersect[
+                z_aixs_intersect >= prerequisite_end_index
+            ]
             index = index[xp.isin(index[:, 2], z_aixs_intersect)]
 
             np_loss = xp.zeros((index.shape[0], len(ec_ic_parcellation_mapping_keys)))
             np_loss[:, :] = 999999
             for i in range(len(ec_ic_parcellation_mapping_keys)):
-                label_index = xp.argwhere(label_array == ec_ic_parcellation_mapping_keys[int(i)])
+                label_index = xp.argwhere(
+                    label_array == ec_ic_parcellation_mapping_keys[int(i)]
+                )
                 loss_list = []
                 index_sub_arg_list = []
                 for j in xp.unique(label_index[:, 2]):
@@ -1024,7 +1262,9 @@ class ECICParcellation:
                     index_sub_arg = xp.argwhere(index[:, 2] == j)
                     label_index_sub = label_index[label_index[:, 2] == j]
                     if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                        loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                        loss_min = loss_distance(
+                            index_sub, label_index_sub, cls.decimal_places
+                        )
                         loss_list.append(loss_min)
                         # loss_list.append(loss_min.numpy())
                         index_sub_arg_list.append(index_sub_arg)
@@ -1039,8 +1279,11 @@ class ECICParcellation:
             # 指定分類
             for i in xp.unique(new_label):
                 select_index = index[xp.argwhere(new_label == i)].squeeze()
-                new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = \
-                    cls.ec_ic_parcellation_mapping[k][ec_ic_parcellation_mapping_keys[int(i)]]
+                new_label_array[
+                    select_index[:, 0], select_index[:, 1], select_index[:, 2]
+                ] = cls.ec_ic_parcellation_mapping[k][
+                    ec_ic_parcellation_mapping_keys[int(i)]
+                ]
         return new_label_array
 
     @classmethod
@@ -1051,65 +1294,64 @@ class ECICParcellation:
 
 class BullseyeProcess:
     synthseg_wm_output = {
-        'left_hemi': {4: 3010,
-                      5: 3010,
-                      7: 3010,
-                      8: 3010,
-                      10: 3010,
-                      11: 3010,
-                      12: 3010,
-                      13: 3010,
-                      18: 3010,
-                      26: 3010,
-                      28: 3010,
-
-                      1001: 3010,
-                      1003: 3010,
-                      1004: 3010,
-                      1005: 3010,
-                      1006: 3010,
-                      1007: 3010,
-
-                      3001: 3010,
-                      3003: 3010,
-                      3004: 3010,
-                      3005: 3010,
-                      3006: 3010,
-                      3007: 3010,
-                      },
-        'right_hemi': {43: 4010,
-                       44: 4010,
-                       46: 4010,
-                       47: 4010,
-                       49: 4010,
-                       50: 4010,
-                       51: 4010,
-                       52: 4010,
-                       54: 4010,
-                       58: 4010,
-                       60: 4010,
-
-                       2001: 4010,
-                       2003: 4010,
-                       2004: 4010,
-                       2005: 4010,
-                       2006: 4010,
-                       2007: 4010,
-
-                       4001: 4010,
-                       4003: 4010,
-                       4004: 4010,
-                       4005: 4010,
-                       4006: 4010,
-                       4007: 4010},
+        "left_hemi": {
+            4: 3010,
+            5: 3010,
+            7: 3010,
+            8: 3010,
+            10: 3010,
+            11: 3010,
+            12: 3010,
+            13: 3010,
+            18: 3010,
+            26: 3010,
+            28: 3010,
+            1001: 3010,
+            1003: 3010,
+            1004: 3010,
+            1005: 3010,
+            1006: 3010,
+            1007: 3010,
+            3001: 3010,
+            3003: 3010,
+            3004: 3010,
+            3005: 3010,
+            3006: 3010,
+            3007: 3010,
+        },
+        "right_hemi": {
+            43: 4010,
+            44: 4010,
+            46: 4010,
+            47: 4010,
+            49: 4010,
+            50: 4010,
+            51: 4010,
+            52: 4010,
+            54: 4010,
+            58: 4010,
+            60: 4010,
+            2001: 4010,
+            2003: 4010,
+            2004: 4010,
+            2005: 4010,
+            2006: 4010,
+            2007: 4010,
+            4001: 4010,
+            4003: 4010,
+            4004: 4010,
+            4005: 4010,
+            4006: 4010,
+            4007: 4010,
+        },
     }
     bullseye_parcellation = {
-        'left_hemi': 3010,
-        'right_hemi': 4010,
+        "left_hemi": 3010,
+        "right_hemi": 4010,
     }
     lateral_ventricle = {
-        'left_hemi': 4,
-        'right_hemi': 43,
+        "left_hemi": 4,
+        "right_hemi": 43,
     }
     depth_number = 6
     inner_size = 2
@@ -1128,7 +1370,8 @@ class BullseyeProcess:
         for labels_list in include_superlist:
             for label in labels_list:
                 value = labels_list[0]
-                if fixed_id is not None: value = fixed_id[0]
+                if fixed_id is not None:
+                    value = fixed_id[0]
                 out0[in0 == label] = value
 
         # transform label-ids in case mapping is specified
@@ -1160,14 +1403,16 @@ class BullseyeProcess:
 
         out = xp.zeros(ndist.shape, dtype=xp.int32)
 
-        limits = xp.linspace(0., 1., n_shells + 1)
+        limits = xp.linspace(0.0, 1.0, n_shells + 1)
         for i in xp.arange(n_shells) + 1:
             # compute shell and assing increasing label-id
             mask2 = xp.logical_and(ndist >= limits[i - 1], ndist < limits[i])
             if mask is not None:  # maskout regions outside mask
                 mask2 = xp.logical_and(mask2, mask)
             out[mask2] = i
-        out[xp.isclose(ndist, 0.)] = 0  # need to assign zero to ventricles because of >= above
+        out[xp.isclose(ndist, 0.0)] = (
+            0  # need to assign zero to ventricles because of >= above
+        )
         return out
 
     @classmethod
@@ -1178,7 +1423,6 @@ class BullseyeProcess:
 
         # if not intersection, simply include labels from 'in2' into 'in1'
         if not intersect:
-
             out = xp.zeros(in1.shape, dtype=xp.int32)
 
             out[:] = in1[:]
@@ -1196,14 +1440,19 @@ class BullseyeProcess:
             u2_set = u2_set.astype(int)
 
             for u1 in u1_set:
-                if u1 == 0: continue
+                if u1 == 0:
+                    continue
                 mask1 = in1 == u1
                 for u2 in u2_set:
-                    if u2 == 0: continue
+                    if u2 == 0:
+                        continue
                     mask2 = in2 == u2
                     mask3 = xp.logical_and(mask1, mask2)
-                    if not xp.any(mask3): continue
-                    out[mask3] = int(str(u1) + str(u2))  # new label id by concatenating [u1, u2]
+                    if not xp.any(mask3):
+                        continue
+                    out[mask3] = int(
+                        str(u1) + str(u2)
+                    )  # new label id by concatenating [u1, u2]
         return out
 
     @classmethod
@@ -1224,7 +1473,7 @@ class BullseyeProcess:
 
         # get DONE and processing masks
         DONE_mask = label > 0  # this is for using freesurfer wmparc
-        proc_mask = xp.logical_and(xp.logical_and(ndist > 0., ndist < 1.), incl_mask)
+        proc_mask = xp.logical_and(xp.logical_and(ndist > 0.0, ndist < 1.0), incl_mask)
 
         # setup the ouptut vol
         out = xp.zeros(label.shape, dtype=label.dtype)
@@ -1237,23 +1486,32 @@ class BullseyeProcess:
 
         # main loop
         while not xp.all(DONE_mask[proc_mask]):
-
             if verbose:
-                print('%0.1f done' % (100. * float(DONE_mask[proc_mask].sum()) / float(proc_mask.sum())))
+                print(
+                    "%0.1f done"
+                    % (
+                        100.0
+                        * float(DONE_mask[proc_mask].sum())
+                        / float(proc_mask.sum())
+                    )
+                )
 
             # loop to increase connectivity for non-reachable TO-DO points
             while True:
-
                 # dilate the SOLVED area
-                aux = binary_dilation(DONE_mask, iterate_structure(connectivity, its_conn))
+                aux = binary_dilation(
+                    DONE_mask, iterate_structure(connectivity, its_conn)
+                )
                 # next TO-DO: close to DONE, in the processing mask and not yet done
-                TODO_mask = xp.logical_and(xp.logical_and(aux, proc_mask), xp.logical_not(DONE_mask))
+                TODO_mask = xp.logical_and(
+                    xp.logical_and(aux, proc_mask), xp.logical_not(DONE_mask)
+                )
 
                 if TODO_mask.sum() > 0:
                     break
 
                 if verbose:
-                    print('Non-reachable points. Increasing connectivity')
+                    print("Non-reachable points. Increasing connectivity")
 
                 its_conn += 1
 
@@ -1264,30 +1522,41 @@ class BullseyeProcess:
 
             # iterate along TO-DO points
             for idx in Idx_TODO[I_sort[::-1]]:
-
-                max_dist = -1.
+                max_dist = -1.0
 
                 # process each neighbor
-                for off in xp.argwhere(iterate_structure(connectivity, its_conn)) - its_conn:
-
+                for off in (
+                    xp.argwhere(iterate_structure(connectivity, its_conn)) - its_conn
+                ):
                     try:
-
                         # if it is not DONE then skip
-                        if not DONE_mask[idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]]:
+                        if not DONE_mask[
+                            idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]
+                        ]:
                             continue
 
                         # if it is the largest distance (ie, largest gradient)
-                        cur_dist = ndist[idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]]
+                        cur_dist = ndist[
+                            idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]
+                        ]
                         if cur_dist > max_dist:
-                            out[idx[0], idx[1], idx[2]] = out[idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]]
+                            out[idx[0], idx[1], idx[2]] = out[
+                                idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]
+                            ]
                             max_dist = cur_dist
 
                     except:
-                        print('something wrong with neighbor at: (%d, %d, %d)' % (
-                            idx[0] + off[0], idx[1] + off[1], idx[2] + off[2]))
+                        print(
+                            "something wrong with neighbor at: (%d, %d, %d)"
+                            % (idx[0] + off[0], idx[1] + off[1], idx[2] + off[2])
+                        )
                         pass
 
-                if max_dist < 0.: print("something went wrong with point: (%d, %d, %d)" % (idx[0], idx[1], idx[2]))
+                if max_dist < 0.0:
+                    print(
+                        "something went wrong with point: (%d, %d, %d)"
+                        % (idx[0], idx[1], idx[2])
+                    )
 
                 # mark as solved and remove from visited
                 DONE_mask[idx[0], idx[1], idx[2]] = True
@@ -1300,12 +1569,14 @@ class BullseyeProcess:
         temp_array = xp.zeros_like(depth_array, dtype=depth_array.dtype)
         # 取出 bullseye 部分
         index = xp.argwhere(depth_array != 0)
-        temp_array[index[:, 0], index[:, 1], index[:, 2]] = synthseg_array[index[:, 0], index[:, 1], index[:, 2]]
+        temp_array[index[:, 0], index[:, 1], index[:, 2]] = synthseg_array[
+            index[:, 0], index[:, 1], index[:, 2]
+        ]
 
         left_mask = (temp_array // 1000) == 3
         right_mask = (temp_array // 1000) == 4
-        new_label_array[left_mask] = cls.bullseye_parcellation['left_hemi']
-        new_label_array[right_mask] = cls.bullseye_parcellation['right_hemi']
+        new_label_array[left_mask] = cls.bullseye_parcellation["left_hemi"]
+        new_label_array[right_mask] = cls.bullseye_parcellation["right_hemi"]
         new_label_array = new_label_array + depth_array
         return new_label_array
 
@@ -1313,7 +1584,9 @@ class BullseyeProcess:
     def bullseye_depth_merge(cls, bullsey_parcellation_array, synthseg_array):
         out_array = xp.zeros_like(bullsey_parcellation_array)
         for k in cls.lateral_ventricle:
-            lateral_ventricle_index = xp.argwhere(synthseg_array == cls.lateral_ventricle[k])
+            lateral_ventricle_index = xp.argwhere(
+                synthseg_array == cls.lateral_ventricle[k]
+            )
             lateral_ventricle_z = xp.unique(lateral_ventricle_index[:, 2])
             z_higher = lateral_ventricle_z.max()
             z_lower = lateral_ventricle_z.min()
@@ -1321,108 +1594,181 @@ class BullseyeProcess:
             bullseye_cluster = bullseye_cluster[bullseye_cluster != 0]
             for i in bullseye_cluster:
                 bullseye_depth_mask = (bullsey_parcellation_array > i) & (
-                        bullsey_parcellation_array < (i + cls.depth_number))
+                    bullsey_parcellation_array < (i + cls.depth_number)
+                )
                 bullseye_index = xp.argwhere(bullseye_depth_mask)
                 bullseye_index_higher = bullseye_index[bullseye_index[:, 2] > z_higher]
                 bullseye_index_lower = bullseye_index[bullseye_index[:, 2] < z_lower]
 
                 bullseye_between_inner_mask = (bullsey_parcellation_array > (i)) & (
-                        bullsey_parcellation_array <= (i + cls.inner_size))
-                bullseye_between_inner_index = xp.argwhere(bullseye_between_inner_mask == True)
+                    bullsey_parcellation_array <= (i + cls.inner_size)
+                )
+                bullseye_between_inner_index = xp.argwhere(
+                    bullseye_between_inner_mask == True
+                )
                 bullseye_between_inner_index_between = bullseye_between_inner_index[
-                    (bullseye_between_inner_index[:, 2] <= z_higher) &
-                    (bullseye_between_inner_index[:, 2] >= z_lower)]
+                    (bullseye_between_inner_index[:, 2] <= z_higher)
+                    & (bullseye_between_inner_index[:, 2] >= z_lower)
+                ]
 
-                bullseye_between_outer_mask = (bullsey_parcellation_array > (i + cls.inner_size)) & (
-                        bullsey_parcellation_array <= (i + cls.outer_size))
-                bullseye_between_outer_index = xp.argwhere(bullseye_between_outer_mask == True)
+                bullseye_between_outer_mask = (
+                    bullsey_parcellation_array > (i + cls.inner_size)
+                ) & (bullsey_parcellation_array <= (i + cls.outer_size))
+                bullseye_between_outer_index = xp.argwhere(
+                    bullseye_between_outer_mask == True
+                )
                 bullseye_between_outer_index_between = bullseye_between_outer_index[
-                    (bullseye_between_outer_index[:, 2] <= z_higher) &
-                    (bullseye_between_outer_index[:, 2] >= z_lower)]
-                out_array[bullseye_index_higher[:, 0],
-                bullseye_index_higher[:, 1],
-                bullseye_index_higher[:, 2]] = i + 2
-                out_array[bullseye_index_lower[:, 0],
-                bullseye_index_lower[:, 1],
-                bullseye_index_lower[:, 2]] = i + 2
-                out_array[bullseye_between_inner_index_between[:, 0],
-                bullseye_between_inner_index_between[:, 1],
-                bullseye_between_inner_index_between[:, 2]] = i + 1
-                out_array[bullseye_between_outer_index_between[:, 0],
-                bullseye_between_outer_index_between[:, 1],
-                bullseye_between_outer_index_between[:, 2]] = i + 2
+                    (bullseye_between_outer_index[:, 2] <= z_higher)
+                    & (bullseye_between_outer_index[:, 2] >= z_lower)
+                ]
+                out_array[
+                    bullseye_index_higher[:, 0],
+                    bullseye_index_higher[:, 1],
+                    bullseye_index_higher[:, 2],
+                ] = i + 2
+                out_array[
+                    bullseye_index_lower[:, 0],
+                    bullseye_index_lower[:, 1],
+                    bullseye_index_lower[:, 2],
+                ] = i + 2
+                out_array[
+                    bullseye_between_inner_index_between[:, 0],
+                    bullseye_between_inner_index_between[:, 1],
+                    bullseye_between_inner_index_between[:, 2],
+                ] = i + 1
+                out_array[
+                    bullseye_between_outer_index_between[:, 0],
+                    bullseye_between_outer_index_between[:, 1],
+                    bullseye_between_outer_index_between[:, 2],
+                ] = i + 2
         return out_array
 
     @classmethod
-    def bullseye_depth_synthseg_label(cls, bullsey_depth_merge_array, label_array, synthseg_array):
+    def bullseye_depth_synthseg_label(
+        cls, bullsey_depth_merge_array, label_array, synthseg_array
+    ):
         out = xp.zeros(bullsey_depth_merge_array.shape, dtype=xp.int32)
         u1 = xp.unique(bullsey_depth_merge_array)
-        mask2 = (synthseg_array == 2)
-        mask41 = (synthseg_array == 41)
+        mask2 = synthseg_array == 2
+        mask41 = synthseg_array == 41
         for k in u1:
-            mask1 = (bullsey_depth_merge_array == k)
-            out_mask = xp.logical_or(xp.logical_and(mask1, mask2),
-                                     xp.logical_and(mask1, mask41))
+            mask1 = bullsey_depth_merge_array == k
+            out_mask = xp.logical_or(
+                xp.logical_and(mask1, mask2), xp.logical_and(mask1, mask41)
+            )
             if (k == 3011) or (k == 4011):
                 out[out_mask] = bullsey_depth_merge_array[out_mask]
             else:
-                inner_mask = xp.logical_and((bullsey_depth_merge_array >= 3000), out_mask)
+                inner_mask = xp.logical_and(
+                    (bullsey_depth_merge_array >= 3000), out_mask
+                )
                 out[out_mask] = label_array[out_mask]
                 out[inner_mask] = label_array[inner_mask] + 30
         return out
 
     @classmethod
     def get_depth_wmparc_np(cls, label_array, n_shells):
-        filter_labels_include_superlist = [[3001, 3007], [4001, 4007], [3004], [4004], [3005], [4005], [3006],
-                                           [4006]]  # lobar labels in WM
+        filter_labels_include_superlist = [
+            [3001, 3007],
+            [4001, 4007],
+            [3004],
+            [4004],
+            [3005],
+            [4005],
+            [3006],
+            [4006],
+        ]  # lobar labels in WM
         filter_labels_fixed_id = None
-        filter_labels_map_pairs_list = [[3001, 11], [4001, 21], [3004, 12], [4004, 22], [3005, 13], [4005, 23],
-                                        [3006, 14], [4006, 24]]
-        filter_lobes_np = cls.filter_labels(label_array,
-                                            include_superlist=filter_labels_include_superlist,
-                                            fixed_id=filter_labels_fixed_id,
-                                            map_pairs_list=filter_labels_map_pairs_list)
+        filter_labels_map_pairs_list = [
+            [3001, 11],
+            [4001, 21],
+            [3004, 12],
+            [4004, 22],
+            [3005, 13],
+            [4005, 23],
+            [3006, 14],
+            [4006, 24],
+        ]
+        filter_lobes_np = cls.filter_labels(
+            label_array,
+            include_superlist=filter_labels_include_superlist,
+            fixed_id=filter_labels_fixed_id,
+            map_pairs_list=filter_labels_map_pairs_list,
+        )
 
         ventricles_include_superlist = [[43, 4]]
         ventricles_fixed_id = [1]
         ventricles_map_pairs_list = None
-        ventricles_np = cls.filter_labels(label_array,
-                                          include_superlist=ventricles_include_superlist,
-                                          fixed_id=ventricles_fixed_id, map_pairs_list=ventricles_map_pairs_list)
+        ventricles_np = cls.filter_labels(
+            label_array,
+            include_superlist=ventricles_include_superlist,
+            fixed_id=ventricles_fixed_id,
+            map_pairs_list=ventricles_map_pairs_list,
+        )
 
-        cortex_include_superlist = [[1001, 2001, 1004, 2004, 1005, 2005, 1006, 2006]]  # lobar labels in cortex
+        cortex_include_superlist = [
+            [1001, 2001, 1004, 2004, 1005, 2005, 1006, 2006]
+        ]  # lobar labels in cortex
         cortex_fixed_id = [1]
         cortex_map_pairs_list = None
-        cortex_np = cls.filter_labels(label_array,
-                                      include_superlist=cortex_include_superlist,
-                                      fixed_id=cortex_fixed_id, map_pairs_list=cortex_map_pairs_list)
-        bgt_include_superlist = [[10, 49, 11, 12, 50, 51, 26, 58, 13, 52]]  # basal ganglia + thalamus
+        cortex_np = cls.filter_labels(
+            label_array,
+            include_superlist=cortex_include_superlist,
+            fixed_id=cortex_fixed_id,
+            map_pairs_list=cortex_map_pairs_list,
+        )
+        bgt_include_superlist = [
+            [10, 49, 11, 12, 50, 51, 26, 58, 13, 52]
+        ]  # basal ganglia + thalamus
         bgt_fixed_id = [5]
         bgt_map_pairs_list = None
-        bgt_np = cls.filter_labels(label_array,
-                                   include_superlist=bgt_include_superlist,
-                                   fixed_id=bgt_fixed_id, map_pairs_list=bgt_map_pairs_list)
+        bgt_np = cls.filter_labels(
+            label_array,
+            include_superlist=bgt_include_superlist,
+            fixed_id=bgt_fixed_id,
+            map_pairs_list=bgt_map_pairs_list,
+        )
 
         ndist_np = cls.norm_dist_map(ventricles_np, cortex_np)
-        generate_wmparc_incl_labels = [3003, 4003, 5001, 5002]  # the labels that need to be 'filled'
-        gen_wmparc_np = cls.generate_wmparc(incl_aux=label_array, ndist=ndist_np,
-                                            label=filter_lobes_np,
-                                            incl_labels=generate_wmparc_incl_labels, verbose=False)
-        lobe_wmparc_np = cls.merge_labels(in1=gen_wmparc_np, in2=bgt_np, intersect=False)
-        depth_wmparc_np = cls.create_shells(ndist=ndist_np, mask=lobe_wmparc_np, n_shells=n_shells)
+        generate_wmparc_incl_labels = [
+            3003,
+            4003,
+            5001,
+            5002,
+        ]  # the labels that need to be 'filled'
+        gen_wmparc_np = cls.generate_wmparc(
+            incl_aux=label_array,
+            ndist=ndist_np,
+            label=filter_lobes_np,
+            incl_labels=generate_wmparc_incl_labels,
+            verbose=False,
+        )
+        lobe_wmparc_np = cls.merge_labels(
+            in1=gen_wmparc_np, in2=bgt_np, intersect=False
+        )
+        depth_wmparc_np = cls.create_shells(
+            ndist=ndist_np, mask=lobe_wmparc_np, n_shells=n_shells
+        )
         return depth_wmparc_np
 
     @classmethod
     def run(cls, label_array, synthseg_array, depth_number):
         cls.depth_number = depth_number
         cls.outer_size = depth_number - 1
-        depth_np = cls.get_depth_wmparc_np(label_array=label_array, n_shells=depth_number)
-        bullsey_parcellation_array = cls.bullsey_hemi_parcellation(depth_array=depth_np, synthseg_array=label_array)
-        bullsey_depth_merge_array = cls.bullseye_depth_merge(bullsey_parcellation_array, label_array)
+        depth_np = cls.get_depth_wmparc_np(
+            label_array=label_array, n_shells=depth_number
+        )
+        bullsey_parcellation_array = cls.bullsey_hemi_parcellation(
+            depth_array=depth_np, synthseg_array=label_array
+        )
+        bullsey_depth_merge_array = cls.bullseye_depth_merge(
+            bullsey_parcellation_array, label_array
+        )
         bullseye_depth_synthseg_array = cls.bullseye_depth_synthseg_label(
             bullsey_depth_merge_array=bullsey_depth_merge_array,
             label_array=label_array,
-            synthseg_array=synthseg_array)
+            synthseg_array=synthseg_array,
+        )
         return bullseye_depth_synthseg_array
 
 
@@ -1431,7 +1777,7 @@ class CMBProcess:
     # left ventral DC (103) 分 (left thalamus 104)、(to left brainstem 101)
     # ventral DC 分 thalamus and brainstem
     label_david_mapping_CMB = {
-        'left_hemi': {
+        "left_hemi": {
             112: 109,
             117: 109,
             119: 109,
@@ -1465,7 +1811,7 @@ class CMBProcess:
             15: 1,
             24: 1,
         },
-        'right_hemi': {
+        "right_hemi": {
             212: 209,
             217: 209,
             219: 209,
@@ -1495,47 +1841,35 @@ class CMBProcess:
             230: 208,
             231: 208,
             232: 208,
-        }
+        },
     }
-    ventral_DC = {
-        'left_hemi': 103,
-        'right_hemi': 203
-    }
+    ventral_DC = {"left_hemi": 103, "right_hemi": 203}
     # 2023-10-24 BRAIN_STEM不分左右改為 301
-    ventral_DC_mapping = {
-        'left_hemi': [104, 301],
-        'right_hemi': [204, 301]
-    }
+    ventral_DC_mapping = {"left_hemi": [104, 301], "right_hemi": [204, 301]}
     # ventral_DC_mapping = {
     #     'left_hemi': [104, 101],
     #     'right_hemi': [204, 201]
     # }
-    ventral_DC_prerequisite = {
-        'left_hemi': 108,
-        'right_hemi': 208
-    }
+    ventral_DC_prerequisite = {"left_hemi": 108, "right_hemi": 208}
     PREREQUISITE_THRESHOLD = 0.5
 
     BRAIN_STEM = 16
 
     # 2023-10-24 BRAIN_STEM不分左右改為 301
-    brain_stem_mapping_CMB = {
-        'left_hemi': 301,
-        'right_hemi': 301
-    }
+    brain_stem_mapping_CMB = {"left_hemi": 301, "right_hemi": 301}
     # brain_stem_mapping_CMB = {
     #     'left_hemi': 101,
     #     'right_hemi': 201
     # }
     brain_stem_hemi_parcellation = {
-        'left_hemi': {
+        "left_hemi": {
             104: 101,
             105: 101,
         },
-        'right_hemi': {
+        "right_hemi": {
             204: 201,
             205: 201,
-        }
+        },
     }
     decimal_places = 8
 
@@ -1548,13 +1882,13 @@ class CMBProcess:
             for key in cls.label_david_mapping_CMB[hemi]:
                 if cls.label_david_mapping_CMB[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.label_david_mapping_CMB[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.label_david_mapping_CMB[hemi][key]
         return new_label_array
 
     @classmethod
     def brain_stem_parcellation(cls, label_array):
-
         # 輸出 nii.gz 的新 array
         new_label_array = xp.zeros_like(label_array)
         # 取出 brain stem 部分
@@ -1564,15 +1898,19 @@ class CMBProcess:
         np_loss = xp.zeros((index.shape[0], len(hemi_list)))
         np_loss[:, :] = 999999
         for k in cls.brain_stem_hemi_parcellation:
-            if k == 'left_hemi':
+            if k == "left_hemi":
                 i = 0
             else:
                 i = 1
-            hemi_parcellation_mapping_keys = list(cls.brain_stem_hemi_parcellation[k].keys())
+            hemi_parcellation_mapping_keys = list(
+                cls.brain_stem_hemi_parcellation[k].keys()
+            )
             # brain stem  的 Z 軸
             z_aixs_intersect = xp.unique(index[:, 2])
 
-            label_index = xp.argwhere(xp.isin(label_array, hemi_parcellation_mapping_keys))
+            label_index = xp.argwhere(
+                xp.isin(label_array, hemi_parcellation_mapping_keys)
+            )
             loss_list = []
             index_sub_arg_list = []
             # Z 軸切片
@@ -1581,7 +1919,9 @@ class CMBProcess:
                 index_sub_arg = xp.argwhere(index[:, 2] == j)
                 label_index_sub = label_index[label_index[:, 2] == j]
                 if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                    loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                    loss_min = loss_distance(
+                        index_sub, label_index_sub, cls.decimal_places
+                    )
                     loss_list.append(loss_min)
                     # loss_list.append(loss_min.numpy())
                     index_sub_arg_list.append(index_sub_arg)
@@ -1596,8 +1936,9 @@ class CMBProcess:
         # 指定分類
         for ii in xp.unique(new_label):
             select_index = index[xp.argwhere(new_label == ii)].squeeze()
-            new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = cls.brain_stem_mapping_CMB[
-                hemi_list[ii]]
+            new_label_array[
+                select_index[:, 0], select_index[:, 1], select_index[:, 2]
+            ] = cls.brain_stem_mapping_CMB[hemi_list[ii]]
         return new_label_array
 
     @classmethod
@@ -1605,7 +1946,9 @@ class CMBProcess:
         new_label_array = xp.zeros_like(label_array)
         for k in cls.ventral_DC:
             index = xp.argwhere(label_array == cls.ventral_DC[k])
-            prerequisite_index = xp.argwhere(label_array == cls.ventral_DC_prerequisite[k])
+            prerequisite_index = xp.argwhere(
+                label_array == cls.ventral_DC_prerequisite[k]
+            )
 
             index_z_unique = xp.unique(index[:, 2])
             # prerequisite_index_z_unique = xp.unique(prerequisite_index[:, 2])
@@ -1614,16 +1957,25 @@ class CMBProcess:
             # Z 軸切片
             for j in z_aixs_intersect:
                 index_sub = index[index[:, 2] == j]
-                prerequisite_index_sub = prerequisite_index[prerequisite_index[:, 2] == j]
+                prerequisite_index_sub = prerequisite_index[
+                    prerequisite_index[:, 2] == j
+                ]
                 if prerequisite_index_sub.shape[0] > 0:
-                    if prerequisite_index_sub.shape[0] / index_sub.shape[0] >= cls.PREREQUISITE_THRESHOLD:
-                        new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][
-                            0]
+                    if (
+                        prerequisite_index_sub.shape[0] / index_sub.shape[0]
+                        >= cls.PREREQUISITE_THRESHOLD
+                    ):
+                        new_label_array[
+                            index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                        ] = cls.ventral_DC_mapping[k][0]
                     else:
-                        new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][
-                            1]
+                        new_label_array[
+                            index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                        ] = cls.ventral_DC_mapping[k][1]
                 else:
-                    new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][1]
+                    new_label_array[
+                        index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                    ] = cls.ventral_DC_mapping[k][1]
         return new_label_array
 
     @classmethod
@@ -1641,8 +1993,7 @@ class CMBProcess:
 
 class DWIProcess:
     label_david_mapping_DWI = {
-        'left_hemi': {
-
+        "left_hemi": {
             112: 118,
             117: 118,
             119: 118,
@@ -1679,7 +2030,7 @@ class DWIProcess:
             15: 1,
             24: 1,
         },
-        'right_hemi': {
+        "right_hemi": {
             212: 218,
             217: 218,
             219: 218,
@@ -1715,101 +2066,82 @@ class DWIProcess:
         },
     }
 
-    ventral_DC = {
-        'left_hemi': 103,
-        'right_hemi': 203
-    }
+    ventral_DC = {"left_hemi": 103, "right_hemi": 203}
 
     # 2023-10-24 BRAIN_STEM不分左右改為 301
-    ventral_DC_mapping = {
-        'left_hemi': [108, 301],
-        'right_hemi': [208, 301]
-    }
+    ventral_DC_mapping = {"left_hemi": [108, 301], "right_hemi": [208, 301]}
     # ventral_DC_mapping = {
     #     'left_hemi': [108, 101],
     #     'right_hemi': [208, 201]
     # }
-    ventral_DC_prerequisite = {
-        'left_hemi': 108,
-        'right_hemi': 208
-    }
+    ventral_DC_prerequisite = {"left_hemi": 108, "right_hemi": 208}
     PREREQUISITE_THRESHOLD = 0.5
 
     BRAIN_STEM = 16
 
-    BRAIN_STEM_mapping = {
-        'midbrain': 301,
-        'pons': 302,
-        'medulla': 303
-    }
+    BRAIN_STEM_mapping = {"midbrain": 301, "pons": 302, "medulla": 303}
 
     BRAIN_STEM_hemi_shift = {
-        'left_hemi': 50,
-        'right_hemi': 150,
+        "left_hemi": 50,
+        "right_hemi": 150,
     }
 
     brain_stem_mapping_DWI = {
         # midbrain 、pons、 medulla
-        'left_hemi': [101, 102, 103],
-        'right_hemi': [201, 202, 203],
+        "left_hemi": [101, 102, 103],
+        "right_hemi": [201, 202, 203],
     }
 
     brain_stem_hemi = {
-        'left_hemi': {
+        "left_hemi": {
             103: 101,
             104: 101,
             105: 101,
             112: 101,
             115: 101,
         },
-        'right_hemi': {
+        "right_hemi": {
             203: 201,
             204: 201,
             205: 201,
             212: 201,
             215: 201,
-        }
+        },
     }
 
-    frontal_deep_white_matter = {
-        'left_hemi': 129,
-        'right_hemi': 229
-    }
+    frontal_deep_white_matter = {"left_hemi": 129, "right_hemi": 229}
     frontal_deep_white_matter_parcellation = {
-        'left_hemi': [112, 113, 114],
-        'right_hemi': [212, 213, 214],
+        "left_hemi": [112, 113, 114],
+        "right_hemi": [212, 213, 214],
     }
     frontal_deep_white_matter_prerequisite = {
-        'left_hemi': [102, 110],
-        'right_hemi': [202, 210],
+        "left_hemi": [102, 110],
+        "right_hemi": [202, 210],
     }
-    parietal_deep_white_matter = {
-        'left_hemi': 130,
-        'right_hemi': 230
-    }
+    parietal_deep_white_matter = {"left_hemi": 130, "right_hemi": 230}
     parietal_deep_white_matter_parcellation = {
-        'left_hemi': [112, 113, 115],
-        'right_hemi': [212, 213, 215],
+        "left_hemi": [112, 113, 115],
+        "right_hemi": [212, 213, 215],
     }
     parietal_deep_white_matter_prerequisite = {
-        'left_hemi': [102, 110],
-        'right_hemi': [202, 210],
+        "left_hemi": [102, 110],
+        "right_hemi": [202, 210],
     }
 
     decimal_places = 8
 
     bullseye_DPWM = {
-        'left_hemi': 128,
-        'right_hemi': 228,
+        "left_hemi": 128,
+        "right_hemi": 228,
     }
     bullseye_DPWM_parcellation = {
-        'left_hemi': {
+        "left_hemi": {
             129: 129,
             130: 130,
             131: 131,
             132: 132,
         },
-        'right_hemi': {
+        "right_hemi": {
             229: 229,
             230: 230,
             231: 231,
@@ -1826,25 +2158,26 @@ class DWIProcess:
             for key in cls.label_david_mapping_DWI[hemi]:
                 if cls.label_david_mapping_DWI[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.label_david_mapping_DWI[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.label_david_mapping_DWI[hemi][key]
         return new_label_array
 
     @classmethod
-    def DPWM_parcellation(cls, label_array, target='frontal'):
+    def DPWM_parcellation(cls, label_array, target="frontal"):
         # 輸出 nii.gz 的新 array
         new_label_array = xp.zeros_like(label_array)
         # 設定 target 、parcellation
-        if 'frontal' == target:
+        if "frontal" == target:
             target_dict = cls.frontal_deep_white_matter
             parcellation_dict = cls.frontal_deep_white_matter_parcellation
             prerequisite_dict = cls.frontal_deep_white_matter_prerequisite
-        elif 'parietal' == target:
+        elif "parietal" == target:
             target_dict = cls.parietal_deep_white_matter
             parcellation_dict = cls.parietal_deep_white_matter_parcellation
             prerequisite_dict = cls.parietal_deep_white_matter_prerequisite
         else:
-            raise ValueError('target is not definition')
+            raise ValueError("target is not definition")
         #
         for k in target_dict:
             # 取出目標索引
@@ -1859,18 +2192,21 @@ class DWIProcess:
             parcellation_lower = temp_index_z.max()
 
             higher_index = index[index[:, 2] > parcellation_higher]
-            middle_index = index[(index[:, 2] <= parcellation_higher) & (index[:, 2] >= parcellation_lower)]
+            middle_index = index[
+                (index[:, 2] <= parcellation_higher)
+                & (index[:, 2] >= parcellation_lower)
+            ]
             lower_index = index[index[:, 2] < parcellation_lower]
 
-            new_label_array[higher_index[:, 0],
-            higher_index[:, 1],
-            higher_index[:, 2]] = parcellation_dict[k][0]
-            new_label_array[middle_index[:, 0],
-            middle_index[:, 1],
-            middle_index[:, 2]] = parcellation_dict[k][1]
-            new_label_array[lower_index[:, 0],
-            lower_index[:, 1],
-            lower_index[:, 2]] = parcellation_dict[k][2]
+            new_label_array[
+                higher_index[:, 0], higher_index[:, 1], higher_index[:, 2]
+            ] = parcellation_dict[k][0]
+            new_label_array[
+                middle_index[:, 0], middle_index[:, 1], middle_index[:, 2]
+            ] = parcellation_dict[k][1]
+            new_label_array[lower_index[:, 0], lower_index[:, 1], lower_index[:, 2]] = (
+                parcellation_dict[k][2]
+            )
         return new_label_array
 
     @classmethod
@@ -1886,12 +2222,14 @@ class DWIProcess:
             y_center = int(temp_index[:, 1].mean())
             left_index = temp_index[(temp_index[:, 0] <= x_center)]
             right_index = temp_index[(temp_index[:, 0] >= x_center)]
-            new_label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]] = \
-                label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]] + cls.BRAIN_STEM_hemi_shift[
-                    'left_hemi']
-            new_label_array[right_index[:, 0], right_index[:, 1], right_index[:, 2]] = \
-                label_array[right_index[:, 0], right_index[:, 1], right_index[:, 2]] + cls.BRAIN_STEM_hemi_shift[
-                    'right_hemi']
+            new_label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]] = (
+                label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]]
+                + cls.BRAIN_STEM_hemi_shift["left_hemi"]
+            )
+            new_label_array[right_index[:, 0], right_index[:, 1], right_index[:, 2]] = (
+                label_array[right_index[:, 0], right_index[:, 1], right_index[:, 2]]
+                + cls.BRAIN_STEM_hemi_shift["right_hemi"]
+            )
         return new_label_array
 
     # 2023 10 24 改停
@@ -1967,7 +2305,6 @@ class DWIProcess:
     # 2023 10 24 改停
     @classmethod
     def brain_stem_parcellation(cls, label_array):
-
         new_label_array = label_array.copy()
         output_label_array = xp.zeros_like(new_label_array)
 
@@ -1977,12 +2314,15 @@ class DWIProcess:
         ventral_DC_z = xp.argwhere(xp.isin(new_label_array, ventral_DC_list))
         ventral_DC_z_min = ventral_DC_z[:, 2].min()
         ventral_DC_z_max = ventral_DC_z[:, 2].max()
-        middle_index = index[(index[:, 2] <= ventral_DC_z_max) & (index[:, 2] >= ventral_DC_z_min)]
+        middle_index = index[
+            (index[:, 2] <= ventral_DC_z_max) & (index[:, 2] >= ventral_DC_z_min)
+        ]
 
-        new_label_array[middle_index[:, 0], middle_index[:, 1], middle_index[:, 2]] = cls.BRAIN_STEM_mapping[
-            'midbrain']
+        new_label_array[middle_index[:, 0], middle_index[:, 1], middle_index[:, 2]] = (
+            cls.BRAIN_STEM_mapping["midbrain"]
+        )
 
-        #lower_index = index[index[:, 2] < ventral_DC_z_min]
+        # lower_index = index[index[:, 2] < ventral_DC_z_min]
 
         # to  pons、 medulla
         # brain-stem - midbrain
@@ -2012,12 +2352,16 @@ class DWIProcess:
         higher_index = index[index[:, 2] > z_index]
         lower_index = index[index[:, 2] <= z_index]
 
-        new_label_array[higher_index[:, 0], higher_index[:, 1], higher_index[:, 2]] = cls.BRAIN_STEM_mapping['pons']
-        new_label_array[lower_index[:, 0], lower_index[:, 1], lower_index[:, 2]] = cls.BRAIN_STEM_mapping['medulla']
+        new_label_array[higher_index[:, 0], higher_index[:, 1], higher_index[:, 2]] = (
+            cls.BRAIN_STEM_mapping["pons"]
+        )
+        new_label_array[lower_index[:, 0], lower_index[:, 1], lower_index[:, 2]] = (
+            cls.BRAIN_STEM_mapping["medulla"]
+        )
 
-        midbrain_mask = new_label_array == cls.BRAIN_STEM_mapping['midbrain']
-        pons_mask = new_label_array == cls.BRAIN_STEM_mapping['pons']
-        medulla_mask = new_label_array == cls.BRAIN_STEM_mapping['medulla']
+        midbrain_mask = new_label_array == cls.BRAIN_STEM_mapping["midbrain"]
+        pons_mask = new_label_array == cls.BRAIN_STEM_mapping["pons"]
+        medulla_mask = new_label_array == cls.BRAIN_STEM_mapping["medulla"]
         output_label_array[midbrain_mask] = new_label_array[midbrain_mask]
         output_label_array[pons_mask] = new_label_array[pons_mask]
         output_label_array[medulla_mask] = new_label_array[medulla_mask]
@@ -2028,23 +2372,34 @@ class DWIProcess:
         new_label_array = xp.zeros_like(label_array)
         for k in cls.ventral_DC:
             index = xp.argwhere(label_array == cls.ventral_DC[k])
-            prerequisite_index = xp.argwhere(label_array == cls.ventral_DC_prerequisite[k])
+            prerequisite_index = xp.argwhere(
+                label_array == cls.ventral_DC_prerequisite[k]
+            )
 
             index_z_unique = xp.unique(index[:, 2])
             z_aixs_intersect = index_z_unique
             # Z 軸切片
             for j in z_aixs_intersect:
                 index_sub = index[index[:, 2] == j]
-                prerequisite_index_sub = prerequisite_index[prerequisite_index[:, 2] == j]
+                prerequisite_index_sub = prerequisite_index[
+                    prerequisite_index[:, 2] == j
+                ]
                 if prerequisite_index_sub.shape[0] > 0:
-                    if prerequisite_index_sub.shape[0] / index_sub.shape[0] >= cls.PREREQUISITE_THRESHOLD:
-                        new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][
-                            0]
+                    if (
+                        prerequisite_index_sub.shape[0] / index_sub.shape[0]
+                        >= cls.PREREQUISITE_THRESHOLD
+                    ):
+                        new_label_array[
+                            index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                        ] = cls.ventral_DC_mapping[k][0]
                     else:
-                        new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][
-                            1]
+                        new_label_array[
+                            index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                        ] = cls.ventral_DC_mapping[k][1]
                 else:
-                    new_label_array[index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]] = cls.ventral_DC_mapping[k][1]
+                    new_label_array[
+                        index_sub[:, 0], index_sub[:, 1], index_sub[:, 2]
+                    ] = cls.ventral_DC_mapping[k][1]
         return new_label_array
 
     @classmethod
@@ -2056,13 +2411,17 @@ class DWIProcess:
         for k in cls.bullseye_DPWM_parcellation:
             # 取出 bullseye_DPWM 部分
             index = xp.argwhere(label_array == cls.bullseye_DPWM[k])
-            hemi_parcellation_mapping_keys = list(cls.bullseye_DPWM_parcellation[k].keys())
+            hemi_parcellation_mapping_keys = list(
+                cls.bullseye_DPWM_parcellation[k].keys()
+            )
             np_loss = xp.zeros((index.shape[0], len(hemi_parcellation_mapping_keys)))
             np_loss[:, :] = 999999
             # Z 軸
             z_aixs_intersect = xp.unique(index[:, 2])
             for i in range(len(hemi_parcellation_mapping_keys)):
-                label_index = xp.argwhere(label_array == hemi_parcellation_mapping_keys[i])
+                label_index = xp.argwhere(
+                    label_array == hemi_parcellation_mapping_keys[i]
+                )
                 loss_list = []
                 index_sub_arg_list = []
                 for j in z_aixs_intersect:
@@ -2070,7 +2429,9 @@ class DWIProcess:
                     index_sub_arg = xp.argwhere(index[:, 2] == j)
                     label_index_sub = label_index[label_index[:, 2] == j]
                     if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                        loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                        loss_min = loss_distance(
+                            index_sub, label_index_sub, cls.decimal_places
+                        )
                         loss_list.append(loss_min)
                         # loss_list.append(loss_min.numpy())
                         index_sub_arg_list.append(index_sub_arg)
@@ -2085,8 +2446,11 @@ class DWIProcess:
             # 指定分類
             for ii in xp.unique(new_label):
                 select_index = index[xp.argwhere(new_label == ii)].squeeze()
-                new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = \
-                    cls.bullseye_DPWM_parcellation[k][hemi_parcellation_mapping_keys[int(ii)]]
+                new_label_array[
+                    select_index[:, 0], select_index[:, 1], select_index[:, 2]
+                ] = cls.bullseye_DPWM_parcellation[k][
+                    hemi_parcellation_mapping_keys[int(ii)]
+                ]
         return new_label_array
 
     @classmethod
@@ -2112,14 +2476,22 @@ class DWIProcess:
         dwi_array_translate = cls.david_label_to_DWI_label(redivide_label_array)
         brain_stem_array = cls.brain_stem_parcellation(redivide_label_array)
         ventral_DC_array = cls.ventral_DC_parcellation(redivide_label_array)
-        array_frontal_array = cls.DPWM_parcellation(redivide_label_array, target='frontal')
-        array_parietal_array = cls.DPWM_parcellation(redivide_label_array, target='parietal')
+        array_frontal_array = cls.DPWM_parcellation(
+            redivide_label_array, target="frontal"
+        )
+        array_parietal_array = cls.DPWM_parcellation(
+            redivide_label_array, target="parietal"
+        )
         brain_stem_mask = brain_stem_array != 0
         ventral_DC_mask = ventral_DC_array != 0
         array_frontal_mask = array_frontal_array != 0
         array_parietal_mask = array_parietal_array != 0
-        dwi_array_translate[array_frontal_mask] = array_frontal_array[array_frontal_mask]
-        dwi_array_translate[array_parietal_mask] = array_parietal_array[array_parietal_mask]
+        dwi_array_translate[array_frontal_mask] = array_frontal_array[
+            array_frontal_mask
+        ]
+        dwi_array_translate[array_parietal_mask] = array_parietal_array[
+            array_parietal_mask
+        ]
         dwi_array_translate[brain_stem_mask] = brain_stem_array[brain_stem_mask]
         dwi_array_translate[ventral_DC_mask] = ventral_DC_array[ventral_DC_mask]
         dwi_array = cls.inverse_left_right_translate(FLIP, dwi_array_translate)
@@ -2144,7 +2516,7 @@ class DWIProcess:
 
 class WMHProcess:
     label_david_mapping_WMH = {
-        'left_hemi': {
+        "left_hemi": {
             112: 0,
             117: 0,
             119: 110,
@@ -2181,7 +2553,7 @@ class WMHProcess:
             15: 0,
             24: 0,
         },
-        'right_hemi': {
+        "right_hemi": {
             212: 0,
             217: 0,
             219: 210,
@@ -2218,29 +2590,25 @@ class WMHProcess:
 
     BRAIN_STEM = 16
     # 2023-10-25 BRAIN_STEM不分左右改為 301
-    brain_stem_mapping = {
-        'left_hemi': 301,
-        'right_hemi': 301
-    }
+    brain_stem_mapping = {"left_hemi": 301, "right_hemi": 301}
     # brain_stem_mapping = {
     #     'left_hemi': 101,
     #     'right_hemi': 201
     # }
     brain_stem_hemi_parcellation = {
-        'left_hemi': {
+        "left_hemi": {
             104: 101,
             105: 101,
         },
-        'right_hemi': {
+        "right_hemi": {
             204: 201,
             205: 201,
-        }
+        },
     }
     decimal_places = 8
 
     @classmethod
     def brain_stem_parcellation(cls, label_array):
-
         # 輸出 nii.gz 的新 array
         new_label_array = xp.zeros_like(label_array)
         # 取出 brain stem 部分
@@ -2250,15 +2618,19 @@ class WMHProcess:
         np_loss = xp.zeros((index.shape[0], len(hemi_list)))
         np_loss[:, :] = 999999
         for k in cls.brain_stem_hemi_parcellation:
-            if k == 'left_hemi':
+            if k == "left_hemi":
                 i = 0
             else:
                 i = 1
-            hemi_parcellation_mapping_keys = list(cls.brain_stem_hemi_parcellation[k].keys())
+            hemi_parcellation_mapping_keys = list(
+                cls.brain_stem_hemi_parcellation[k].keys()
+            )
             # brain stem  的 Z 軸
             z_aixs_intersect = xp.unique(index[:, 2])
 
-            label_index = xp.argwhere(xp.isin(label_array, hemi_parcellation_mapping_keys))
+            label_index = xp.argwhere(
+                xp.isin(label_array, hemi_parcellation_mapping_keys)
+            )
             loss_list = []
             index_sub_arg_list = []
             # Z 軸切片
@@ -2267,7 +2639,9 @@ class WMHProcess:
                 index_sub_arg = xp.argwhere(index[:, 2] == j)
                 label_index_sub = label_index[label_index[:, 2] == j]
                 if (index_sub.shape[0] > 0) and (label_index_sub.shape[0] > 0):
-                    loss_min = loss_distance(index_sub, label_index_sub, cls.decimal_places)
+                    loss_min = loss_distance(
+                        index_sub, label_index_sub, cls.decimal_places
+                    )
                     loss_list.append(loss_min)
                     # loss_list.append(loss_min.numpy())
                     index_sub_arg_list.append(index_sub_arg)
@@ -2282,8 +2656,9 @@ class WMHProcess:
         # 指定分類
         for ii in xp.unique(new_label):
             select_index = index[xp.argwhere(new_label == ii)].squeeze()
-            new_label_array[select_index[:, 0], select_index[:, 1], select_index[:, 2]] = cls.brain_stem_mapping[
-                hemi_list[ii]]
+            new_label_array[
+                select_index[:, 0], select_index[:, 1], select_index[:, 2]
+            ] = cls.brain_stem_mapping[hemi_list[ii]]
         return new_label_array
 
     @classmethod
@@ -2295,8 +2670,9 @@ class WMHProcess:
             for key in cls.label_david_mapping_WMH[hemi]:
                 if cls.label_david_mapping_WMH[hemi][key] is not None:
                     index_mask = xp.argwhere(label_array == key)
-                    new_label_array[index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]] = \
-                        cls.label_david_mapping_WMH[hemi][key]
+                    new_label_array[
+                        index_mask[:, 0], index_mask[:, 1], index_mask[:, 2]
+                    ] = cls.label_david_mapping_WMH[hemi][key]
         return new_label_array
 
     @classmethod
@@ -2310,25 +2686,42 @@ class WMHProcess:
 
 class CorpusCallosumParcellationForWMHProcess(CorpusCallosumParcellation):
     @classmethod
-    def _get_df_lateral_ventricle(cls, left_lateral_ventricle_index, right_lateral_ventricle_index):
+    def _get_df_lateral_ventricle(
+        cls, left_lateral_ventricle_index, right_lateral_ventricle_index
+    ):
         # print('CorpusCallosumParcellationForWMHProcess _get_df_lateral_ventricle')
         lateral_ventricle_vector = []
         left_lateral_ventricle_z_axis = xp.unique(left_lateral_ventricle_index[:, 2])
         right_lateral_ventricle_z_axis = xp.unique(right_lateral_ventricle_index[:, 2])
-        z_axis_intersect = xp.intersect1d(left_lateral_ventricle_z_axis, right_lateral_ventricle_z_axis)
+        z_axis_intersect = xp.intersect1d(
+            left_lateral_ventricle_z_axis, right_lateral_ventricle_z_axis
+        )
         for i in z_axis_intersect:
-            left_vector_x = left_lateral_ventricle_index[left_lateral_ventricle_index[:, 2] == i][:, 1]
-            right_vector_x = right_lateral_ventricle_index[right_lateral_ventricle_index[:, 2] == i][:, 1]
+            left_vector_x = left_lateral_ventricle_index[
+                left_lateral_ventricle_index[:, 2] == i
+            ][:, 1]
+            right_vector_x = right_lateral_ventricle_index[
+                right_lateral_ventricle_index[:, 2] == i
+            ][:, 1]
 
-            lateral_ventricle_vector.append([i,
-                                             xp.percentile(left_vector_x, 50, axis=0).astype(int),
-                                             xp.percentile(right_vector_x, 50, axis=0).astype(int)])
+            lateral_ventricle_vector.append(
+                [
+                    i,
+                    xp.percentile(left_vector_x, 50, axis=0).astype(int),
+                    xp.percentile(right_vector_x, 50, axis=0).astype(int),
+                ]
+            )
 
         intersect_lateral_ventricle_array = xp.array(lateral_ventricle_vector)
-        df_lateral_ventricle = pd.DataFrame(asnumpy(intersect_lateral_ventricle_array), columns=['lateral_ventricle_z',
-                                                                                        'left_lateral_ventricle_x',
-                                                                                        'right_lateral_ventricle_x'])
-        df_lateral_ventricle.index = df_lateral_ventricle['lateral_ventricle_z']
+        df_lateral_ventricle = pd.DataFrame(
+            asnumpy(intersect_lateral_ventricle_array),
+            columns=[
+                "lateral_ventricle_z",
+                "left_lateral_ventricle_x",
+                "right_lateral_ventricle_x",
+            ],
+        )
+        df_lateral_ventricle.index = df_lateral_ventricle["lateral_ventricle_z"]
         return df_lateral_ventricle
 
 
@@ -2359,6 +2752,7 @@ def left_right_translate(slice):
     else:
         return True, xp.flip(slice, 1)
 
+
 def inverse_left_right_translate(flip, slice):
     """Inverse the left-right flipping if necessary."""
     if flip:
@@ -2367,11 +2761,12 @@ def inverse_left_right_translate(flip, slice):
         return slice
 
 
-
 def process_file(file_path, depth_number, args, synthseg_array, synthseg33_array):
     """Process a single file for different algorithms."""
     seg_array, synthseg_array_wm = run_with_WhiteMatterParcellation(
-        synthseg_array=synthseg_array, synthseg33=synthseg33_array, depth_number=depth_number
+        synthseg_array=synthseg_array,
+        synthseg33=synthseg33_array,
+        depth_number=depth_number,
     )
 
     if args.all or args.wm_file:
@@ -2386,8 +2781,11 @@ def process_file(file_path, depth_number, args, synthseg_array, synthseg33_array
         save_nifti(dwi_array, synthseg_array, args.dwi_file_list, file_path)
 
     if args.all or args.wmh:
-        wmh_array = run_wmh(synthseg_array=synthseg_array, synthseg_array_wm=synthseg_array_wm,
-                            depth_number=depth_number)
+        wmh_array = run_wmh(
+            synthseg_array=synthseg_array,
+            synthseg_array_wm=synthseg_array_wm,
+            depth_number=depth_number,
+        )
         save_nifti(wmh_array, synthseg_array, args.wmh_file_list, file_path)
 
 
@@ -2399,24 +2797,28 @@ def save_nifti(data_array, reference_nii, file_list, file_path):
 
 def replace_suffix(filename, new_suffix):
     """Replace the .nii or .nii.gz suffix with a new one."""
-    pattern = r'\.nii\.gz$|\.nii$'
+    pattern = r"\.nii\.gz$|\.nii$"
     return re.sub(pattern, new_suffix, filename)
+
 
 def prepare_file_lists(args, file_list):
     """Prepare output file lists based on arguments."""
     suffix_map = {
-        'cmb_file': args.cmb_file,
-        'dwi_file': args.dwi_file,
-        'wmh_file': args.wmh_file
+        "cmb_file": args.cmb_file,
+        "dwi_file": args.dwi_file,
+        "wmh_file": args.wmh_file,
     }
     file_lists = {}
     for key, suffix in suffix_map.items():
-        if getattr(args, key.split('_')[0]):
-            file_lists[key] = [replace_suffix(f, f'_{suffix}.nii.gz') for f in file_list]
+        if getattr(args, key.split("_")[0]):
+            file_lists[key] = [
+                replace_suffix(f, f"_{suffix}.nii.gz") for f in file_list
+            ]
         else:
             file_lists[key] = []
-    file_lists['wm_file'] = [replace_suffix(f, '_david.nii.gz') for f in file_list]
+    file_lists["wm_file"] = [replace_suffix(f, "_david.nii.gz") for f in file_list]
     return file_lists
+
 
 def run(synthseg_array, depth_number):
     """Run the parcellation process."""
@@ -2424,9 +2826,15 @@ def run(synthseg_array, depth_number):
     synthseg_array_wm = WhiteMatterParcellation.run(synthseg_array)
     synthseg_array_cc = CorpusCallosumParcellation.run(synthseg_array_wm)
     synthseg_array_ec = ECICParcellation.run(synthseg_array_wm)
-    revert_array = WhiteMatterParcellation.re_run(synthseg_array_wm, synthseg_array_cc, synthseg_array_ec)
-    re_white_matter_parcellation_array = WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
-    synthseg_array_bullseye = BullseyeProcess.run(re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number)
+    revert_array = WhiteMatterParcellation.re_run(
+        synthseg_array_wm, synthseg_array_cc, synthseg_array_ec
+    )
+    re_white_matter_parcellation_array = (
+        WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
+    )
+    synthseg_array_bullseye = BullseyeProcess.run(
+        re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number
+    )
     out_array = re_white_matter_parcellation_array.copy()
     cc_mask = synthseg_array_cc != 0
     ecic_mask = synthseg_array_ec != 0
@@ -2442,12 +2850,20 @@ def run_with_WhiteMatterParcellation(synthseg_array, synthseg33, depth_number):
     """Run parcellation with WhiteMatterParcellation."""
     synthseg_array = synthseg_array.round(0).astype(int)
     synthseg33_array = synthseg33.round(0).astype(int)
-    synthseg_array_wm = WhiteMatterParcellation2.run(synthseg_array=synthseg_array, synthseg33_array=synthseg33_array)
+    synthseg_array_wm = WhiteMatterParcellation2.run(
+        synthseg_array=synthseg_array, synthseg33_array=synthseg33_array
+    )
     synthseg_array_cc = CorpusCallosumParcellation.run(synthseg_array_wm)
     synthseg_array_ec = ECICParcellation.run(synthseg_array_wm)
-    revert_array = WhiteMatterParcellation.re_run(synthseg_array_wm, synthseg_array_cc, synthseg_array_ec)
-    re_white_matter_parcellation_array = WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
-    synthseg_array_bullseye = BullseyeProcess.run(re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number)
+    revert_array = WhiteMatterParcellation.re_run(
+        synthseg_array_wm, synthseg_array_cc, synthseg_array_ec
+    )
+    re_white_matter_parcellation_array = (
+        WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
+    )
+    synthseg_array_bullseye = BullseyeProcess.run(
+        re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number
+    )
     out_array = re_white_matter_parcellation_array.copy()
     cc_mask = synthseg_array_cc != 0
     ecic_mask = synthseg_array_ec != 0
@@ -2461,7 +2877,9 @@ def run_with_WhiteMatterParcellation(synthseg_array, synthseg33, depth_number):
 
 def run_cmb(synthseg_array, depth_number=5):
     """Run CMB process."""
-    david_label_array, synthseg_array_wm = run(synthseg_array=synthseg_array, depth_number=depth_number)
+    david_label_array, synthseg_array_wm = run(
+        synthseg_array=synthseg_array, depth_number=depth_number
+    )
     return CMBProcess.run(david_label_array)
 
 
@@ -2470,9 +2888,15 @@ def run_wmh(synthseg_array, synthseg_array_wm, depth_number=5):
     synthseg_array = synthseg_array.round(0).astype(int)
     synthseg_array_cc = CorpusCallosumParcellationForWMHProcess.run(synthseg_array_wm)
     synthseg_array_ec = ECICParcellation.run(synthseg_array_wm)
-    revert_array = WhiteMatterParcellation.re_run(synthseg_array_wm, synthseg_array_cc, synthseg_array_ec)
-    re_white_matter_parcellation_array = WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
-    synthseg_array_bullseye = BullseyeProcess.run(re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number)
+    revert_array = WhiteMatterParcellation.re_run(
+        synthseg_array_wm, synthseg_array_cc, synthseg_array_ec
+    )
+    re_white_matter_parcellation_array = (
+        WhiteMatterParcellation.re_white_matter_parcellation(revert_array)
+    )
+    synthseg_array_bullseye = BullseyeProcess.run(
+        re_white_matter_parcellation_array, synthseg_array, depth_number=depth_number
+    )
     out_array = re_white_matter_parcellation_array.copy()
     cc_mask = synthseg_array_cc != 0
     ecic_mask = synthseg_array_ec != 0
@@ -2486,7 +2910,9 @@ def run_wmh(synthseg_array, synthseg_array_wm, depth_number=5):
 
 def run_dwi(synthseg_array, depth_number=5):
     """Run DWI process."""
-    david_label_array, synthseg_array_wm = run(synthseg_array=synthseg_array, depth_number=depth_number)
+    david_label_array, synthseg_array_wm = run(
+        synthseg_array=synthseg_array, depth_number=depth_number
+    )
     return DWIProcess.run(david_label_array)
 
 
@@ -2494,9 +2920,9 @@ def str_to_bool(v):
     """Convert string to boolean."""
     if isinstance(v, bool):
         return v
-    if v.lower() in ('false', 'no', 'n', 'f'):
+    if v.lower() in ("false", "no", "n", "f"):
         return False
-    elif v.lower() in ('true', 'yes', 'y', 't'):
+    elif v.lower() in ("true", "yes", "y", "t"):
         return True
     else:
         raise argparse.ArgumentTypeError("Bool value expected")
@@ -2505,43 +2931,115 @@ def str_to_bool(v):
 def main(args):
     """Main function to process input arguments and run the parcellation."""
     # Prepare input and output paths
-    file_list = [args.input] if args.input.endswith(('nii', 'nii.gz')) else glob.glob(f'{args.input}/*.nii*', recursive=True)
-    assert file_list, 'No nii.gz files found'
+    file_list = (
+        [args.input]
+        if args.input.endswith(("nii", "nii.gz"))
+        else glob.glob(f"{args.input}/*.nii*", recursive=True)
+    )
+    assert file_list, "No nii.gz files found"
     if args.input_name:
         file_list = [f for f in file_list if args.input_name in f]
-    out_path = args.output if args.output else (args.input if os.path.isdir(args.input) else os.path.dirname(args.input))
+    out_path = (
+        args.output
+        if args.output
+        else (args.input if os.path.isdir(args.input) else os.path.dirname(args.input))
+    )
     os.makedirs(out_path, exist_ok=True)
 
     # Prepare file lists
-    args.cmb_file_list, args.dwi_file_list, args.wmh_file_list, args.wm_file_list = prepare_file_lists(args, file_list)
+    args.cmb_file_list, args.dwi_file_list, args.wmh_file_list, args.wm_file_list = (
+        prepare_file_lists(args, file_list)
+    )
     depth_number = args.depth_number or 5
 
     # Process each file
     for file_path in file_list:
         synthseg_nii = nib.load(file_path)
         synthseg_array = xp.array(synthseg_nii.dataobj)
-        synthseg33_nii = nib.load(file_path.replace('synthseg.nii.gz', 'synthseg33.nii.gz'))
+        synthseg33_nii = nib.load(
+            file_path.replace("synthseg.nii.gz", "synthseg33.nii.gz")
+        )
         synthseg33_array = xp.array(synthseg33_nii.dataobj)
         try:
-            process_file(file_path, depth_number, args, synthseg_array, synthseg33_array)
+            process_file(
+                file_path, depth_number, args, synthseg_array, synthseg33_array
+            )
         except Exception as e:
-            print(f'{file_path} processing error: {e}')
+            print(f"{file_path} processing error: {e}")
             traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', required=True, help="Input synthseg file path or folder.")
-    parser.add_argument('--input_name', help="Specific input file name to process.")
-    parser.add_argument('-o', '--output', help="Output path for result files.")
-    parser.add_argument('--all', type=str_to_bool, default=True, help="Run all algorithms.")
-    parser.add_argument('--david', dest='wm_file', type=str_to_bool, default=True, help="Output white matter parcellation file.")
-    parser.add_argument('--CMB', '--cmb', dest='cmb', type=str_to_bool, default=False, help="Output CMB Mask.")
-    parser.add_argument('--CMBFile', '--cmbFile', dest='cmb_file', type=str, default='CMB', help="CMB Mask file name.")
-    parser.add_argument('--DWI', '--dwi', dest='dwi', type=str_to_bool, default=False, help="Output DWI Mask.")
-    parser.add_argument('--DWIFile', '--dwiFile', dest='dwi_file', type=str, default='DWI', help="DWI Mask file name.")
-    parser.add_argument('--WMH', '--wmh', dest='wmh', type=str_to_bool, default=False, help="Output WMH Mask.")
-    parser.add_argument('--WMHFile', '--wmhFile', dest='wmh_file', type=str, default='WMH', help="WMH Mask file name.")
-    parser.add_argument('--depth_number', type=int, default=5, choices=range(4, 11), help="Deep white matter parameter.")
+    parser.add_argument(
+        "-i", "--input", required=True, help="Input synthseg file path or folder."
+    )
+    parser.add_argument("--input_name", help="Specific input file name to process.")
+    parser.add_argument("-o", "--output", help="Output path for result files.")
+    parser.add_argument(
+        "--all", type=str_to_bool, default=True, help="Run all algorithms."
+    )
+    parser.add_argument(
+        "--david",
+        dest="wm_file",
+        type=str_to_bool,
+        default=True,
+        help="Output white matter parcellation file.",
+    )
+    parser.add_argument(
+        "--CMB",
+        "--cmb",
+        dest="cmb",
+        type=str_to_bool,
+        default=False,
+        help="Output CMB Mask.",
+    )
+    parser.add_argument(
+        "--CMBFile",
+        "--cmbFile",
+        dest="cmb_file",
+        type=str,
+        default="CMB",
+        help="CMB Mask file name.",
+    )
+    parser.add_argument(
+        "--DWI",
+        "--dwi",
+        dest="dwi",
+        type=str_to_bool,
+        default=False,
+        help="Output DWI Mask.",
+    )
+    parser.add_argument(
+        "--DWIFile",
+        "--dwiFile",
+        dest="dwi_file",
+        type=str,
+        default="DWI",
+        help="DWI Mask file name.",
+    )
+    parser.add_argument(
+        "--WMH",
+        "--wmh",
+        dest="wmh",
+        type=str_to_bool,
+        default=False,
+        help="Output WMH Mask.",
+    )
+    parser.add_argument(
+        "--WMHFile",
+        "--wmhFile",
+        dest="wmh_file",
+        type=str,
+        default="WMH",
+        help="WMH Mask file name.",
+    )
+    parser.add_argument(
+        "--depth_number",
+        type=int,
+        default=5,
+        choices=range(4, 11),
+        help="Deep white matter parameter.",
+    )
     args = parser.parse_args()
     main(args)

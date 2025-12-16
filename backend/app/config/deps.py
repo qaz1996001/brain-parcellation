@@ -3,19 +3,11 @@
 import datetime
 import inspect
 from typing import (
-    TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
-    Literal,
-    NamedTuple,
     Optional,
-    TypeVar,
-    Union,
-    cast,
-    overload,
 )
-from uuid import UUID
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
@@ -30,17 +22,21 @@ from advanced_alchemy.filters import (
 )
 
 from advanced_alchemy.utils.text import camelize
-from typing import TYPE_CHECKING, Callable
 
-from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    FilterTypes,
+from advanced_alchemy.extensions.fastapi.providers import (
+    DEPENDENCY_DEFAULTS,
+    FilterConfig,
+    _make_hashable,
 )
-from advanced_alchemy.extensions.fastapi.providers import DEPENDENCY_DEFAULTS, FilterConfig, _make_hashable
-from advanced_alchemy.extensions.fastapi.providers import DependencyCache, SortOrder, FieldNameType
-from advanced_alchemy.extensions.fastapi.providers import _aggregate_filter_function,DependencyDefaults
-
+from advanced_alchemy.extensions.fastapi.providers import (
+    DependencyCache,
+    SortOrder,
+    FieldNameType,
+)
+from advanced_alchemy.extensions.fastapi.providers import (
+    _aggregate_filter_function,
+    DependencyDefaults,
+)
 
 
 dep_cache = DependencyCache()
@@ -71,13 +67,21 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = None,
         ) -> Optional[CollectionFilter[id_filter]]:  # type: ignore
-            return CollectionFilter[id_filter](field_name=config.get("id_field", "id"), values=ids) if ids else None  # type: ignore
+            return (
+                CollectionFilter[id_filter](
+                    field_name=config.get("id_field", "id"), values=ids
+                )
+                if ids
+                else None
+            )  # type: ignore
 
         params.append(
             inspect.Parameter(
                 name=dep_defaults.ID_FILTER_DEPENDENCY_KEY,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)],  # type: ignore
+                annotation=Annotated[
+                    Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)
+                ],  # type: ignore
             )
         )
         annotations[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Annotated[
@@ -111,18 +115,32 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             # Validate both parameters regardless of endpoint path
             if before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(
+                        before.replace("Z", "+00:00")
+                    )
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdBefore"], "msg": "Invalid date format"}]
+                        errors=[
+                            {
+                                "loc": ["query", "createdBefore"],
+                                "msg": "Invalid date format",
+                            }
+                        ]
                     ) from e
 
             if after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(
+                        after.replace("Z", "+00:00")
+                    )
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "createdAfter"], "msg": "Invalid date format"}]
+                        errors=[
+                            {
+                                "loc": ["query", "createdAfter"],
+                                "msg": "Invalid date format",
+                            }
+                        ]
                     ) from e
 
             return (
@@ -136,10 +154,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)],
+                annotation=Annotated[
+                    Optional[BeforeAfter], Depends(provide_created_at_filter)
+                ],
             )
         )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_created_at_filter)]
+        annotations[param_name] = Annotated[
+            Optional[BeforeAfter], Depends(provide_created_at_filter)
+        ]
 
     # Add updated_at filter providers
     if config.get("updated_at", False):
@@ -168,18 +190,32 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             # Validate both parameters regardless of endpoint path
             if before is not None:
                 try:
-                    before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                    before_dt = datetime.datetime.fromisoformat(
+                        before.replace("Z", "+00:00")
+                    )
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedBefore"], "msg": "Invalid date format"}]
+                        errors=[
+                            {
+                                "loc": ["query", "updatedBefore"],
+                                "msg": "Invalid date format",
+                            }
+                        ]
                     ) from e
 
             if after is not None:
                 try:
-                    after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                    after_dt = datetime.datetime.fromisoformat(
+                        after.replace("Z", "+00:00")
+                    )
                 except (ValueError, TypeError, AttributeError) as e:
                     raise RequestValidationError(
-                        errors=[{"loc": ["query", "updatedAfter"], "msg": "Invalid date format"}]
+                        errors=[
+                            {
+                                "loc": ["query", "updatedAfter"],
+                                "msg": "Invalid date format",
+                            }
+                        ]
                     ) from e
 
             return (
@@ -193,36 +229,44 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)],
+                annotation=Annotated[
+                    Optional[BeforeAfter], Depends(provide_updated_at_filter)
+                ],
             )
         )
-        annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provide_updated_at_filter)]
+        annotations[param_name] = Annotated[
+            Optional[BeforeAfter], Depends(provide_updated_at_filter)
+        ]
 
     if before_after_fields := config.get("before_after_fields"):
-        before_after_fields = {before_after_fields} if isinstance(before_after_fields,
-                                                                  (str, FieldNameType)) else before_after_fields
+        before_after_fields = (
+            {before_after_fields}
+            if isinstance(before_after_fields, (str, FieldNameType))
+            else before_after_fields
+        )
 
         for field_def in before_after_fields:
+
             def create_before_after_filter_provider(
-                    local_field_name: str,
+                local_field_name: str,
             ) -> Callable[..., Optional[BeforeAfter]]:
                 def provide_before_after_filter(
-                        before: Annotated[
-                            Optional[str],
-                            Query(
-                                alias=f"{camelize(local_field_name)}Before",
-                                description=f"Filter by {local_field_name} before this timestamp.",
-                                json_schema_extra={"format": "date-time"},
-                            ),
-                        ] = None,
-                        after: Annotated[
-                            Optional[str],
-                            Query(
-                                alias=f"{camelize(local_field_name)}After",
-                                description=f"Filter by {local_field_name} after this timestamp.",
-                                json_schema_extra={"format": "date-time"},
-                            ),
-                        ] = None,
+                    before: Annotated[
+                        Optional[str],
+                        Query(
+                            alias=f"{camelize(local_field_name)}Before",
+                            description=f"Filter by {local_field_name} before this timestamp.",
+                            json_schema_extra={"format": "date-time"},
+                        ),
+                    ] = None,
+                    after: Annotated[
+                        Optional[str],
+                        Query(
+                            alias=f"{camelize(local_field_name)}After",
+                            description=f"Filter by {local_field_name} after this timestamp.",
+                            json_schema_extra={"format": "date-time"},
+                        ),
+                    ] = None,
                 ) -> Optional[BeforeAfter]:
                     before_dt = None
                     after_dt = None
@@ -230,24 +274,46 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     # Validate both parameters regardless of endpoint path
                     if before is not None:
                         try:
-                            before_dt = datetime.datetime.fromisoformat(before.replace("Z", "+00:00"))
+                            before_dt = datetime.datetime.fromisoformat(
+                                before.replace("Z", "+00:00")
+                            )
                         except (ValueError, TypeError, AttributeError) as e:
                             raise RequestValidationError(
-                                errors=[{"loc": ["query", f"{camelize(local_field_name)}Before"],
-                                         "msg": "Invalid date format"}]
+                                errors=[
+                                    {
+                                        "loc": [
+                                            "query",
+                                            f"{camelize(local_field_name)}Before",
+                                        ],
+                                        "msg": "Invalid date format",
+                                    }
+                                ]
                             ) from e
 
                     if after is not None:
                         try:
-                            after_dt = datetime.datetime.fromisoformat(after.replace("Z", "+00:00"))
+                            after_dt = datetime.datetime.fromisoformat(
+                                after.replace("Z", "+00:00")
+                            )
                         except (ValueError, TypeError, AttributeError) as e:
                             raise RequestValidationError(
-                                errors=[{"loc": ["query", f"{camelize(local_field_name)}After"],
-                                         "msg": "Invalid date format"}]
+                                errors=[
+                                    {
+                                        "loc": [
+                                            "query",
+                                            f"{camelize(local_field_name)}After",
+                                        ],
+                                        "msg": "Invalid date format",
+                                    }
+                                ]
                             ) from e
 
                     return (
-                        BeforeAfter(field_name=local_field_name, before=before_dt, after=after_dt)
+                        BeforeAfter(
+                            field_name=local_field_name,
+                            before=before_dt,
+                            after=after_dt,
+                        )
                         if before_dt or after_dt
                         else None
                     )
@@ -264,7 +330,9 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     annotation=Annotated[Optional[BeforeAfter], Depends(provider)],
                 )
             )
-            annotations[param_name] = Annotated[Optional[BeforeAfter], Depends(provider)]
+            annotations[param_name] = Annotated[
+                Optional[BeforeAfter], Depends(provider)
+            ]
 
     # Add pagination filter providers
     if config.get("pagination_type") == "limit_offset":
@@ -294,10 +362,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[LimitOffset, Depends(provide_limit_offset_pagination)],
+                annotation=Annotated[
+                    LimitOffset, Depends(provide_limit_offset_pagination)
+                ],
             )
         )
-        annotations[param_name] = Annotated[LimitOffset, Depends(provide_limit_offset_pagination)]
+        annotations[param_name] = Annotated[
+            LimitOffset, Depends(provide_limit_offset_pagination)
+        ]
 
     # Add search filter providers
     if search_fields := config.get("search"):
@@ -320,7 +392,11 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = config.get("search_ignore_case", False),
         ) -> SearchFilter:
-            field_names = set(search_fields.split(",")) if isinstance(search_fields, str) else search_fields
+            field_names = (
+                set(search_fields.split(","))
+                if isinstance(search_fields, str)
+                else search_fields
+            )
 
             return SearchFilter(
                 field_name=field_names,
@@ -333,10 +409,14 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             inspect.Parameter(
                 name=param_name,
                 kind=inspect.Parameter.KEYWORD_ONLY,
-                annotation=Annotated[Optional[SearchFilter], Depends(provide_search_filter)],
+                annotation=Annotated[
+                    Optional[SearchFilter], Depends(provide_search_filter)
+                ],
             )
         )
-        annotations[param_name] = Annotated[Optional[SearchFilter], Depends(provide_search_filter)]
+        annotations[param_name] = Annotated[
+            Optional[SearchFilter], Depends(provide_search_filter)
+        ]
 
     # Add sort filter providers
     if sort_field := config.get("sort_field"):
@@ -360,7 +440,9 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 ),
             ] = sort_order_default,
         ) -> OrderBy:
-            return OrderBy(field_name=field_name, sort_order=sort_order or sort_order_default)
+            return OrderBy(
+                field_name=field_name, sort_order=sort_order or sort_order_default
+            )
 
         param_name = dep_defaults.ORDER_BY_FILTER_DEPENDENCY_KEY
         params.append(
@@ -374,7 +456,11 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
 
     # Add not_in filter providers
     if not_in_fields := config.get("not_in_fields"):
-        not_in_fields = {not_in_fields} if isinstance(not_in_fields, (str, FieldNameType)) else not_in_fields
+        not_in_fields = (
+            {not_in_fields}
+            if isinstance(not_in_fields, (str, FieldNameType))
+            else not_in_fields
+        )
         for field_def in not_in_fields:
 
             def create_not_in_filter_provider(  # pyright: ignore
@@ -390,24 +476,39 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                         ),
                     ] = None,
                 ) -> Optional[NotInCollectionFilter[local_field_type]]:  # type: ignore
-                    return NotInCollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                    return (
+                        NotInCollectionFilter(
+                            field_name=local_field_name, values=values
+                        )
+                        if values
+                        else None
+                    )  # pyright: ignore
 
                 return provide_not_in_filter  # pyright: ignore
 
-            provider = create_not_in_filter_provider(field_def.name, field_def.type_hint)  # pyright: ignore
+            provider = create_not_in_filter_provider(
+                field_def.name, field_def.type_hint
+            )  # pyright: ignore
             param_name = f"{field_def.name}_not_in_filter"
             params.append(
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
+                    annotation=Annotated[
+                        Optional[NotInCollectionFilter[field_def.type_hint]],
+                        Depends(provider),
+                    ],  # type: ignore
                 )
             )
-            annotations[param_name] = Annotated[Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
+            annotations[param_name] = Annotated[
+                Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)
+            ]  # type: ignore
 
     # Add in filter providers
     if in_fields := config.get("in_fields"):
-        in_fields = {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+        in_fields = (
+            {in_fields} if isinstance(in_fields, (str, FieldNameType)) else in_fields
+        )
         for field_def in in_fields:
 
             def create_in_filter_provider(  # pyright: ignore
@@ -423,7 +524,11 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                         ),
                     ] = None,
                 ) -> Optional[CollectionFilter[local_field_type]]:  # type: ignore
-                    return CollectionFilter(field_name=local_field_name, values=values) if values else None  # pyright: ignore
+                    return (
+                        CollectionFilter(field_name=local_field_name, values=values)
+                        if values
+                        else None
+                    )  # pyright: ignore
 
                 return provide_in_filter  # pyright: ignore
 
@@ -433,14 +538,21 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 inspect.Parameter(
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
-                    annotation=Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)],  # type: ignore
+                    annotation=Annotated[
+                        Optional[CollectionFilter[field_def.type_hint]],
+                        Depends(provider),
+                    ],  # type: ignore
                 )
             )
-            annotations[param_name] = Annotated[Optional[CollectionFilter[field_def.type_hint]], Depends(provider)]  # type: ignore
+            annotations[param_name] = Annotated[
+                Optional[CollectionFilter[field_def.type_hint]], Depends(provider)
+            ]  # type: ignore
 
     _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore
         parameters=params,
-        return_annotation=Annotated[list[FilterTypes], Depends(_aggregate_filter_function)],
+        return_annotation=Annotated[
+            list[FilterTypes], Depends(_aggregate_filter_function)
+        ],
     )
 
     return _aggregate_filter_function

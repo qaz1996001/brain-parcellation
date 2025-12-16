@@ -72,15 +72,6 @@ sudo systemctl start brain-parcellation.service
 
 ## 📊 使用命令
 
-### 查看服务状态
-
-```bash
-# 查看当前状态
-sudo systemctl status brain-parcellation.service
-
-# 查看详细状态
-systemctl show brain-parcellation.service
-```
 
 ### 查看日志
 
@@ -107,6 +98,8 @@ sudo tail -f /var/log/brain-parcellation/shutdown.log
 ### 启动、停止、重启
 
 ```bash
+
+
 # 启动服务
 sudo systemctl start brain-parcellation.service
 
@@ -118,7 +111,14 @@ sudo systemctl restart brain-parcellation.service
 
 # 重新加载（不中断服务）
 sudo systemctl reload brain-parcellation.service
+
+# 查看当前状态
+sudo systemctl status brain-parcellation.service
+
+# 查看详细状态
+systemctl show brain-parcellation.service
 ```
+
 
 ### 禁用或移除
 
@@ -128,21 +128,6 @@ sudo systemctl disable brain-parcellation.service
 
 # 停止并禁用
 sudo systemctl disable --now brain-parcellation.service
-```
-
-## 🎯 便捷别名
-
-在 `~/.bashrc` 或 `~/.zshrc` 中添加：
-
-```bash
-# Brain Parcellation 快捷命令
-alias brain-start="sudo systemctl start brain-parcellation.service"
-alias brain-stop="sudo systemctl stop brain-parcellation.service"
-alias brain-restart="sudo systemctl restart brain-parcellation.service"
-alias brain-status="sudo systemctl status brain-parcellation.service"
-alias brain-logs="sudo journalctl -u brain-parcellation.service -f"
-alias brain-backend-log="sudo tail -f /var/log/brain-parcellation/backend.log"
-alias brain-funboost-log="sudo tail -f /var/log/brain-parcellation/funboost.log"
 ```
 
 然后执行：
@@ -165,14 +150,7 @@ sudo journalctl -u brain-parcellation.service --no-pager
 sudo /usr/local/bin/brain-parcellation-start.sh
 ```
 
-### 问题 2：Docker Compose 找不到
 
-确保在正确的目录运行：
-
-```bash
-cd /var/www/brain-parcellation
-docker-compose ps
-```
 
 ### 问题 3：conda 命令找不到
 
@@ -291,19 +269,8 @@ sudo tail -f /var/log/brain-parcellation/startup.log
 
 ### 日常使用
 
-```bash
-# 启动
-brain-start
-
-# 查看状态
-brain-status
-
-# 查看日志
-brain-logs
-
-# 停止
-brain-stop
-```
+sudo chmod 777 -R /mnt/e/pipeline/sean/log/
+sudo chmod 777 -R /opt/miniconda3/envs/tf_2_14/lib/python3.10/site-packages
 
 ## ✅ 验证清单
 

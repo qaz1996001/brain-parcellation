@@ -1,7 +1,3 @@
-import os
-import pathlib
-
-
 def setup_pip_tf_cuda_env() -> bool:
     try:
         # import nvidia
@@ -30,5 +26,3 @@ def setup_pip_tf_cuda_env() -> bool:
 
 
 # dir_path = pathlib.Path(r'/mnt/c/Users/avinhsu/Desktop/sean/yolo8/predict_by_project-3_4-23-8/label/')
-
-

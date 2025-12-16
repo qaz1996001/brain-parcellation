@@ -1,2 +1,1 @@
-# app/routers/sync/deps.py
-from functools import lru_cache
+"""預留 sync router 依賴注入模組，目前僅作為結構化入口點。"""

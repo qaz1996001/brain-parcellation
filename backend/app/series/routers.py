@@ -1,9 +1,9 @@
 # app/series/routers.py
 
 import io
-from typing import List,Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 from pydantic import FilePath
-from fastapi import APIRouter, Depends, Response,UploadFile
+from fastapi import APIRouter, Depends, Response, UploadFile
 import pydicom
 
 if TYPE_CHECKING:
@@ -13,46 +13,60 @@ from code_ai.dicom2nii.convert import ConvertManager
 from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
 
 from backend.app.series.schemas import SeriesResponse
-from backend.app.series.schemas import series_special_sort,series_perfusion_sort,series_structure_sort,series_functional_sort
-from backend.app.series.deps import get_rename_dicom_manager,get_dicom_orientation
+from backend.app.series.schemas import (
+    series_special_sort,
+    series_perfusion_sort,
+    series_structure_sort,
+    series_functional_sort,
+)
+from backend.app.series.deps import get_rename_dicom_manager, get_dicom_orientation
 from backend.app.series import urls
 
 router = APIRouter()
 
 
-@router.get(urls.SERIES_GET_HEALTH_CHECK, status_code=200,
-            summary="健康檢查",
-            description="檢查 DICOM 服務是否正常運行",
-            response_description="返回服務狀態訊息",
-            )
+@router.get(
+    urls.SERIES_GET_HEALTH_CHECK,
+    status_code=200,
+    summary="健康檢查",
+    description="檢查 DICOM 服務是否正常運行",
+    response_description="返回服務狀態訊息",
+)
 async def get_health_check() -> Response:
     return Response("DICOM Service is running")
 
 
-
-@router.get(urls.SERIES_GET_AVAILABLE_SERIES_TYPES,
-            summary="取得可用的 DICOM series 類型",
-            description="返回系統支援的所有 DICOM series名稱列表",
-            response_description="DICOM series 的字串陣列",
-            response_model=List[str],)
+@router.get(
+    urls.SERIES_GET_AVAILABLE_SERIES_TYPES,
+    summary="取得可用的 DICOM series 類型",
+    description="返回系統支援的所有 DICOM series名稱列表",
+    response_description="DICOM series 的字串陣列",
+    response_model=List[str],
+)
 async def get_available_series_types() -> List[str]:
     series_list = []
-    series_list.extend(map(lambda x:x,series_structure_sort.keys()))
+    series_list.extend(map(lambda x: x, series_structure_sort.keys()))
     series_list.extend(map(lambda x: x, series_special_sort.keys()))
     series_list.extend(map(lambda x: x, series_perfusion_sort.keys()))
     series_list.extend(map(lambda x: x, series_functional_sort.keys()))
     return series_list
 
 
-@router.post(urls.SERIES_ANALYZE_DICOM_FILES_BY_PATH, status_code=200,
-             summary="透過檔案路徑分析 DICOM",
-             description="根據提供的檔案路徑列表，分析 DICOM series 類型和影像方向",
-             response_description="包含分析結果的DICOM series list",
-             response_model=List[SeriesResponse],
-             )
-async def analyze_dicom_files_by_path(file_path_list :Optional[List[FilePath]],
-                                      convert_manager:ConvertManager = Depends(get_rename_dicom_manager),
-                                      dicom_orientation:ImageOrientationProcessingStrategy = Depends(get_dicom_orientation),) -> List[SeriesResponse]:
+@router.post(
+    urls.SERIES_ANALYZE_DICOM_FILES_BY_PATH,
+    status_code=200,
+    summary="透過檔案路徑分析 DICOM",
+    description="根據提供的檔案路徑列表，分析 DICOM series 類型和影像方向",
+    response_description="包含分析結果的DICOM series list",
+    response_model=List[SeriesResponse],
+)
+async def analyze_dicom_files_by_path(
+    file_path_list: Optional[List[FilePath]],
+    convert_manager: ConvertManager = Depends(get_rename_dicom_manager),
+    dicom_orientation: ImageOrientationProcessingStrategy = Depends(
+        get_dicom_orientation
+    ),
+) -> List[SeriesResponse]:
     """
     ## 透過檔案路徑分析 DICOM 檔案
 
@@ -80,30 +94,37 @@ async def analyze_dicom_files_by_path(file_path_list :Optional[List[FilePath]],
     if len(file_path_list) > 100:
         file_path_list = file_path_list[:100]
     for file_path in file_path_list:
-        with open(file_path,mode='rb') as f:
-            dcm_ds = pydicom.dcmread(f,stop_before_pixels=True)
+        with open(file_path, mode="rb") as f:
+            dcm_ds = pydicom.dcmread(f, stop_before_pixels=True)
             rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
-            orientation  = dicom_orientation.process(dcm_ds)
+            orientation = dicom_orientation.process(dcm_ds)
 
-            rename_dicom_list.append(SeriesResponse(file_name = file_path.name,
-                                                    series_type=rename_dicom if len(rename_dicom)>0 else 'unknown' ,
-                                                    series_orientation = str(orientation.value)
-                                                    ))
+            rename_dicom_list.append(
+                SeriesResponse(
+                    file_name=file_path.name,
+                    series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
+                    series_orientation=str(orientation.value),
+                )
+            )
     # series = pd.Series(rename_dicom_list,name='rename_dicom')
     return rename_dicom_list
 
 
-
-@router.post(urls.SERIES_ANALYZE_DICOM_FILES_BY_UPLOAD, status_code=200,
-             summary="透過上傳檔案分析 DICOM",
-             description="透過 HTTP 檔案上傳的方式，分析 DICOM series 類型和影像方向",
-             response_description="包含分析結果的DICOM series list",
-             response_model=List[SeriesResponse],
-             )
-async def analyze_dicom_files_by_upload(dicom_file_list :Optional[List[UploadFile]],
-                                        convert_manager: ConvertManager = Depends(get_rename_dicom_manager),
-                                        dicom_orientation: ImageOrientationProcessingStrategy = Depends(get_dicom_orientation),
-                                        ) -> List[SeriesResponse]:
+@router.post(
+    urls.SERIES_ANALYZE_DICOM_FILES_BY_UPLOAD,
+    status_code=200,
+    summary="透過上傳檔案分析 DICOM",
+    description="透過 HTTP 檔案上傳的方式，分析 DICOM series 類型和影像方向",
+    response_description="包含分析結果的DICOM series list",
+    response_model=List[SeriesResponse],
+)
+async def analyze_dicom_files_by_upload(
+    dicom_file_list: Optional[List[UploadFile]],
+    convert_manager: ConvertManager = Depends(get_rename_dicom_manager),
+    dicom_orientation: ImageOrientationProcessingStrategy = Depends(
+        get_dicom_orientation
+    ),
+) -> List[SeriesResponse]:
     """
     ## 透過上傳檔案分析 DICOM 檔案
 
@@ -143,14 +164,17 @@ async def analyze_dicom_files_by_upload(dicom_file_list :Optional[List[UploadFil
     if len(dicom_file_list) > 100:
         dicom_file_list = dicom_file_list[:100]
     for dicom_file in dicom_file_list:
-        bytes_io = io.BytesIO( await dicom_file.read())
+        bytes_io = io.BytesIO(await dicom_file.read())
         bytes_io.seek(0)
         dcm_ds = pydicom.dcmread(bytes_io, stop_before_pixels=True)
         rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
         orientation = dicom_orientation.process(dcm_ds)
 
-        rename_dicom_list.append(SeriesResponse(file_name=dicom_file.filename,
-                                                series_type=rename_dicom if len(rename_dicom) > 0 else 'unknown',
-                                                series_orientation=str(orientation.value)
-                                                ))
+        rename_dicom_list.append(
+            SeriesResponse(
+                file_name=dicom_file.filename,
+                series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
+                series_orientation=str(orientation.value),
+            )
+        )
     return rename_dicom_list

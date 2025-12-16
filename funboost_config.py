@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
 import logging
-from pathlib import Path
 from funboost.utils.simple_data_class import DataClassBase
 from nb_log import nb_log_config_default
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
-'''
+"""
 funboost_config.py 文件是第一次运行框架自动生成到你的项目根目录的，不需要用由户手动创建。
 此文件里面可以写任意python代码。例如 中间件 帐号 密码自己完全可以从apola配置中心获取或者从环境变量获取。
-'''
+"""
 
-'''
+"""
 你项目根目录下自动生成的 funboost_config.py 文件中修改配置，会被自动读取到。
 用户不要动修改框架的源码 funboost/funboost_config_deafult.py 中的代码，此模块的变量会自动被 funboost_config.py 覆盖。
 funboost/funboost_config_deafult.py配置覆盖逻辑可看funboost/set_frame_config.py中的代码.
 
 框架使用文档是 https://funboost.readthedocs.io/zh_CN/latest/
-'''
+"""
 
 
 class BrokerConnConfig(DataClassBase):
@@ -29,7 +29,7 @@ class BrokerConnConfig(DataClassBase):
     如果@boost装饰器设置is_using_rpc_mode为True或者 is_using_distributed_frequency_control为True或do_task_filtering=True则需要把redis连接配置好，默认是False不强迫用户安装redis。
     """
 
-    MONGO_CONNECT_URL = f'mongodb://127.0.0.1:27017'  # 如果有密码连接 'mongodb://myUserAdmin:8mwTdy1klnSYepNo@192.168.199.202:27016/'   authSource 指定鉴权db，MONGO_CONNECT_URL = 'mongodb://root:123456@192.168.64.151:27017?authSource=admin'
+    MONGO_CONNECT_URL = "mongodb://127.0.0.1:27017"  # 如果有密码连接 'mongodb://myUserAdmin:8mwTdy1klnSYepNo@192.168.199.202:27016/'   authSource 指定鉴权db，MONGO_CONNECT_URL = 'mongodb://root:123456@192.168.64.151:27017?authSource=admin'
 
     # PYTHON3 = os.getenv("PYTHON3")
     # RABBITMQ_USER = 'guest'
@@ -43,7 +43,7 @@ class BrokerConnConfig(DataClassBase):
     RABBITMQ_HOST = os.getenv("RABBITMQ_HOST")
     RABBITMQ_PORT = os.getenv("RABBITMQ_PORT")
     RABBITMQ_VIRTUAL_HOST = os.getenv("RABBITMQ_VIRTUAL_HOST")
-    RABBITMQ_URL = f'amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}/{RABBITMQ_VIRTUAL_HOST}'
+    RABBITMQ_URL = f"amqp://{RABBITMQ_USER}:{RABBITMQ_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}/{RABBITMQ_VIRTUAL_HOST}"
 
     # REDIS_HOST = '127.0.0.1'
     # REDIS_USERNAME = ''
@@ -52,14 +52,14 @@ class BrokerConnConfig(DataClassBase):
     # REDIS_DB = 2  # redis消息队列所在db，请不要在这个db放太多其他键值对，框架里面有的功能会scan扫描unacked的键名，使用单独的db。
     # REDIS_DB_FILTER_AND_RPC_RESULT = 3  # 如果函数做任务参数过滤 或者使用rpc获取结果，使用这个db，因为这个db的键值对多，和redis消息队列db分开
 
-    REDIS_HOST     = os.getenv("REDIS_HOST")
+    REDIS_HOST = os.getenv("REDIS_HOST")
     REDIS_USERNAME = os.getenv("REDIS_USERNAME")
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
-    REDIS_PORT     = os.getenv("REDIS_PORT")
-    REDIS_DB       = os.getenv("REDIS_DB")
+    REDIS_PORT = os.getenv("REDIS_PORT")
+    REDIS_DB = os.getenv("REDIS_DB")
     REDIS_DB_FILTER_AND_RPC_RESULT = os.getenv("REDIS_DB_FILTER_AND_RPC_RESULT")
 
-    REDIS_URL = f'redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+    REDIS_URL = f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
     # NSQD_TCP_ADDRESSES = ['127.0.0.1:4150']
     # NSQD_HTTP_CLIENT_HOST = '127.0.0.1'
@@ -75,8 +75,7 @@ class BrokerConnConfig(DataClassBase):
     # }
 
     # SQLACHEMY_ENGINE_URL = f'sqlite:////sqlachemy_queues/queues.db'
-    SQLACHEMY_ENGINE_URL = f'sqlite:///{os.getenv("LOCAL_DB","database.sqlite3")}'
-
+    SQLACHEMY_ENGINE_URL = f"sqlite:///{os.getenv('LOCAL_DB', 'database.sqlite3')}"
 
     # 如果broker_kind 使用 peewee 中间件模式会使用mysql配置
     # MYSQL_HOST = '127.0.0.1'
@@ -117,11 +116,14 @@ class FunboostCommonConfig(DataClassBase):
     # NB_LOG_FORMATER_INDEX_FOR_CONSUMER_AND_PUBLISHER = 11  # 7是简短的不可跳转，5是可点击跳转的，11是可显示ip 进程 线程的模板,也可以亲自设置日志模板不传递数字。
     NB_LOG_FORMATER_INDEX_FOR_CONSUMER_AND_PUBLISHER = logging.Formatter(
         f'%(asctime)s-({nb_log_config_default.computer_ip},{nb_log_config_default.computer_name})-[p%(process)d_t%(thread)d] - %(name)s - "%(filename)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(task_id)s - %(message)s',
-        "%Y-%m-%d %H:%M:%S",)   # 这个是带task_id的日志模板,日志可以显示task_id,方便用户串联起来排查某一个任务消息的所有日志.
+        "%Y-%m-%d %H:%M:%S",
+    )  # 这个是带task_id的日志模板,日志可以显示task_id,方便用户串联起来排查某一个任务消息的所有日志.
 
-    TIMEZONE = 'Asia/Taipei'  # 时区
+    TIMEZONE = "Asia/Taipei"  # 时区
 
     # 以下配置是修改funboost的一些命名空间和启动时候的日志级别,新手不熟练就别去屏蔽日志了
     SHOW_HOW_FUNBOOST_CONFIG_SETTINGS = True  # 如果你单纯想屏蔽 "分布式函数调度框架会自动导入funboost_config模块当第一次运行脚本时候，函数调度框架会在你的python当前项目的根目录下 ...... "  这句话,
-    FUNBOOST_PROMPT_LOG_LEVEL = logging.DEBUG  # funboost启动时候的相关提示语,用户可以设置这个命名空间的日志级别来调整
+    FUNBOOST_PROMPT_LOG_LEVEL = (
+        logging.DEBUG
+    )  # funboost启动时候的相关提示语,用户可以设置这个命名空间的日志级别来调整
     KEEPALIVETIMETHREAD_LOG_LEVEL = logging.DEBUG  # funboost的作者发明的可缩小自适应线程池,用户对可变线程池的线程创建和销毁线程完全无兴趣,可以提高日志级别.

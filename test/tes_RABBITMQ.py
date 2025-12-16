@@ -1,8 +1,4 @@
-
-
-from celery import shared_task
 from kombu import Connection, Exchange, Queue, Producer
-from kombu.exceptions import NotBoundError
 
 # RabbitMQ 鎖配置
 RABBITMQ_URL = "amqp://guest:guest@localhost:5672//"
@@ -18,7 +14,9 @@ def acquire_lock():
         with conn.channel() as channel:
             # Define exchange and queue
             lock_exchange = Exchange(LOCK_NAME, type="direct", durable=True)
-            lock_queue = Queue(LOCK_NAME, exchange=lock_exchange, routing_key=LOCK_NAME, durable=True)
+            lock_queue = Queue(
+                LOCK_NAME, exchange=lock_exchange, routing_key=LOCK_NAME, durable=True
+            )
 
             # Declare exchange and queue
             lock_exchange(channel).declare()
@@ -35,12 +33,11 @@ def acquire_lock():
                     exchange=lock_exchange,
                     routing_key=LOCK_NAME,
                     declare=[bound_queue],
-                    serializer="json"
+                    serializer="json",
                 )
                 return True
             else:
                 return False  # Lock already exists
-
 
 
 def release_lock():
@@ -51,7 +48,9 @@ def release_lock():
         with conn.channel() as channel:
             # Define exchange and queue
             lock_exchange = Exchange(LOCK_NAME, type="direct", durable=True)
-            lock_queue = Queue(LOCK_NAME, exchange=lock_exchange, routing_key=LOCK_NAME, durable=True)
+            lock_queue = Queue(
+                LOCK_NAME, exchange=lock_exchange, routing_key=LOCK_NAME, durable=True
+            )
 
             # Declare exchange and queue
             lock_exchange(channel).declare()
@@ -61,7 +60,7 @@ def release_lock():
             bound_queue.purge(channel)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     release_lock()
     print(10000000000000000)
     # if acquire_lock():
@@ -70,5 +69,3 @@ if __name__ == '__main__':
     #     print('release_lock')
     # else:
     #     print('eeeeeeeeeeee')
-
-

@@ -1,28 +1,42 @@
 import argparse
-import os
 import pathlib
-import subprocess
-import sys
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dicom', dest='input_dicom', type=str,
-                        help="input the raw dicom folder.\r\n")
-    parser.add_argument('--output_dicom', dest='output_dicom', type=str,
-                        help="output the rename dicom folder.\r\n")
-    parser.add_argument('--output_nifti', dest='output_nifti', type=str,
-                        help="rename dicom output to nifti folder.\r\n"
-                             "Example ： python convert.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
-                             "--output_nifti output_nifti_path")
-    parser.add_argument('--work', dest='work', type=int, default=4,
-                        help="Thread cont .\r\n"
-                             "Example ： python convert.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
-                             "--output_nifti output_nifti_path --work 4")
+    parser.add_argument(
+        "--input_dicom",
+        dest="input_dicom",
+        type=str,
+        help="input the raw dicom folder.\r\n",
+    )
+    parser.add_argument(
+        "--output_dicom",
+        dest="output_dicom",
+        type=str,
+        help="output the rename dicom folder.\r\n",
+    )
+    parser.add_argument(
+        "--output_nifti",
+        dest="output_nifti",
+        type=str,
+        help="rename dicom output to nifti folder.\r\n"
+        "Example ： python convert.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
+        "--output_nifti output_nifti_path",
+    )
+    parser.add_argument(
+        "--work",
+        dest="work",
+        type=int,
+        default=4,
+        help="Thread cont .\r\n"
+        "Example ： python convert.py --input_dicom raw_dicom_path --output_dicom rename_dicom_path "
+        "--output_nifti output_nifti_path --work 4",
+    )
     return parser.parse_args()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = parse_arguments()
     input_dicom_path = args.input_dicom
     output_dicom_path = args.output_dicom

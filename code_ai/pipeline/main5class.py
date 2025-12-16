@@ -347,6 +347,7 @@ Example：
             #  -- folder_4
                --- ....
 """
+
 import os
 
 import pathlib
@@ -360,12 +361,13 @@ from code_ai.utils.resample import resampleSynthSEG2original_z_index, resample_o
 
 # from code_ai.utils_resample import resampleSynthSEG2original_z_index, resample_one
 
+
 def str_to_bool(v):
     if isinstance(v, bool):
         return v
-    if v.lower() in ('false', 'no', 'n', 'f'):
+    if v.lower() in ("false", "no", "n", "f"):
         return False
-    elif v.lower() in ('true', 'yes', 'y', 't'):
+    elif v.lower() in ("true", "yes", "y", "t"):
         return True
     else:
         raise argparse.ArgumentTypeError("Bool value expected")
@@ -373,7 +375,7 @@ def str_to_bool(v):
 
 def replace_suffix(filename, new_suffix):
     # 匹配 .nii or .nii.gz 改為 XX.nii.gz
-    pattern = r'\.nii\.gz$|\.nii$'
+    pattern = r"\.nii\.gz$|\.nii$"
     new_filename = re.sub(pattern, new_suffix, filename)
     return new_filename
 
@@ -382,26 +384,31 @@ def main(args):
     # --------- 檢查輸入輸出 start----------------------
 
     input_path = pathlib.Path(args.input)
-    if ('.nii' in input_path.suffixes) or ('.nii.gz' in input_path.suffixes):
+    if (".nii" in input_path.suffixes) or (".nii.gz" in input_path.suffixes):
         file_list = [input_path]
     else:
-        file_list = sorted(list(input_path.rglob('*.nii*')))
-    assert len(file_list) > 0, 'Not find the nii.gz file'
+        file_list = sorted(list(input_path.rglob("*.nii*")))
+    assert len(file_list) > 0, "Not find the nii.gz file"
 
     if args.input_name:
         file_list = list(filter(lambda x: args.input_name in x.name, file_list))
-
 
     # --------- 檢查輸入輸出 end------------------------
 
     # --------- 檢 參數 建立存檔名稱 start---------------
 
-
-    resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
-                                  file_list))
-    synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg5.nii.gz')),
-                                  resample_file_list))
-
+    resample_file_list = list(
+        map(
+            lambda x: x.parent.joinpath(replace_suffix(x.name, "_resample.nii.gz")),
+            file_list,
+        )
+    )
+    synthseg5_file_list = list(
+        map(
+            lambda x: x.parent.joinpath(replace_suffix(x.name, "_synthseg5.nii.gz")),
+            resample_file_list,
+        )
+    )
 
     if args.output:
         out_path = pathlib.Path(args.output)
@@ -410,28 +417,37 @@ def main(args):
         else:
             out_path = out_path.parent
 
-        resample_file_list = list(map(lambda x: out_path.joinpath(f'{str(x.parent.name)}_{x.name}'),
-                                      resample_file_list))
-        synthseg5_file_list = list(map(lambda x: out_path.joinpath(f'{str(x.parent.name)}_{x.name}'),
-                                      synthseg5_file_list))
+        resample_file_list = list(
+            map(
+                lambda x: out_path.joinpath(f"{str(x.parent.name)}_{x.name}"),
+                resample_file_list,
+            )
+        )
+        synthseg5_file_list = list(
+            map(
+                lambda x: out_path.joinpath(f"{str(x.parent.name)}_{x.name}"),
+                synthseg5_file_list,
+            )
+        )
 
         os.makedirs(out_path, exist_ok=True)
     else:
         pass
-
 
     # --------- 檢 參數 建立存檔名稱 end----------------
     synth_seg = SynthSeg()
     for i in range(len(file_list)):
         try:
             resample_one(str(file_list[i]), str(resample_file_list[i]))
-            synth_seg.run_segmentations5(path_images=str(resample_file_list[i]),
-                                         path_segmentations5 = str(synthseg5_file_list[i]))
-            original_seg_file,argmin = resampleSynthSEG2original_z_index(file_list[i],
-                                                                         resample_file_list[i],
-                                                                         synthseg5_file_list[i])
+            synth_seg.run_segmentations5(
+                path_images=str(resample_file_list[i]),
+                path_segmentations5=str(synthseg5_file_list[i]),
+            )
+            original_seg_file, argmin = resampleSynthSEG2original_z_index(
+                file_list[i], resample_file_list[i], synthseg5_file_list[i]
+            )
         except Exception as e:
-            print(f'{file_list[i]} is Error')
+            print(f"{file_list[i]} is Error")
             error_class = e.__class__.__name__  # 取得錯誤類型
             detail = e.args[0]  # 取得詳細內容
             cl, exc, tb = sys.exc_info()  # 取得Call Stack
@@ -439,31 +455,44 @@ def main(args):
             fileName = lastCallStack[0]  # 取得發生的檔案名稱
             lineNum = lastCallStack[1]  # 取得發生的行號
             funcName = lastCallStack[2]  # 取得發生的函數名稱
-            errMsg = "File \"{}\", line {}, in {}: [{}] {}".format(fileName, lineNum, funcName, error_class, detail)
+            errMsg = 'File "{}", line {}, in {}: [{}] {}'.format(
+                fileName, lineNum, funcName, error_class, detail
+            )
             print(errMsg)
             print(traceback.print_exc())
         gc.collect()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import tensorflow as tf
-    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-    tf.config.experimental.set_visible_devices(devices=gpus, device_type='GPU')
+
+    gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
+    tf.config.experimental.set_visible_devices(devices=gpus, device_type="GPU")
     # print(gpus, cpus)
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
     parser = argparse.ArgumentParser()
     # args, unrecognized_args = parser.parse_known_args()
-    parser.add_argument('-i', '--input', dest='input', type=str, required=True,
-                        # default=r'D:\00_Chen\Task03_\VCI_out_4cases_nii_gz_T1',
-                        help="input the (SHH seg)synthseg file path (nii , nii.gz) or input the folder path.\r\n"
-                             "Example ： python utils_parcellation.py -i input_path ")
-    parser.add_argument('--input_name', dest='input_name', type=str,
-                        help="")
-    parser.add_argument('-o', '--output', dest='output', type=str,
-                        # default=r'D:\00_Chen\Task03_\VCI_out_4cases_nii_gz_T1',
-                        help="output the result file , if None then output file to input parameter path.\r\n"
-                             "Example ： python utils_parcellation.py -i input_path -o output_path")
+    parser.add_argument(
+        "-i",
+        "--input",
+        dest="input",
+        type=str,
+        required=True,
+        # default=r'D:\00_Chen\Task03_\VCI_out_4cases_nii_gz_T1',
+        help="input the (SHH seg)synthseg file path (nii , nii.gz) or input the folder path.\r\n"
+        "Example ： python utils_parcellation.py -i input_path ",
+    )
+    parser.add_argument("--input_name", dest="input_name", type=str, help="")
+    parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        type=str,
+        # default=r'D:\00_Chen\Task03_\VCI_out_4cases_nii_gz_T1',
+        help="output the result file , if None then output file to input parameter path.\r\n"
+        "Example ： python utils_parcellation.py -i input_path -o output_path",
+    )
     args = parser.parse_args()
     print(args)
     main(args)

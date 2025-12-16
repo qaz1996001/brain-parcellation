@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Optional,Union
+from typing import Optional, Union
 import numpy as np
 import pandas as pd
 import nibabel as nib
@@ -10,7 +10,7 @@ from .inference import InferenceEnum
 
 class VolumeProcessor:
     label_index_mapping_name_dict = {
-        InferenceEnum.Area:{
+        InferenceEnum.Area: {
             0: "Background",
             14: "3rd ventricle",
             15: "4th ventricle",
@@ -198,19 +198,24 @@ class VolumeProcessor:
         InferenceEnum.Aneurysm: {},
     }
 
-
     @classmethod
-    def process(cls,maks_file_path:pathlib.Path,mode:InferenceEnum) -> Optional[Union[str,pathlib.Path]]:
-        label_index_mapping = cls.label_index_mapping_name_dict.get(mode,None)
+    def process(
+        cls, maks_file_path: pathlib.Path, mode: InferenceEnum
+    ) -> Optional[Union[str, pathlib.Path]]:
+        label_index_mapping = cls.label_index_mapping_name_dict.get(mode, None)
         if label_index_mapping is None:
             return
-        return cls.calculate_volume(maks_file_path,label_index_mapping)
+        return cls.calculate_volume(maks_file_path, label_index_mapping)
 
     @classmethod
-    def calculate_volume(cls, mask_file_path:pathlib.Path, label_index_mapping:dict, ) -> Optional[Union[pathlib.Path,str]]:
+    def calculate_volume(
+        cls,
+        mask_file_path: pathlib.Path,
+        label_index_mapping: dict,
+    ) -> Optional[Union[pathlib.Path, str]]:
         mask_nii = nib.load(mask_file_path)
         mask_array: np.ndarray = np.array(mask_nii.dataobj)
-        pixdim = mask_nii.header['pixdim']
+        pixdim = mask_nii.header["pixdim"]
         spacing = pixdim[3]
         pixel_size = pixdim[1:]
         ml_size = (pixdim[1] * pixdim[2] * pixdim[3]) / 1000
@@ -220,17 +225,16 @@ class VolumeProcessor:
         return
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     # input_path = pathlib.Path(r'D:\00_Chen\Task06_\Study_SVD_20220916_20230718_out_8nii_T2')
-    #dir_list = ['Study_SVD_20220916_20230718_out_8nii_T1','Study_SVD_20220916_20230718_out_8nii_T2','Study_SVD_20190726_20220105_out_7nii_T1','Study_SVD_20190726_20220105_out_7nii_T2']
-    dir_list = ['Study_SVD_20220113_20220902_rawdata_T1']
+    # dir_list = ['Study_SVD_20220916_20230718_out_8nii_T1','Study_SVD_20220916_20230718_out_8nii_T2','Study_SVD_20190726_20220105_out_7nii_T1','Study_SVD_20190726_20220105_out_7nii_T2']
+    dir_list = ["Study_SVD_20220113_20220902_rawdata_T1"]
     # dir_list = ['Study_SVD_20220113_20220902_rawdata_T2']
     for dir_path in dir_list:
-        input_path = pathlib.Path(rf'D:\00_Chen\Task06_SVD\{dir_path}')
+        input_path = pathlib.Path(rf"D:\00_Chen\Task06_SVD\{dir_path}")
 
         # input_path = pathlib.Path(r'D:\00_Chen\Task06_\Study_SVD_20190726_20220105_out_7nii_T1')
-        synthseg_list = list(input_path.glob(rf'*synthseg.nii.gz'))
+        synthseg_list = list(input_path.glob(r"*synthseg.nii.gz"))
         mask_size_list = []
         for file_path in synthseg_list:
             start_time = time.time()
@@ -239,7 +243,7 @@ if __name__ == '__main__':
             mask_nii = nib.load(synthseg_path)
             mask_array: np.ndarray = mask_nii.get_fdata()
             mask_array = mask_array.astype(int)
-            pixdim = mask_nii.header['pixdim']
+            pixdim = mask_nii.header["pixdim"]
             spacing = pixdim[3]
             pixel_size = pixdim[1:]
             ml_size = (pixdim[1] * pixdim[2] * pixdim[3]) / 1000
@@ -247,7 +251,7 @@ if __name__ == '__main__':
             # cluster_ml = cluster_size * ml_size
             unique_values, values_count = np.unique(mask_array, return_counts=True)
             mask_size = values_count * ml_size
-            df_mask_size = pd.DataFrame(mask_size,index=unique_values).T
+            df_mask_size = pd.DataFrame(mask_size, index=unique_values).T
             mask_size_list.append(df_mask_size)
 
             # 結束時間
@@ -256,7 +260,9 @@ if __name__ == '__main__':
             execution_time = end_time - start_time
             # 輸出運行時間
             print(f"{base_name} 程式運行時間：", execution_time, "秒")
-        index_list = list(map(lambda x: str(x.name.replace('.nii.gz','')),synthseg_list))
+        index_list = list(
+            map(lambda x: str(x.name.replace(".nii.gz", "")), synthseg_list)
+        )
         df = pd.concat(mask_size_list)
         df.index = index_list
-        df.to_csv(input_path.parent.joinpath(f'{input_path.name}_mask_size.csv'))
+        df.to_csv(input_path.parent.joinpath(f"{input_path.name}_mask_size.csv"))

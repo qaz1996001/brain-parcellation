@@ -7,16 +7,16 @@ import json
 load_dotenv()
 
 # RabbitMQ connection parameters from .env
-rabbitmq_admin_user = os.getenv('RABBITMQ_DEFAULT_USER', 'admin')
-rabbitmq_admin_pass = os.getenv('RABBITMQ_DEFAULT_PASS', 'pass.123')
-rabbitmq_host = os.getenv('RABBITMQ_HOST', '127.0.0.1')
-rabbitmq_ui_port = int(os.getenv('RABBITMQ_UI_PORT', 15672))
-rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+rabbitmq_admin_user = os.getenv("RABBITMQ_DEFAULT_USER", "admin")
+rabbitmq_admin_pass = os.getenv("RABBITMQ_DEFAULT_PASS", "pass.123")
+rabbitmq_host = os.getenv("RABBITMQ_HOST", "127.0.0.1")
+rabbitmq_ui_port = int(os.getenv("RABBITMQ_UI_PORT", 15672))
+rabbitmq_port = int(os.getenv("RABBITMQ_PORT", 5672))
 
 # Target user and vhost to check/create
-target_user = os.getenv('RABBITMQ_USER', 'guest')
-target_pass = os.getenv('RABBITMQ_PASS', 'guest')
-target_vhost = os.getenv('RABBITMQ_VIRTUAL_HOST', 'celery')
+target_user = os.getenv("RABBITMQ_USER", "guest")
+target_pass = os.getenv("RABBITMQ_PASS", "guest")
+target_vhost = os.getenv("RABBITMQ_VIRTUAL_HOST", "celery")
 
 # Management API base URL
 api_base = f"http://{rabbitmq_host}:{rabbitmq_ui_port}/api"
@@ -37,12 +37,16 @@ def check_and_create_vhost(vhost_name):
         if response.status_code == 201:
             print(f"Virtual host '{vhost_name}' created successfully.")
         else:
-            print(f"Failed to create virtual host '{vhost_name}'. Status code: {response.status_code}")
+            print(
+                f"Failed to create virtual host '{vhost_name}'. Status code: {response.status_code}"
+            )
             print(response.text)
     elif response.status_code == 200:
         print(f"Virtual host '{vhost_name}' already exists.")
     else:
-        print(f"Error checking virtual host '{vhost_name}'. Status code: {response.status_code}")
+        print(
+            f"Error checking virtual host '{vhost_name}'. Status code: {response.status_code}"
+        )
         print(response.text)
 
 
@@ -54,20 +58,19 @@ def check_and_create_user(username, password):
     if response.status_code == 404:
         print(f"User '{username}' does not exist. Creating...")
         # Create the user
-        user_data = {
-            "password": password,
-            "tags": "administrator"
-        }
+        user_data = {"password": password, "tags": "administrator"}
         response = requests.put(
             f"{api_base}/users/{username}",
             auth=auth,
             headers={"Content-Type": "application/json"},
-            data=json.dumps(user_data)
+            data=json.dumps(user_data),
         )
         if response.status_code == 201:
             print(f"User '{username}' created successfully.")
         else:
-            print(f"Failed to create user '{username}'. Status code: {response.status_code}")
+            print(
+                f"Failed to create user '{username}'. Status code: {response.status_code}"
+            )
             print(response.text)
     elif response.status_code == 200:
         print(f"User '{username}' already exists.")
@@ -78,24 +81,23 @@ def check_and_create_user(username, password):
 
 def set_permissions(username, vhost_name):
     """Set permissions for the user on the virtual host"""
-    permissions = {
-        "configure": ".*",
-        "write": ".*",
-        "read": ".*"
-    }
+    permissions = {"configure": ".*", "write": ".*", "read": ".*"}
 
     response = requests.put(
         f"{api_base}/permissions/{vhost_name}/{username}",
         auth=auth,
         headers={"Content-Type": "application/json"},
-        data=json.dumps(permissions)
+        data=json.dumps(permissions),
     )
 
     if response.status_code in (201, 204):
-        print(f"Permissions for user '{username}' on vhost '{vhost_name}' set successfully.")
+        print(
+            f"Permissions for user '{username}' on vhost '{vhost_name}' set successfully."
+        )
     else:
         print(
-            f"Failed to set permissions for user '{username}' on vhost '{vhost_name}'. Status code: {response.status_code}")
+            f"Failed to set permissions for user '{username}' on vhost '{vhost_name}'. Status code: {response.status_code}"
+        )
         print(response.text)
 
 
@@ -115,7 +117,7 @@ def main():
         print("RabbitMQ configuration check completed.")
 
         # Verify connection with the created user and vhost without using pika
-        print(f"Configuration complete. To verify the connection manually, you can use:")
+        print("Configuration complete. To verify the connection manually, you can use:")
         print(f"- RabbitMQ Management UI: http://{rabbitmq_host}:{rabbitmq_ui_port}/")
         print(f"- Login with: {target_user}/{target_pass}")
         print(f"- Virtual host: {target_vhost}")

@@ -1,11 +1,15 @@
 import enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from code_ai.dicom2nii.convert.config import T1SeriesRenameEnum, MRSeriesRenameEnum, T2SeriesRenameEnum
+from code_ai.dicom2nii.convert.config import (
+    T1SeriesRenameEnum,
+    MRSeriesRenameEnum,
+    T2SeriesRenameEnum,
+)
 
 
 class InferenceCmdItem(BaseModel):
-    study_id : str
+    study_id: str
     name: str
     cmd_str: str
     input_list: List[str]
@@ -14,24 +18,22 @@ class InferenceCmdItem(BaseModel):
 
 
 class InferenceCmd(BaseModel):
-    cmd_items : List[InferenceCmdItem]
+    cmd_items: List[InferenceCmdItem]
 
 
 class InferenceEnum(str, enum.Enum):
-    Aneurysm = 'Aneurysm'
-    SynthSeg = 'SynthSeg'
-    Area = 'Area'
+    Aneurysm = "Aneurysm"
+    SynthSeg = "SynthSeg"
+    Area = "Area"
 
-    CMB = 'CMB'
+    CMB = "CMB"
 
-    DWI = 'DWI'
-    Infarct = 'Infarct'
+    DWI = "DWI"
+    Infarct = "Infarct"
 
-    WMH = 'WMH'
-    WMH_PVS = 'WMH_PVS'
+    WMH = "WMH"
+    WMH_PVS = "WMH_PVS"
     # Lacune
-
-
 
 
 class Task(BaseModel):
@@ -54,24 +56,52 @@ class Analysis(BaseModel):
 
 
 MODEL_MAPPING_SERIES_DICT = {
-InferenceEnum.Aneurysm: [[MRSeriesRenameEnum.MRA_BRAIN,
-                              ]],
-    InferenceEnum.Area: [[T1SeriesRenameEnum.T1BRAVO_AXI, ],
-                         [T1SeriesRenameEnum.T1BRAVO_SAG, ],
-                         [T1SeriesRenameEnum.T1BRAVO_COR, ],
-                         [T1SeriesRenameEnum.T1FLAIR_AXI, ],
-                         [T1SeriesRenameEnum.T1FLAIR_SAG, ],
-                         [T1SeriesRenameEnum.T1FLAIR_COR, ], ],
-    InferenceEnum.DWI: [
-        [MRSeriesRenameEnum.DWI0]
+    InferenceEnum.Aneurysm: [
+        [
+            MRSeriesRenameEnum.MRA_BRAIN,
+        ]
     ],
-    InferenceEnum.WMH_PVS: [[T2SeriesRenameEnum.T2FLAIR_AXI, ]],
-    #Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
-    InferenceEnum.CMB: [[MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
-                        [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
-                        ],
-    InferenceEnum.Infarct: [[MRSeriesRenameEnum.DWI0, MRSeriesRenameEnum.DWI1000, MRSeriesRenameEnum.ADC, ]
-                            ],
-    InferenceEnum.WMH: [[T2SeriesRenameEnum.T2FLAIR_AXI,
-                         ]],
+    InferenceEnum.Area: [
+        [
+            T1SeriesRenameEnum.T1BRAVO_AXI,
+        ],
+        [
+            T1SeriesRenameEnum.T1BRAVO_SAG,
+        ],
+        [
+            T1SeriesRenameEnum.T1BRAVO_COR,
+        ],
+        [
+            T1SeriesRenameEnum.T1FLAIR_AXI,
+        ],
+        [
+            T1SeriesRenameEnum.T1FLAIR_SAG,
+        ],
+        [
+            T1SeriesRenameEnum.T1FLAIR_COR,
+        ],
+    ],
+    InferenceEnum.DWI: [[MRSeriesRenameEnum.DWI0]],
+    InferenceEnum.WMH_PVS: [
+        [
+            T2SeriesRenameEnum.T2FLAIR_AXI,
+        ]
+    ],
+    # Ax SWAN_resample_synthseg33_from_Sag_FSPGR_BRAVO_resample_synthseg33.nii.gz
+    InferenceEnum.CMB: [
+        [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1BRAVO_AXI],
+        [MRSeriesRenameEnum.SWAN, T1SeriesRenameEnum.T1FLAIR_AXI],
+    ],
+    InferenceEnum.Infarct: [
+        [
+            MRSeriesRenameEnum.DWI0,
+            MRSeriesRenameEnum.DWI1000,
+            MRSeriesRenameEnum.ADC,
+        ]
+    ],
+    InferenceEnum.WMH: [
+        [
+            T2SeriesRenameEnum.T2FLAIR_AXI,
+        ]
+    ],
 }

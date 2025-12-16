@@ -14,9 +14,11 @@
 LOG_PATH 配置文件日志的保存路径的文件夹。
 """
 import sys
+
 # noinspection PyUnresolvedReferences
 import logging
 import os
+
 # noinspection PyUnresolvedReferences
 from pathlib import Path  # noqa
 import socket
@@ -24,19 +26,29 @@ from pythonjsonlogger.jsonlogger import JsonFormatter
 
 # 项目中的print是否自动写入到文件中。值为None则不重定向print到文件中。 自动每天一个文件， 2023-06-30.my_proj.print,生成的文件位置在定义的LOG_PATH
 # 如果你设置了环境变量，export PRINT_WRTIE_FILE_NAME="my_proj.print" (linux临时环境变量语法，windows语法自己百度这里不举例),那就优先使用环境变量中设置的文件名字，而不是nb_log_config.py中设置的名字
-PRINT_WRTIE_FILE_NAME = os.environ.get("PRINT_WRTIE_FILE_NAME") or Path(sys.path[1]).name + '.print'
+PRINT_WRTIE_FILE_NAME = (
+    os.environ.get("PRINT_WRTIE_FILE_NAME") or Path(sys.path[1]).name + ".print"
+)
 
 # 项目中的所有标准输出（不仅包括print，还包括了streamHandler日志）都写入到这个文件，为None将不把标准输出重定向到文件。自动每天一个文件， 2023-06-30.my_proj.std,生成的文件位置在定义的LOG_PATH
 # 如果你设置了环境变量，export SYS_STD_FILE_NAME="my_proj.std"  (linux临时环境变量语法，windows语法自己百度这里不举例),那就优先使用环境变量中设置的文件名字，，而不是nb_log_config.py中设置的名字
 # 这个相当于是 nohup 自动重定向所有屏幕输出流到一个nohup.out文件的功能了,这个是nb_log日志包的独有黑科技功能,logging 和loguru没这种功能.
-SYS_STD_FILE_NAME = os.environ.get("SYS_STD_FILE_NAME") or Path(sys.path[1]).name + '.std'
+SYS_STD_FILE_NAME = (
+    os.environ.get("SYS_STD_FILE_NAME") or Path(sys.path[1]).name + ".std"
+)
 
 USE_BULK_STDOUT_ON_WINDOWS = False  # 在win上是否每隔0.1秒批量stdout,win的io太差了
 
 DEFAULUT_USE_COLOR_HANDLER = True  # 是否默认使用有彩的日志。
-DEFAULUT_IS_USE_LOGURU_STREAM_HANDLER = False  # 是否默认使用 loguru的控制台日志，而非是nb_log的ColorHandler
-DISPLAY_BACKGROUD_COLOR_IN_CONSOLE = True  # 在控制台是否显示彩色块状的日志。为False则不使用大块的背景颜色。
-AUTO_PATCH_PRINT = True  # 是否自动打print的猴子补丁，如果打了猴子补丁，print自动变色和可点击跳转。
+DEFAULUT_IS_USE_LOGURU_STREAM_HANDLER = (
+    False  # 是否默认使用 loguru的控制台日志，而非是nb_log的ColorHandler
+)
+DISPLAY_BACKGROUD_COLOR_IN_CONSOLE = (
+    True  # 在控制台是否显示彩色块状的日志。为False则不使用大块的背景颜色。
+)
+AUTO_PATCH_PRINT = (
+    True  # 是否自动打print的猴子补丁，如果打了猴子补丁，print自动变色和可点击跳转。
+)
 
 # 以下是屏蔽控制台所谓的烦人提示项,如果要关闭,先了解下这三个提示是什么,有的pythoner又菜又爱屏蔽提示,然后不知道为什么,这样的人太烦人了.
 SHOW_PYCHARM_COLOR_SETINGS = True  # 有的人很反感启动代码时候提示教你怎么优化pycahrm控制台颜色，可以把这里设置为False  (怕提示颜色设置打扰你又不懂pycharm和python的颜色原理,就别抱怨颜色瞎眼)
@@ -50,16 +62,26 @@ AUTO_WRITE_ERROR_LEVEL_TO_SEPARATE_FILE = False  # 自动把错误error级别以
 LOG_FILE_SIZE = 1000  # 单位是M,每个文件的切片大小，超过多少后就自动切割
 LOG_FILE_BACKUP_COUNT = 10  # 对同一个日志文件，默认最多备份几个文件，超过就删除了。
 
-LOG_PATH = os.getenv("LOG_PATH")  # 优先从环境变量获取,启动代码之前可以 export LOG_PATH = '/你的日志目录/'
+LOG_PATH = os.getenv(
+    "LOG_PATH"
+)  # 优先从环境变量获取,启动代码之前可以 export LOG_PATH = '/你的日志目录/'
 if not LOG_PATH:
-    LOG_PATH = '/pythonlogs'  # 默认的日志文件夹,如果不写明磁盘名，则是项目代码所在磁盘的根目录下的/pythonlogs
+    LOG_PATH = "/pythonlogs"  # 默认的日志文件夹,如果不写明磁盘名，则是项目代码所在磁盘的根目录下的/pythonlogs
     # LOG_PATH = Path(__file__).absolute().parent / Path("pythonlogs")   #这么配置就会自动在你项目的根目录下创建pythonlogs文件夹了并写入。
-    if os.name == 'posix':  # linux非root用户和mac用户无法操作 /pythonlogs 文件夹，没有权限，默认修改为   home/[username]  下面了。例如你的linux用户名是  xiaomin，那么默认会创建并在 /home/xiaomin/pythonlogs文件夹下写入日志文件。
-        home_path = os.environ.get("HOME", '/')  # 这个是获取linux系统的当前用户的主目录，不需要亲自设置
-        LOG_PATH = Path(home_path) / Path('python_logs')  # linux mac 权限很严格，非root权限不能在/pythonlogs写入，修改一下默认值。
+    if (
+        os.name == "posix"
+    ):  # linux非root用户和mac用户无法操作 /pythonlogs 文件夹，没有权限，默认修改为   home/[username]  下面了。例如你的linux用户名是  xiaomin，那么默认会创建并在 /home/xiaomin/pythonlogs文件夹下写入日志文件。
+        home_path = os.environ.get(
+            "HOME", "/"
+        )  # 这个是获取linux系统的当前用户的主目录，不需要亲自设置
+        LOG_PATH = Path(home_path) / Path(
+            "python_logs"
+        )  # linux mac 权限很严格，非root权限不能在/pythonlogs写入，修改一下默认值。
 # print('LOG_PATH:',LOG_PATH)
 
-LOG_FILE_HANDLER_TYPE = 6  # 1 2 3 4 5 6 7   # nb_log 的日志切割,全都追求多进程下切割正常.
+LOG_FILE_HANDLER_TYPE = (
+    6  # 1 2 3 4 5 6 7   # nb_log 的日志切割,全都追求多进程下切割正常.
+)
 """
 LOG_FILE_HANDLER_TYPE 这个值可以设置为 1 2 3 4 5 四种值，
 1为使用多进程安全按日志文件大小切割的文件日志,这是本人实现的批量写入日志，减少操作文件锁次数，测试10进程快速写入文件，win上性能比第5种提高了100倍，linux提升5倍
@@ -84,12 +106,12 @@ FILTER_WORDS_PRINT = []  # 例如， 你希望消息中包括阿弥陀佛 或者
 
 
 def get_host_ip():
-    ip = ''
-    host_name = ''
+    ip = ""
+    host_name = ""
     # noinspection PyBroadException
     try:
         sc = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sc.connect(('8.8.8.8', 80))
+        sc.connect(("8.8.8.8", 80))
         ip = sc.getsockname()[0]
         host_name = socket.gethostname()
         sc.close()
@@ -104,61 +126,82 @@ computer_ip, computer_name = get_host_ip()
 class JsonFormatterJumpAble(JsonFormatter):
     def add_fields(self, log_record, record, message_dict):
         # log_record['jump_click']   = f"""File '{record.__dict__.get('pathname')}', line {record.__dict__.get('lineno')}"""
-        log_record[f"{record.__dict__.get('pathname')}:{record.__dict__.get('lineno')}"] = ''  # 加个能点击跳转的字段。
-        log_record['ip'] = computer_ip
-        log_record['host_name'] = computer_name
+        log_record[
+            f"{record.__dict__.get('pathname')}:{record.__dict__.get('lineno')}"
+        ] = ""  # 加个能点击跳转的字段。
+        log_record["ip"] = computer_ip
+        log_record["host_name"] = computer_name
         super().add_fields(log_record, record, message_dict)
-        if 'for_segmentation_color' in log_record:
-            del log_record['for_segmentation_color']
+        if "for_segmentation_color" in log_record:
+            del log_record["for_segmentation_color"]
 
 
-DING_TALK_TOKEN = '3dd0eexxxxxadab014bd604XXXXXXXXXXXX'  # 钉钉报警机器人
+DING_TALK_TOKEN = "3dd0eexxxxxadab014bd604XXXXXXXXXXXX"  # 钉钉报警机器人
 
-EMAIL_HOST = ('smtp.sohu.com', 465)
-EMAIL_FROMADDR = 'aaa0509@sohu.com'  # 'matafyhotel-techl@matafy.com',
-EMAIL_TOADDRS = ('cccc.cheng@silknets.com', 'yan@dingtalk.com',)
-EMAIL_CREDENTIALS = ('aaa0509@sohu.com', 'abcdefg')
+EMAIL_HOST = ("smtp.sohu.com", 465)
+EMAIL_FROMADDR = "aaa0509@sohu.com"  # 'matafyhotel-techl@matafy.com',
+EMAIL_TOADDRS = (
+    "cccc.cheng@silknets.com",
+    "yan@dingtalk.com",
+)
+EMAIL_CREDENTIALS = ("aaa0509@sohu.com", "abcdefg")
 
-ELASTIC_HOST = '127.0.0.1'
+ELASTIC_HOST = "127.0.0.1"
 ELASTIC_PORT = 9200
 
-KAFKA_BOOTSTRAP_SERVERS = ['192.168.199.202:9092']
+KAFKA_BOOTSTRAP_SERVERS = ["192.168.199.202:9092"]
 ALWAYS_ADD_KAFKA_HANDLER_IN_TEST_ENVIRONENT = False
 
-MONGO_URL = 'mongodb://myUserAdmin:mimamiama@127.0.0.1:27016/admin'
+MONGO_URL = "mongodb://myUserAdmin:mimamiama@127.0.0.1:27016/admin"
 
-RUN_ENV = 'test'
+RUN_ENV = "test"
 
 FORMATTER_DICT = {
     1: logging.Formatter(
-        '日志时间【%(asctime)s】 - 日志名称【%(name)s】 - 文件【%(filename)s】 - 第【%(lineno)d】行 - 日志等级【%(levelname)s】 - 日志信息【%(message)s】',
-        "%Y-%m-%d %H:%M:%S"),
+        "日志时间【%(asctime)s】 - 日志名称【%(name)s】 - 文件【%(filename)s】 - 第【%(lineno)d】行 - 日志等级【%(levelname)s】 - 日志信息【%(message)s】",
+        "%Y-%m-%d %H:%M:%S",
+    ),
     2: logging.Formatter(
-        '%(asctime)s - %(name)s - %(filename)s - %(funcName)s - %(lineno)d - %(levelname)s - %(message)s',
-        "%Y-%m-%d %H:%M:%S"),
+        "%(asctime)s - %(name)s - %(filename)s - %(funcName)s - %(lineno)d - %(levelname)s - %(message)s",
+        "%Y-%m-%d %H:%M:%S",
+    ),
     3: logging.Formatter(
         '%(asctime)s - %(name)s - 【 File "%(pathname)s", line %(lineno)d, in %(funcName)s 】 - %(levelname)s - %(message)s',
-        "%Y-%m-%d %H:%M:%S"),  # 一个模仿traceback异常的可跳转到打印日志地方的模板
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 一个模仿traceback异常的可跳转到打印日志地方的模板
     4: logging.Formatter(
         '%(asctime)s - %(name)s - "%(filename)s" - %(funcName)s - %(lineno)d - %(levelname)s - %(message)s -               File "%(pathname)s", line %(lineno)d ',
-        "%Y-%m-%d %H:%M:%S"),  # 这个也支持日志跳转
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 这个也支持日志跳转
     5: logging.Formatter(
         '%(asctime)s - %(name)s - "%(pathname)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(message)s',
-        "%Y-%m-%d %H:%M:%S"),  # 我认为的最好的模板,推荐
-    6: logging.Formatter('%(name)s - %(asctime)-15s - %(filename)s - %(lineno)d - %(levelname)s: %(message)s',
-                         "%Y-%m-%d %H:%M:%S"),
-    7: logging.Formatter('%(asctime)s - %(name)s - "%(filename)s:%(lineno)d" - %(levelname)s - %(message)s', "%Y-%m-%d %H:%M:%S"),  # 一个只显示简短文件名和所处行数的日志模板
-
-    8: JsonFormatterJumpAble('%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(filename)s %(lineno)d  %(process)d %(thread)d', "%Y-%m-%d %H:%M:%S.%f",
-                             json_ensure_ascii=False),  # 这个是json日志，方便elk采集分析.
-
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 我认为的最好的模板,推荐
+    6: logging.Formatter(
+        "%(name)s - %(asctime)-15s - %(filename)s - %(lineno)d - %(levelname)s: %(message)s",
+        "%Y-%m-%d %H:%M:%S",
+    ),
+    7: logging.Formatter(
+        '%(asctime)s - %(name)s - "%(filename)s:%(lineno)d" - %(levelname)s - %(message)s',
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 一个只显示简短文件名和所处行数的日志模板
+    8: JsonFormatterJumpAble(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(filename)s %(lineno)d  %(process)d %(thread)d",
+        "%Y-%m-%d %H:%M:%S.%f",
+        json_ensure_ascii=False,
+    ),  # 这个是json日志，方便elk采集分析.
     9: logging.Formatter(
         '[p%(process)d_t%(thread)d] %(asctime)s - %(name)s - "%(pathname)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(message)s',
-        "%Y-%m-%d %H:%M:%S"),  # 对5改进，带进程和线程显示的日志模板。
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 对5改进，带进程和线程显示的日志模板。
     10: logging.Formatter(
-        '[p%(process)d_t%(thread)d] %(asctime)s - %(name)s - "%(filename)s:%(lineno)d" - %(levelname)s - %(message)s', "%Y-%m-%d %H:%M:%S"),  # 对7改进，带进程和线程显示的日志模板。
+        '[p%(process)d_t%(thread)d] %(asctime)s - %(name)s - "%(filename)s:%(lineno)d" - %(levelname)s - %(message)s',
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 对7改进，带进程和线程显示的日志模板。
     11: logging.Formatter(
-        f'%(asctime)s-({computer_ip},{computer_name})-[p%(process)d_t%(thread)d] - %(name)s - "%(filename)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(message)s', "%Y-%m-%d %H:%M:%S"),  # 对7改进，带进程和线程显示的日志模板以及ip和主机名。
+        f'%(asctime)s-({computer_ip},{computer_name})-[p%(process)d_t%(thread)d] - %(name)s - "%(filename)s:%(lineno)d" - %(funcName)s - %(levelname)s - %(message)s',
+        "%Y-%m-%d %H:%M:%S",
+    ),  # 对7改进，带进程和线程显示的日志模板以及ip和主机名。
 }
 
 FORMATTER_KIND = 5  # 如果get_logger不指定日志模板，则默认选择第几个模板
