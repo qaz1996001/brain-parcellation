@@ -1,3 +1,57 @@
+"""
+研究 (Study) 業務邏輯層 - DCOP 事件驅動 DICOM 服務。
+
+此模組負責管理醫學影像 DICOM 研究的生命週期，包括：
+1. Study/Series 狀態轉遷管理
+2. 事件記錄與審計追蹤
+3. 與外部系統的集成（Orthanc DICOM 伺服器、NIFTI 轉檔工具、推理引擎）
+4. 異步任務隊列協調
+5. 多輸出序列的特殊處理（如 DWI）
+
+核心概念
+--------
+- **事件驅動**：每個狀態變化都產生一條事件紀錄
+- **狀態機**：Study 和 Series 遵循嚴格的狀態轉遷流程
+- **鬆散耦合**：通過配置和事件而非直接 API 調用
+- **完整審計**：完整的時間戳記和參數追蹤
+
+Dependencies
+-----------
+code_ai : 代碼轉換和推理任務框架
+pyorthanc : Orthanc DICOM 伺服器 API 客戶端
+sqlalchemy : 非同步 ORM
+fastapi_cache : Redis 快取層
+funboost : 非同步任務隊列
+
+Notes
+-----
+此服務層建立在 Good Taste 設計原則之上：
+- 消除特殊情況：統一的事件處理流程
+- 資料結構驅動：使用 DCOPStatus 列舉而非魔術字符串
+- 鬆散耦合：配置驅動而非硬編碼邏輯
+
+Examples
+--------
+基本使用流程：
+
+>>> service = DCOPEventDicomService()
+>>>
+>>> # 1. 添加新 Study
+>>> study_ids = ["study-uid-123"]
+>>> await service.add_study_new(study_ids)
+>>>
+>>> # 2. 檢查傳輸是否完成
+>>> await service.check_study_series_transfer_complete()
+>>>
+>>> # 3. 檢查轉檔是否完成
+>>> await service.check_study_series_conversion_complete()
+
+See Also
+--------
+backend.app.sync.service : 同步模組的核心服務實現
+backend.app.sync.schemas : 資料模型和序列化方案
+"""
+
 import json
 import logging
 import os
@@ -25,18 +79,96 @@ from .urls import (
     SYNC_PROT_STUDY_TRANSFER_COMPLETE,
 )
 
+# 模組級日誌記錄器
 logger = logging.getLogger(__name__)
 
 
 class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
-    """Author repository."""
+    """
+    研究 (Study) 級別的 DICOM 事件服務 - 核心業務邏輯層。
+    
+    此服務類負責管理 DICOM 研究的所有業務邏輯，包括：
+    
+    1. Study/Series 狀態轉遷管理
+       - STUDY_NEW → STUDY_TRANSFERRING → STUDY_TRANSFER_COMPLETE
+       - STUDY_CONVERTING → STUDY_CONVERSION_COMPLETE
+       - STUDY_INFERENCE_READY → STUDY_INFERENCE_QUEUED → STUDY_INFERENCE_COMPLETE
+    
+    2. 事件記錄與審計
+       - 每個狀態變化都產生一條事件紀錄
+       - 完整的時間戳記和參數追蹤
+    
+    3. 與外部系統的集成
+       - Orthanc DICOM 伺服器：查詢 Study 和 Series
+       - NIFTI 轉檔工具：協調 DICOM 到 NIFTI 的轉檔
+       - 推理引擎：排隊推理任務
+    
+    4. 異步任務隊列協調
+       - 將任務推送到隊列中執行
+       - 監控任務完成狀態
+    
+    5. 多輸出序列的特殊處理
+       - 自動檢測多輸出序列（如 DWI）
+       - 為每個輸出創建獨立的轉檔任務
+       - 等待所有輸出完成
+    
+    Attributes
+    ----------
+    logger : logging.Logger
+        類級別的日誌記錄器，所有實例共享。
+    pattern_str : str
+        正則表達式：Series 必須經歷的狀態序列。
+    can_inference_pattern : re.Pattern
+        編譯後的正則表達式，用於快速判斷 Series 是否可進入推理。
+    
+    Nested Classes
+    ---------------
+    Repo : SQLAlchemyAsyncRepository
+        非同步 ORM 儲存庫，處理資料庫操作。
+    
+    Notes
+    -----
+    Good Taste 設計特點：
+    - 消除特殊情況：統一的事件驅動流程
+    - 資料結構驅動：使用 DCOPStatus 列舉而非字符串
+    - 檢查點 API：支援推動式轉遷而非完全自動化
+    - 鬆散耦合：通過事件而非直接 API 調用
+    
+    Examples
+    --------
+    基本使用流程：
+    
+    >>> service = DCOPEventDicomService()
+    >>>
+    >>> # 1. 添加新 Study
+    >>> study_ids = ["study-uid-123"]
+    >>> events = await service.add_study_new(study_ids)
+    >>>
+    >>> # 2. 檢查傳輸是否完成
+    >>> completed = await service.check_study_series_transfer_complete()
+    >>>
+    >>> # 3. 檢查轉檔是否完成
+    >>> await service.check_study_series_conversion_complete()
+    
+    See Also
+    --------
+    backend.app.sync.service : 同步模組的核心服務
+    backend.app.sync.schemas : 資料模型和狀態定義
+    """
 
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
-        """Author repository."""
-
+        """
+        DICOM 事件儲存庫 - 非同步 ORM 操作。
+        
+        使用 SQLAlchemy 異步引擎進行資料庫操作，提供事件的
+        CRUD 操作和複雜查詢。
+        """
         model_type = DCOPEventModel
 
     repository_type = Repo
+    
+    # 正則表達式：Series 必須經歷的狀態序列
+    # 格式: (NEW), (TRANSFERRING), (TRANSFER_COMPLETE), (CONVERTING), (CONVERSION_COMPLETE | CONVERSION_SKIP)
     pattern_str = "({}),({}),({}),({}),({}|{})".format(
         DCOPStatus.SERIES_NEW.value,
         DCOPStatus.SERIES_TRANSFERRING.value,
@@ -45,34 +177,143 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
         DCOPStatus.SERIES_CONVERSION_SKIP.value,
     )
+    # 編譯後的正則模式，用於快速檢查 Series 是否可進入推理
     can_inference_pattern = re.compile(pattern_str)
 
     async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
+        """
+        根據操作編號取得對應的檢查點 API URL。
+        
+        此方法實現了操作碼到 API 端點的映射，支援四個檢查點：
+        1. Series 傳輸完成 → 觸發 Study 傳輸檢查
+        2. Series 轉檔完成 → 觸發 Study 轉檔檢查
+        3. Study 傳輸完成 → 觸發轉檔初始化
+        4. Study 轉檔完成 → 觸發推理初始化
+        
+        Parameters
+        ----------
+        ope_no : str
+            操作編號，格式為 xxx.xxx（e.g. "100.095"）。
+        
+        Returns
+        -------
+        Optional[str]
+            對應的檢查點 API URL，若無對應則返回 None。
+        
+        Examples
+        --------
+        >>> url = await service.get_check_url_by_ope_no("100.095")
+        >>> print(url)
+        http://api.server/sync/study/transfer
+        
+        >>> url = await service.get_check_url_by_ope_no("200.195")
+        >>> print(url)
+        http://api.server/sync/study/convert
+        
+        Notes
+        -----
+        Good Taste 設計：使用 Python match-case 語句而非 if-elif 鏈，
+        消除了條件邏輯中的重複。
+        """
         from code_ai import load_dotenv
 
         load_dotenv()
         UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+        
+        # 根據操作編號映射到對應的檢查點 API
         match ope_no:
             case DCOPStatus.STUDY_TRANSFER_COMPLETE.value:
+                # Study 傳輸完成 → 觸發轉檔初始化
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.STUDY_CONVERSION_COMPLETE.value:
+                # Study 轉檔完成 → 觸發推理初始化
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
+                # Series 傳輸完成 → 觸發 Study 傳輸檢查
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                # Series 轉檔完成 → 觸發 Study 轉檔檢查
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case _:
+                # 未知的操作編號
                 url = None
+        
+        logger.debug(f'get_check_url_by_ope_no: ope_no={ope_no}, url={url}')
         return url
 
-    async def post_ope_no_task(self, data: List[DCOPEventRequest]):
+    async def post_ope_no_task(self, data: List[DCOPEventRequest]) -> None:
+        """
+        批次寫入事件記錄並觸發相應的檢查點 API。
+        
+        此方法用於處理外部系統（如 Orthanc、NIFTI_TOOL）批次上報的事件。
+        它會：
+        1. 逐一寫入事件到資料庫
+        2. 識別觸發檢查點的事件類型
+        3. 收集所有需要觸發的檢查點 URL
+        4. 批次執行所有檢查點
+        
+        Parameters
+        ----------
+        data : list[DCOPEventRequest]
+            外部系統上報的事件列表。
+        
+        Returns
+        -------
+        None
+        
+        Side Effects
+        -----------
+        - 每個事件寫入資料庫並立即提交
+        - 觸發所有相關的檢查點 API（去重）
+        
+        事件與檢查點的對應
+        -------------------
+        - SERIES_TRANSFER_COMPLETE → 檢查 Study 傳輸是否完成
+        - SERIES_CONVERSION_COMPLETE → 檢查 Study 轉檔是否完成
+        
+        Examples
+        --------
+        處理 Orthanc 的 Series 傳輸完成上報：
+        
+        >>> events = [
+        ...     DCOPEventRequest(
+        ...         study_uid="abc-123",
+        ...         series_uid="def-456",
+        ...         ope_no="100.095",
+        ...         tool_id="DICOM_TOOL"
+        ...     ),
+        ...     DCOPEventRequest(
+        ...         study_uid="abc-123",
+        ...         series_uid="ghi-789",
+        ...         ope_no="100.095",
+        ...         tool_id="DICOM_TOOL"
+        ...     )
+        ... ]
+        >>> await service.post_ope_no_task(events)
+        # 結果: 2 個事件寫入，1 次檢查點 API 調用
+        
+        Notes
+        -----
+        檢查點 URL 去重：
+        - 若同一檢查點被多個事件觸發，只調用一次
+        - 例如 2 個 Series 都完成轉檔，只調用一次 check_conversion
+        
+        原子性：
+        - 每個事件單獨提交，確保原子性
+        - 某個事件寫入失敗不影響其他事件
+        """
         from code_ai import load_dotenv
 
         load_dotenv()
+        
+        # 收集所有需要觸發的檢查點 URL（使用集合去重）
         check_url_set = set()
+        
         # async with AsyncSession(self.repository.session.bind) as session:
         async with self.session_manager.get_session() as session:
+            # 逐一處理每個事件
             for dcop_event in data:
+                # 建立事件記錄
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
                     tool_id=dcop_event.tool_id,
                     study_uid=dcop_event.study_uid,
@@ -88,15 +329,23 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 await session.refresh(new_data_obj)
 
                 # new_data_obj = await self.create(data=new_data, auto_commit=True, auto_refresh=True)
+                # 識別是否需要觸發檢查點
                 match new_data_obj.ope_no:
                     case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
+                        # Series 傳輸完成 → 檢查 Study 傳輸
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                        # Series 轉檔完成 → 檢查 Study 轉檔
                         url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                     case _:
+                        # 其他事件不觸發檢查點
                         url = None
+                
+                # 添加到檢查點集合（自動去重）
                 if url is not None and url not in check_url_set:
                     check_url_set.add(url)
+        
+        # 批次執行所有檢查點
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
                 rep = await client.post(url)
@@ -104,23 +353,67 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def check_study_series_transfer_complete(
         self, data: Optional[List[DCOPEventRequest]] = None
-    ):
+    ) -> Optional[List[DCOPEventRequest]]:
         """
-        Checks if all series under a study have completed transfer and initiates the conversion process.
-            檢查 study 下的 series 是否都傳輸完成
-            1. series 完成傳輸添加 SERIES_TRANSFER_COMPLETE  的記錄
-            2. 所有series都到了SERIES_TRANSFER_COMPLETE， 添加 STUDY_TRANSFER_COMPLETE 的記錄
-            3. 添加 STUDY_CONVERTING 的記錄，
-            4. 發送管道任務  進行轉換
-        Process flow:
-        1. Mark series completion with SERIES_TRANSFER_COMPLETE record
-        2. When all series reach SERIES_TRANSFER_COMPLETE, add STUDY_TRANSFER_COMPLETE record
-        3. Add STUDY_CONVERTING record
-        4. Send pipeline task for conversion
-
-        Args:
-            data: Optional list of DCOPEventRequest objects. If None, retrieves study status from database.
-
+        檢查 Study/Series 傳輸是否完成，若完成則進入轉檔階段。
+        
+        此方法是 "檢查點" API，用於推動狀態轉遷。其工作流程為：
+        
+        1. 獲取所有狀態 ≥ SERIES_TRANSFER_COMPLETE 的 Series
+        2. 為每個已完成傳輸的 Study 建立 STUDY_TRANSFER_COMPLETE 事件
+        3. 建立 STUDY_CONVERTING 事件，開始轉檔階段
+        4. 排程 NIFTI 轉檔工具執行
+        
+        狀態轉遷圖
+        ----------
+        SERIES_TRANSFER_COMPLETE (多個)
+                    ↓
+        [此方法檢查]
+                    ↓
+        STUDY_TRANSFER_COMPLETE
+                    ↓
+        STUDY_CONVERTING
+        
+        Parameters
+        ----------
+        data : list[DCOPEventRequest], optional
+            指定要檢查的事件列表。
+            若為 None，則自動掃描資料庫中所有待檢查的 Study。
+        
+        Returns
+        -------
+        list[DCOPEventRequest]
+            已檢查的 Study 事件清單。
+        
+        Side Effects
+        -----------
+        - 在資料庫中建立事件
+        - 透過 HTTP 呼叫 CHECK API 進行狀態轉遷
+        - 排程 NIFTI 轉檔任務
+        
+        Examples
+        --------
+        自動掃描所有待檢查的 Study：
+        
+        >>> await service.check_study_series_transfer_complete()
+        
+        檢查指定的 Study：
+        
+        >>> events = [DCOPEventRequest(study_uid="abc-123", ope_no="100.095")]
+        >>> await service.check_study_series_transfer_complete(data=events)
+        
+        Notes
+        -----
+        此方法會立即進行以下操作：
+        1. 查詢資料庫或使用提供的事件
+        2. 建立完成事件
+        3. 透過 HTTP 觸發檢查點 API
+        4. 等待檢查完成
+        
+        設計特點：
+        - 可推動式（由外部觸發）或自動式（定期掃描）
+        - 支援部分 Study 檢查
+        - 非同步執行，不阻塞調用方
         """
         from code_ai import load_dotenv
 
@@ -159,11 +452,57 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return dcop_event_list
 
-    async def add_study_new(self, data_list):
+    async def add_study_new(self, data_list: List[str]) -> List[DCOPEventModel]:
+        """
+        建立新 Study 的初始事件。
+        
+        此方法為每個新 Study 建立兩個初始事件：
+        1. STUDY_NEW: Study 剛到達系統
+        2. STUDY_TRANSFERRING: Study 開始傳輸，附帶傳輸參數
+        
+        這是 Study 生命週期的第一步，會立即排程 DICOM 轉檔任務。
+        
+        Parameters
+        ----------
+        data_list : list[str]
+            Study UID 清單。
+        
+        Returns
+        -------
+        list[DCOPEventModel]
+            建立的所有事件模型（STUDY_NEW 和 STUDY_TRANSFERRING）。
+        
+        Raises
+        ------
+        Exception
+            若資料庫操作失敗，將回滾事務並重新拋出異常。
+        
+        Examples
+        --------
+        >>> study_ids = ["study-uid-123", "study-uid-456"]
+        >>> events = await service.add_study_new(study_ids)
+        >>> print(len(events))
+        4  # 每個 Study 有 2 個事件
+        
+        Notes
+        -----
+        流程：
+        1. 為每個 Study 創建 STUDY_NEW 事件
+        2. 準備轉檔參數（檔案路徑）
+        3. 創建 STUDY_TRANSFERRING 事件並附加參數
+        4. 提交事務
+        
+        檔案路徑配置：
+        - PATH_RAW_DICOM: 原始 DICOM 檔案位置
+        - PATH_RENAME_DICOM: 重命名後的 DICOM 位置
+        - PATH_RENAME_NIFTI: NIFTI 輸出位置
+        """
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
 
         load_dotenv()
+        
+        # 載入檔案路徑配置
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
@@ -173,6 +512,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             try:
                 for ids in data_list:
                     study_uid_raw_dicom_path = raw_dicom_path.joinpath(ids)
+                    
+                    # 步驟 1: 建立 STUDY_NEW 事件
                     new_data = await DCOPEventModel.create_event(
                         study_uid=ids,
                         series_uid=None,
@@ -181,11 +522,15 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     )
                     session.add(new_data)
                     # new_data_obj = await self.create(data=new_data)
+                    
+                    # 步驟 2: 準備轉檔參數
                     task_params = Dicom2NiiParams(
                         sub_dir=study_uid_raw_dicom_path,
                         output_dicom_path=rename_dicom_path,
                         output_nifti_path=rename_nifti_path,
                     )
+                    
+                    # 步驟 3: 建立 STUDY_TRANSFERRING 事件（包含參數）
                     data_transferring = await DCOPEventModel.create_event(
                         study_uid=ids,
                         series_uid=None,
@@ -194,12 +539,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     )
                     data_transferring.params_data = task_params.get_str_dict()
                     session.add(data_transferring)
+                    
+                    # 步驟 4: 提交事務
                     session.commit()
                     session.flush()
                     # obj = await self.create_many(data=[new_data_obj,data_transferring],auto_commit=True)
+                    
+                    # 收集結果
                     result_list.append(new_data)
                     result_list.append(data_transferring)
             except Exception as e:
+                # 發生錯誤時回滾所有更改
                 await session.rollback()
                 logger.error(f"Error in add_study_new: {e}")
                 raise

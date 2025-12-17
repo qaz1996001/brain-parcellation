@@ -1,4 +1,71 @@
-# app/routers/sync/deps.py
+"""
+研究 (Study) 模組的依賴注入配置。
+
+此模組管理所有與查詢過濾、搜索和分頁相關的依賴注入。
+使用 FastAPI 的依賴注入系統和 advanced-alchemy 提供的過濾器框架。
+
+核心概念
+--------
+依賴注入提供者（DIP）模式：
+- 所有過濾器配置統一通過 provide_filters() 函數生成
+- 支援動態配置，避免硬編碼
+- 自動緩存生成的依賴提供者，提高效率
+
+支援的過濾器類型
+-----------
+1. **搜索過濾** (SearchFilter)
+   - 全文搜索，支援多欄位
+   - 支援大小寫不敏感搜索
+
+2. **集合過濾** (CollectionFilter)
+   - IN 過濾：字段值在指定集合內
+   - 支援多個欄位組合
+
+3. **日期範圍過濾** (BeforeAfter)
+   - BEFORE/AFTER 過濾
+   - 支援 ISO 8601 格式日期
+
+4. **排序** (OrderBy)
+   - 單欄位或多欄位排序
+   - 支援升序（asc）和降序（desc）
+
+5. **分頁** (LimitOffset)
+   - Limit/Offset 分頁方式
+   - 默認 limit=50
+
+Example Configuration
+--------------------
+典型的過濾器配置：
+
+    provide_filters({
+        # 搜索
+        "search": "field1,field2",
+        "search_ignore_case": True,
+        
+        # 集合過濾
+        "in_fields": [
+            FieldNameType(name="status", type_hint=str),
+            FieldNameType(name="category", type_hint=str),
+        ],
+        
+        # 日期範圍
+        "before_after_fields": [
+            FieldNameType(name="created_at", type_hint=datetime),
+        ],
+        
+        # 排序
+        "order_by": ["created_at", "name"],
+        
+        # 分頁
+        "pagination_type": "limit_offset",
+        "limit": 50,
+    })
+
+See Also
+--------
+backend.app.study.routers : 使用過濾器的路由端點
+backend.app.config.deps : 全局依賴配置
+"""
 
 import datetime
 import inspect
@@ -39,6 +106,7 @@ from advanced_alchemy.extensions.fastapi.providers import (
 )
 
 
+# 依賴項快取，避免重複創建相同配置的依賴提供者
 dep_cache = DependencyCache()
 
 
