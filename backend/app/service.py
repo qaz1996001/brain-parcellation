@@ -1,3 +1,70 @@
+"""
+基礎服務層 - 統一的資料庫會話管理和服務基類。
+
+此模組提供兩個核心組件：
+1. SessionManager: 資料庫會話管理器，支援嵌套事務和自動清理
+2. BaseRepositoryService: 增強的服務基類，提供統一的會話管理
+
+核心功能
+--------
+- 非同步會話管理: 自動創建、使用和清理資料庫會話
+- 事務支援: 支援常規和嵌套事務（savepoints）
+- 重試機制: 自動重試暫時性資料庫錯誤
+- 批次操作: 在單一事務中執行多個操作
+- 資源清理: 應用程式關閉時自動清理所有會話
+
+設計原則
+--------
+- 資源安全: 確保會話正確關閉，避免連接洩漏
+- 事務一致性: 支援原子性操作和自動回滾
+- 錯誤恢復: 自動重試暫時性錯誤
+- 靈活性: 支援使用現有會話或創建新會話
+
+Classes
+-------
+SessionManager
+    資料庫會話管理器，提供會話創建、事務管理和資源清理。
+    
+BaseRepositoryService
+    增強的服務基類，擴展 SQLAlchemyAsyncRepositoryService，
+    提供統一的會話管理能力。
+
+Notes
+-----
+此模組建立在 Advanced Alchemy 之上，提供額外的會話管理功能。
+所有服務類應繼承 BaseRepositoryService 以獲得統一的會話管理。
+
+Examples
+--------
+使用 SessionManager：
+
+>>> from backend.app.service import SessionManager
+>>> from sqlalchemy.ext.asyncio import async_sessionmaker
+>>> 
+>>> session_factory = async_sessionmaker(...)
+>>> manager = SessionManager(session_factory)
+>>> 
+>>> async with manager.get_session() as session:
+>>>     result = await session.execute(query)
+
+繼承 BaseRepositoryService：
+
+>>> from backend.app.service import BaseRepositoryService
+>>> from backend.app.model import MyModel
+>>> 
+>>> class MyService(BaseRepositoryService[MyModel]):
+>>>     async def my_method(self):
+>>>         async with self.session_manager.get_session() as session:
+>>>             # 使用會話進行操作
+>>>             pass
+
+See Also
+--------
+backend.app.database : 資料庫配置
+advanced_alchemy.extensions.fastapi.service : Advanced Alchemy 服務基類
+sqlalchemy.ext.asyncio : SQLAlchemy 非同步擴展
+"""
+
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, TypeVar, Generic, AsyncGenerator, Callable, Any
@@ -17,10 +84,72 @@ T = TypeVar("T")
 
 class SessionManager:
     """
-    Manages database sessions with support for nested transactions and proper cleanup.
-
-    This class provides a centralized way to manage SQLAlchemy async sessions,
-    ensuring proper transaction handling, error recovery, and resource cleanup.
+    資料庫會話管理器 - 提供統一的會話生命週期管理。
+    
+    此類提供集中化的 SQLAlchemy 非同步會話管理，確保：
+    - 正確的事務處理
+    - 錯誤恢復機制
+    - 資源自動清理
+    - 嵌套事務支援
+    
+    Attributes
+    ----------
+    _session_factory : async_sessionmaker
+        會話工廠，用於創建新的資料庫會話。
+    _active_sessions : dict[int, AsyncSession]
+        當前活躍的會話字典，鍵為會話 ID，值為會話實例。
+    _lock : asyncio.Lock
+        非同步鎖，用於保護會話字典的並發訪問。
+    
+    Methods
+    -------
+    get_session()
+        創建並管理新的資料庫會話，自動清理。
+    use_session(session)
+        使用現有會話或創建新會話。
+    transaction(session, nested)
+        在會話中創建事務（支援嵌套）。
+    execute_with_retry(func, *args, **kwargs)
+        執行函數並在暫時性錯誤時自動重試。
+    close_all_sessions()
+        關閉所有活躍的會話。
+    get_active_session_count()
+        獲取當前活躍會話數量。
+    
+    Notes
+    -----
+    會話追蹤：
+        所有創建的會話都會被追蹤，確保在應用程式關閉時
+        正確清理，避免連接洩漏。
+    
+    線程安全：
+        使用 asyncio.Lock 保護會話字典的並發訪問，
+        確保多個協程同時創建會話時的安全性。
+    
+    Examples
+    --------
+    基本使用：
+    
+    >>> from sqlalchemy.ext.asyncio import async_sessionmaker
+    >>> manager = SessionManager(async_sessionmaker(...))
+    >>> 
+    >>> async with manager.get_session() as session:
+    >>>     result = await session.execute(query)
+    >>>     await session.commit()
+    
+    使用現有會話：
+    
+    >>> async with manager.use_session(existing_session) as session:
+    >>>     # 如果提供了會話，使用它；否則創建新的
+    >>>     await session.execute(query)
+    
+    嵌套事務：
+    
+    >>> async with manager.get_session() as session:
+    >>>     async with manager.transaction(session, nested=True) as trans:
+    >>>         # 嵌套事務（savepoint）
+    >>>         await session.execute(query)
+    >>>         # 如果出錯，只回滾此嵌套事務
     """
 
     def __init__(self, session_factory: async_sessionmaker):
@@ -218,11 +347,78 @@ class BaseRepositoryService(
     service.SQLAlchemyAsyncRepositoryService[ModelT], Generic[ModelT]
 ):
     """
-    Enhanced Service base class providing unified Session management.
-
-    This base class extends the SQLAlchemyAsyncRepositoryService with
-    additional session management capabilities, making it easier to handle
-    complex transactional operations across multiple repository calls.
+    增強的服務基類 - 提供統一的會話管理能力。
+    
+    此基類擴展 SQLAlchemyAsyncRepositoryService，添加額外的會話管理功能，
+    使跨多個儲存庫調用的複雜事務操作更容易處理。
+    
+    Parameters
+    ----------
+    **kwargs
+        傳遞給父服務類的參數。
+    
+    Attributes
+    ----------
+    session_manager : SessionManager
+        會話管理器實例，提供會話創建和事務管理。
+    _session_factory : async_sessionmaker
+        會話工廠，從儲存庫中提取或創建。
+    
+    Methods
+    -------
+    execute_in_transaction(func, *args, **kwargs)
+        在事務中執行函數，確保原子性。
+    execute_batch_operations(operations, session, stop_on_error)
+        在單一事務中執行多個操作。
+    with_new_session(func, *args, **kwargs)
+        使用全新的會話執行函數。
+    cleanup()
+        清理服務使用的資源。
+    get_session_stats()
+        獲取會話使用統計。
+    
+    Notes
+    -----
+    會話工廠提取：
+        此類會自動從 Advanced Alchemy 儲存庫中提取會話工廠。
+        支援多種提取策略，確保兼容性。
+    
+    事務管理：
+        所有資料庫操作都應通過此類的方法進行，以確保
+        正確的事務處理和資源清理。
+    
+    Examples
+    --------
+    基本繼承：
+    
+    >>> from backend.app.service import BaseRepositoryService
+    >>> from backend.app.model import UserModel
+    >>> 
+    >>> class UserService(BaseRepositoryService[UserModel]):
+    >>>     async def create_user_with_profile(self, name, email):
+    >>>         async def _create(session):
+    >>>             user = await self.create({"name": name}, session=session)
+    >>>             profile = await profile_repo.create(
+    >>>                 {"user_id": user.id, "email": email},
+    >>>                 session=session
+    >>>             )
+    >>>             return user, profile
+    >>>         
+    >>>         return await self.execute_in_transaction(_create)
+    
+    批次操作：
+    
+    >>> operations = [
+    >>>     (repo.create, (data1,), {}),
+    >>>     (repo.update, (id1, data2), {}),
+    >>>     (repo.delete, (id2,), {})
+    >>> ]
+    >>> results = await service.execute_batch_operations(operations)
+    
+    See Also
+    --------
+    SessionManager : 會話管理器
+    advanced_alchemy.extensions.fastapi.service.SQLAlchemyAsyncRepositoryService : 父類
     """
 
     def __init__(self, **kwargs):
