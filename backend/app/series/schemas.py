@@ -1,22 +1,137 @@
-# app/series/schemas.py
+"""
+Series 模組的資料序列化方案和序列類型定義。
+
+此模組定義了：
+1. API 響應模型（SeriesResponse）
+2. 序列類型識別的正則表達式模式
+3. 序列類型的排序字典（用於優先級排序）
+
+序列類型分類
+-----------
+系統支援四類序列類型：
+
+1. **結構影像序列** (series_structure_sort)
+   - T1, T2, DWI, ADC 等基礎序列
+   - 各種方向和對比增強變體
+   - 約 80+ 種變體
+
+2. **特殊序列** (series_special_sort)
+   - MRA（磁共振血管造影）
+   - SWAN, eSWAN（磁敏感加權成像）
+   - 約 10+ 種變體
+
+3. **灌注序列** (series_perfusion_sort)
+   - DSC（動態磁敏感對比）
+   - ASL（動脈自旋標記）
+   - 約 10+ 種變體
+
+4. **功能序列** (series_functional_sort)
+   - RESTING（靜息態）
+   - CVR（腦血管反應性）
+   - DTI（擴散張量成像）
+   - 約 10+ 種變體
+
+排序機制
+--------
+每個序列類型都有一個排序值（數字），用於：
+- 確定序列的優先級
+- 在列表中排序顯示
+- 決定處理順序
+
+See Also
+--------
+backend.app.series.routers : 使用這些模型的 API 端點
+"""
+
 import re
 
 from pydantic import BaseModel
 
 
 class SeriesResponse(BaseModel):
-    """Schema for series response."""
-
+    """
+    DICOM 序列分析響應模型。
+    
+    此模型表示單個 DICOM 檔案的分析結果，包含檔案名稱、
+    識別的序列類型和影像方向。
+    
+    Attributes
+    ----------
+    file_name : str
+        檔案名稱。
+        對於檔案路徑分析，為檔案的基本名稱（不含路徑）。
+        對於上傳分析，為原始上傳的檔案名稱。
+    series_type : str
+        識別的序列類型。
+        可能的值包括：
+        - 結構序列：T1_AXI, T2_COR, DWI0, ADC 等
+        - 特殊序列：MRA_BRAIN, SWAN, eSWAN 等
+        - 灌注序列：DSC, ASLSEQ 等
+        - 功能序列：RESTING, CVR2000, DTI64D 等
+        - 未知序列：'unknown'（無法識別時）
+    series_orientation : str
+        影像的空間方向。
+        可能的值：
+        - 'AXI': 軸位（Axial）
+        - 'COR': 冠狀位（Coronal）
+        - 'SAG': 矢狀位（Sagittal）
+        - 其他方向標識符
+    
+    Examples
+    --------
+    >>> response = SeriesResponse(
+    ...     file_name="scan1.dcm",
+    ...     series_type="T1_AXI",
+    ...     series_orientation="AXI"
+    ... )
+    >>> print(response.series_type)
+    T1_AXI
+    
+    >>> response = SeriesResponse(
+    ...     file_name="unknown_scan.dcm",
+    ...     series_type="unknown",
+    ...     series_orientation="AXI"
+    ... )
+    >>> print(response.series_type)
+    unknown
+    
+    Notes
+    -----
+    - series_type 為空字串時會自動轉換為 'unknown'
+    - 所有欄位都是必填的
+    - 使用 Pydantic 進行自動驗證和序列化
+    """
     file_name: str
     series_type: str
     series_orientation: str
 
 
+# ========== 序列類型識別正則表達式 ==========
+
+# 結構影像序列模式：匹配 T1, T2, DWI, ADC 等基礎序列
 series_structure_pattern = re.compile(("T1|T2|DWI|ADC"))
+
+# 特殊序列模式：匹配 MRA, SWAN, eSWAN 等特殊序列
 series_special_pattern = re.compile(("MRA|SWAN|eSWAN"))
+
+# 灌注序列模式：匹配 DSC, ASL 等灌注序列
 series_perfusion_pattern = re.compile(("DSC|ASL"))
+
+# 功能序列模式：匹配 RESTING, CVR, DTI 等功能序列
 series_functional_pattern = re.compile(("RESTING|CVR|DTI"))
 
+# ========== 序列類型排序字典 ==========
+# 這些字典定義了每個序列類型的排序值（優先級）
+# 排序值越小，優先級越高
+# 用於在列表中排序和確定處理順序
+
+# 結構影像序列排序字典
+# 包含 T1, T2, DWI, ADC 等基礎序列及其各種變體
+# 排序值範圍：100-507
+# 分類：
+#   - ADC/DWI: 100-120
+#   - T1 系列: 300-407
+#   - T2 系列: 410-507
 series_structure_sort = {
     "ADC": 100,
     "DWI0": 110,
@@ -118,6 +233,13 @@ series_structure_sort = {
     "T2BRAVOCE_CORr": 506,
     "T2BRAVOCE_SAGr": 507,
 }
+# 特殊序列排序字典
+# 包含 MRA, SWAN, eSWAN 等特殊序列
+# 排序值範圍：100-330
+# 分類：
+#   - MRA: 100-130
+#   - SWAN: 200-210
+#   - eSWAN: 300-330
 series_special_sort = {
     "MRA_BRAIN": 100,
     "MRA_NECK": 110,
@@ -130,6 +252,12 @@ series_special_sort = {
     "eSWANmIP": 310,
     "eSWANPHASE": 330,
 }
+# 灌注序列排序字典
+# 包含 DSC, ASL 等灌注序列
+# 排序值範圍：100-230
+# 分類：
+#   - ASL: 100-150
+#   - DSC: 200-230
 series_perfusion_sort = {
     "ASLSEQ": 100,
     "ASLSEQATT": 110,
@@ -145,6 +273,13 @@ series_perfusion_sort = {
     "DSCCBV_COLOR": 220,
     "DSCMTT_COLOR": 230,
 }
+# 功能序列排序字典
+# 包含 RESTING, CVR, DTI 等功能序列
+# 排序值範圍：100-330
+# 分類：
+#   - RESTING: 100-101
+#   - CVR: 200-204
+#   - DTI: 300-330
 series_functional_sort = {
     "RESTING": 100,
     "RESTING2000": 101,
