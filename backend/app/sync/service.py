@@ -580,6 +580,47 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         return dcop_event_list
 
+    async def schedule_new_studies(self, study_ids: List[Optional[str]]) -> List[DCOPEventModel]:
+        """
+        排程新 Study 的同步任務（去重並過濾）。
+        
+        此方法是 `add_study_new` 的包裝方法，提供以下額外功能：
+        1. 自動去重：移除重複的 Study UID
+        2. 過濾無效值：移除 None 和空字串
+        3. 統一介面：提供更語義化的方法名稱
+        
+        Parameters
+        ----------
+        study_ids : list[Optional[str]]
+            Study UID 清單（可能包含重複和 None）。
+        
+        Returns
+        -------
+        list[DCOPEventModel]
+            建立的所有事件模型（STUDY_NEW 和 STUDY_TRANSFERRING）。
+        
+        Examples
+        --------
+        >>> study_ids = ["study-uid-123", "study-uid-123", None, "study-uid-456"]
+        >>> events = await service.schedule_new_studies(study_ids)
+        >>> # 結果：只處理 "study-uid-123" 和 "study-uid-456"（去重並過濾 None）
+        
+        Notes
+        -----
+        此方法遵循 Good Taste 設計原則：
+        - 消除特殊情況：統一處理重複和無效值
+        - 資料結構驅動：使用集合去重而非手動檢查
+        """
+        # 去重並過濾無效值
+        unique_study_ids = list({uid for uid in study_ids if uid})
+        
+        # 如果沒有有效的 Study ID，返回空列表
+        if not unique_study_ids:
+            return []
+        
+        # 調用實際的建立方法
+        return await self.add_study_new(unique_study_ids)
+
     async def add_study_new(self, data_list: List[str]) -> List[DCOPEventModel]:
         """
         建立新 Study 的初始事件。
