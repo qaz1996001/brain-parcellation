@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from funboost.core.func_params_model import BaseJsonAbleModel
-from pydantic import ConfigDict, field_serializer
+from pydantic import ConfigDict, field_serializer, Field, field_validator
 
 
 class ResampleTaskParams(BaseJsonAbleModel):
@@ -85,6 +85,44 @@ class TaskInferenceParams(BaseJsonAbleModel):
 
 
 class StudyTaskInferenceParams(BaseJsonAbleModel):
-    mapping_inference: Dict[str, any]
+    mapping_inference: Dict[str, Any]
     output_study_nifti_path: Path
+    model_config = ConfigDict(extra="allow")
+
+
+# *************************************************************************** #
+# Pipeline Inference Task Parameters
+# *************************************************************************** #
+
+
+class InferenceTaskParams(BaseJsonAbleModel):
+    """推論任務參數模型 - 用於 task_pipeline_inference"""
+    nifti_study_path: str = Field(..., description="NIFTI Study 路徑")
+    dicom_study_path: str = Field(..., description="DICOM Study 路徑")
+    study_uid: Optional[str] = Field(None, description="Study UID")
+    study_id: Optional[str] = Field(None, description="Study ID")
+    
+    @field_validator('nifti_study_path', 'dicom_study_path')
+    @classmethod
+    def validate_paths(cls, v: str) -> str:
+        """驗證路徑格式（不強制要求路徑存在，因為可能是遠程路徑）"""
+        if not v or not v.strip():
+            raise ValueError(f"路徑不能為空")
+        return v.strip()
+    
+    model_config = ConfigDict(extra="allow")
+
+
+class SubprocessTaskParams(BaseJsonAbleModel):
+    """子進程任務參數模型 - 用於 task_subprocess_inference"""
+    cmd_str: str = Field(..., description="要執行的命令字串")
+    
+    @field_validator('cmd_str')
+    @classmethod
+    def validate_cmd_str(cls, v: str) -> str:
+        """驗證命令字串"""
+        if not v or not v.strip():
+            raise ValueError("命令字串不能為空")
+        return v.strip()
+    
     model_config = ConfigDict(extra="allow")

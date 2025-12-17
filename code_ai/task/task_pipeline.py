@@ -2,7 +2,7 @@ import json
 import os
 import pathlib
 import subprocess
-from typing import Dict
+from typing import Dict, Any
 
 from funboost import Booster, fct
 from funboost.core.serialization import Serialization
@@ -16,6 +16,7 @@ logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_h
 from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
+from code_ai.task.schema.intput_params import InferenceTaskParams, SubprocessTaskParams
 from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.database import save_result_status_to_sqlalchemy
 
@@ -27,8 +28,12 @@ from code_ai.utils.database import save_result_status_to_sqlalchemy
         qps=1,
     )
 )
-def task_pipeline_inference(func_params: Dict[str, any]):
+def task_pipeline_inference(func_params: Dict[str, Any]) -> str:
+    """推論任務主函數 - 執行推論管道並發送狀態事件"""
     from code_ai.task.task_dicom2nii import call_post_httpx
+
+    # 驗證並解析輸入參數
+    params = InferenceTaskParams.model_validate(func_params)
 
     upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
     path_process = os.getenv("PATH_PROCESS")
@@ -39,10 +44,9 @@ def task_pipeline_inference(func_params: Dict[str, any]):
     os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
     os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
     os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
 
-    nifti_study_path = func_params["nifti_study_path"]
-    dicom_study_path = func_params["dicom_study_path"]
+    nifti_study_path = params.nifti_study_path
+    dicom_study_path = params.dicom_study_path
 
     inference_item_cmd = build_inference_cmd(
         pathlib.Path(nifti_study_path), pathlib.Path(dicom_study_path)
@@ -57,8 +61,8 @@ def task_pipeline_inference(func_params: Dict[str, any]):
     with open(cmd_output_path, "w") as f:
         f.write(json.dumps(inference_item_cmd.model_dump()["cmd_items"]))
 
-    study_uid = func_params.get("study_uid", None)
-    study_id = func_params.get("study_id", None)
+    study_uid = params.study_uid
+    study_id = params.study_id
     api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
 
     if study_uid and study_id:
@@ -70,7 +74,7 @@ def task_pipeline_inference(func_params: Dict[str, any]):
             tool_id="INFERENCE_TOOL",
             params_data={
                 "inference_item_cmd": inference_item_cmd.cmd_items,
-                "func_params": func_params,
+                "func_params": params.model_dump(),
                 "task": fct.function_result_status.get_status_dict(),
             },
         )
@@ -80,8 +84,6 @@ def task_pipeline_inference(func_params: Dict[str, any]):
                 "data": dcop_event.model_dump_json(),
             }
         )
-    else:
-        pass
 
     result_list = []
     for inference_item in inference_item_cmd.cmd_items:
@@ -105,7 +107,7 @@ def task_pipeline_inference(func_params: Dict[str, any]):
             tool_id="INFERENCE_TOOL",
             params_data={
                 "inference_item_cmd": inference_item_cmd.cmd_items,
-                "func_params": func_params,
+                "func_params": params.model_dump(),
                 "task": fct.function_result_status.get_status_dict(),
             },
             result_data={
@@ -128,11 +130,15 @@ def task_pipeline_inference(func_params: Dict[str, any]):
         qps=1,
     )
 )
-def task_subprocess_inference(func_params: Dict[str, any]):
+def task_subprocess_inference(func_params: Dict[str, Any]) -> str:
+    """子進程推論任務 - 執行單一命令並返回結果"""
+    # 驗證並解析輸入參數
+    params = SubprocessTaskParams.model_validate(func_params)
+    
     path_process = os.getenv("PATH_PROCESS")
     path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
     os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
-    cmd_str = func_params["cmd_str"]
+    cmd_str = params.cmd_str
     process = subprocess.Popen(
         args=cmd_str,
         shell=True,
