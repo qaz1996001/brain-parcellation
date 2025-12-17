@@ -1,6 +1,6 @@
 """Task schema 模組 - 定義所有任務參數模型"""
 
-from .intput_params import (
+from code_ai.task.schema.intput_params import (
     ResampleTaskParams,
     SynthsegTaskParams,
     ProcessSynthsegTaskParams,

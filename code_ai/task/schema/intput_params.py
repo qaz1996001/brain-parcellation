@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-
 from funboost.core.func_params_model import BaseJsonAbleModel
 from pydantic import ConfigDict, field_serializer, Field, field_validator
 
