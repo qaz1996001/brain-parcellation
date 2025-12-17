@@ -140,3 +140,4 @@ echo "   - 執行完整診斷: python scripts/diagnose_inference_stuck.py"
 echo "   - 快速修復: ./scripts/quick_fix_stuck.sh"
 echo ""
 
+
