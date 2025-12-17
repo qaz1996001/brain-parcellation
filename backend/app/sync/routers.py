@@ -236,14 +236,14 @@ async def post_study_uuid(
         dcop_event_service.dicom_tool_get_series_info, result_list
     )
 
-    # 若指定了前驅 Study，建立時序鏈結
-    link_target = request.study_uid or (study_ids[0] if len(study_ids) == 1 else None)
-    if request.prev_study_uid and link_target:
-        background_tasks.add_task(
-            dcop_event_service.link_prev_study,
-            link_target,
-            request.prev_study_uid,
-        )
+    # 若指定了前驅 Study，建立時#序鏈結
+    #link_target = request.study_uid or (study_ids[0] if len(study_ids) == 1 else None)
+    #if request.prev_study_uid and link_target:
+     #   background_tasks.add_task(
+         #   dcop_event_service.link_prev_study,
+       #     link_target,
+    #        request.prev_study_uid,
+     #   )
     
     return result_list
 
