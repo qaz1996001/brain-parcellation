@@ -131,30 +131,57 @@ def _prepare_directories() -> Dict[str, str]:
     準備推論任務所需的目錄結構。
 
     此函數從環境變數讀取目錄路徑配置，並確保所有必要的目錄存在。
-    如果目錄不存在，會自動創建。
+    如果目錄不存在，會自動創建。此函數在推論任務開始前調用，確保
+    所有輸出目錄都已準備就緒。
 
     Returns
     -------
     Dict[str, str]
         包含以下鍵的字典：
-        - 'json': JSON 檔案輸出目錄路徑
-        - 'log': 日誌檔案輸出目錄路徑
-        - 'cmd_tools': 推論命令檔案輸出目錄路徑
+        - 'json': JSON 檔案輸出目錄路徑，用於儲存推論結果的 JSON 檔案
+        - 'log': 日誌檔案輸出目錄路徑，用於儲存推論任務的日誌檔案
+        - 'cmd_tools': 推論命令檔案輸出目錄路徑，用於儲存推論命令的 JSON 檔案
+
+        如果環境變數未設置，對應的值可能為 None。但函數會跳過 None 值，
+        不會嘗試創建不存在的路徑。
 
     Notes
     -----
     此函數依賴以下環境變數：
-    - PATH_PROCESS: 處理檔案根目錄
-    - PATH_JSON: JSON 檔案目錄
-    - PATH_LOG: 日誌檔案目錄
+    - PATH_PROCESS: 處理檔案根目錄，必須設置
+    - PATH_JSON: JSON 檔案目錄，必須設置
+    - PATH_LOG: 日誌檔案目錄，必須設置
 
     cmd_tools 目錄會自動建立在 PATH_PROCESS/Deep_cmd_tools。
 
+    目錄創建行為：
+    - 使用 os.makedirs(path, exist_ok=True)，如果目錄已存在不會報錯
+    - 如果環境變數為 None，該路徑會被跳過，不會創建
+    - 此函數不會驗證目錄創建是否成功，假設環境變數配置正確
+
+    See Also
+    --------
+    os.makedirs : Python 標準庫函數，用於創建目錄
+    os.getenv : 從環境變數讀取配置
+
     Examples
     --------
+    基本使用：
+
     >>> directories = _prepare_directories()
     >>> print(directories['cmd_tools'])
     /path/to/process/Deep_cmd_tools
+    >>> print(directories['json'])
+    /path/to/json
+    >>> print(directories['log'])
+    /path/to/log
+
+    檢查目錄是否存在：
+
+    >>> directories = _prepare_directories()
+    >>> import os
+    >>> os.path.exists(directories['cmd_tools'])
+    True
     """
     path_process = os.getenv("PATH_PROCESS")
     path_json = os.getenv("PATH_JSON")
@@ -183,43 +210,60 @@ def _build_inference_commands(
     建立推論命令列表。
 
     根據 NIFTI 和 DICOM Study 路徑，分析需要執行的推論任務，
-    並生成對應的命令字串列表。
+    並生成對應的命令字串列表。此函數是推論任務規劃的核心，
+    決定哪些推論模型需要執行。
 
     Parameters
     ----------
     nifti_study_path : str
         NIFTI Study 目錄路徑。此路徑應包含已轉換的 NIFTI 檔案。
+        路徑必須存在且可讀取，否則推論命令建立可能失敗。
+        格式範例："/path/to/nifti/study_id"
     dicom_study_path : str
         DICOM Study 目錄路徑。此路徑應包含原始 DICOM 檔案。
+        用於推論任務的元資料提取和結果對應。
+        格式範例："/path/to/dicom/study_id"
 
     Returns
     -------
     InferenceCmd
         推論命令物件，包含以下屬性：
         - cmd_items: List[InferenceCmdItem]，每個項目包含：
-          - study_id: Study 識別碼
-          - name: 推論任務名稱（如 'SynthSeg', 'Aneurysm'）
-          - cmd_str: 要執行的命令字串
-          - input_list: 輸入檔案路徑列表
-          - output_list: 輸出檔案路徑列表
-          - input_dicom_dir: DICOM 輸入目錄
+          - study_id: Study 識別碼，格式為 "patient_id_study_date_modality_accession"
+          - name: 推論任務名稱（如 'SynthSeg', 'Aneurysm', 'SeriesClassification'）
+          - cmd_str: 要執行的完整命令字串，可直接用於 subprocess 執行
+          - input_list: 輸入檔案路徑列表，包含所有需要的 NIFTI 檔案
+          - output_list: 輸出檔案路徑列表，包含預期的輸出檔案位置
+          - input_dicom_dir: DICOM 輸入目錄，用於後處理和結果對應
+
+        如果 Study 中沒有符合條件的序列，cmd_items 將為空列表。
 
     Notes
     -----
     此函數會掃描 NIFTI Study 目錄，根據配置檔案判斷需要執行哪些推論任務。
     推論任務的選擇基於：
-    1. Study 中可用的序列類型（T1, T2, DWI 等）
+    1. Study 中可用的序列類型（T1, T2, DWI, FLAIR 等）
     2. 配置檔案中定義的推論任務映射規則
+    3. 序列的完整性檢查（確保所有必要的檔案都存在）
 
-    如果 Study 中沒有符合條件的序列，cmd_items 將為空列表。
+    推論任務類型：
+    - SynthSeg: 腦部組織分割，需要 T1 或 T2 序列
+    - Aneurysm: 動脈瘤檢測，需要特定的血管序列
+    - SeriesClassification: 序列分類，用於驗證序列類型
+
+    如果 Study 中沒有符合條件的序列，cmd_items 將為空列表，但不會報錯。
+    這種情況下，推論任務會正常完成，只是不執行任何推論命令。
 
     See Also
     --------
     build_inference_cmd : 實際執行推論命令建立的函數
     InferenceCmd : 推論命令資料結構
+    InferenceCmdItem : 單個推論命令項目的資料結構
 
     Examples
     --------
+    基本使用：
+
     >>> inference_cmd = _build_inference_commands(
     ...     "/path/to/nifti/study",
     ...     "/path/to/dicom/study"
@@ -228,6 +272,32 @@ def _build_inference_commands(
     3
     >>> print(inference_cmd.cmd_items[0].name)
     SynthSeg
+
+    檢查推論命令內容：
+
+    >>> inference_cmd = _build_inference_commands(
+    ...     "/path/to/nifti/study",
+    ...     "/path/to/dicom/study"
+    ... )
+    >>> for item in inference_cmd.cmd_items:
+    ...     print(f"Task: {item.name}")
+    ...     print(f"Command: {item.cmd_str}")
+    ...     print(f"Inputs: {item.input_list}")
+    ...     print(f"Outputs: {item.output_list}")
+    Task: SynthSeg
+    Command: python /path/to/synthseg.py --input /path/to/input.nii.gz
+    Inputs: ['/path/to/T1.nii.gz']
+    Outputs: ['/path/to/synthseg_output.nii.gz']
+
+    處理空結果的情況：
+
+    >>> inference_cmd = _build_inference_commands(
+    ...     "/path/to/empty/study",
+    ...     "/path/to/empty/dicom"
+    ... )
+    >>> print(len(inference_cmd.cmd_items))
+    0
+    >>> # 空列表表示沒有需要執行的推論任務
     """
     return build_inference_cmd(
         pathlib.Path(nifti_study_path),
@@ -244,38 +314,62 @@ def _save_commands_to_file(
     儲存推論命令到 JSON 檔案。
 
     將推論命令列表序列化為 JSON 格式並寫入檔案，用於：
-    1. 審計追蹤：記錄執行的推論命令
-    2. 除錯：可以查看實際執行的命令
-    3. 重跑：可以根據 JSON 檔案重新執行命令
+    1. 審計追蹤：記錄執行的推論命令，便於後續審計和追蹤
+    2. 除錯：可以查看實際執行的命令，快速定位問題
+    3. 重跑：可以根據 JSON 檔案重新執行命令，無需重新分析
 
     Parameters
     ----------
     inference_cmd : InferenceCmd
-        推論命令物件，包含要執行的命令列表。
+        推論命令物件，包含要執行的命令列表。如果 cmd_items 為空，
+        將使用 dicom_study_path 的目錄名稱作為檔案名稱。
     cmd_tools_path : str
-        命令檔案輸出目錄路徑。
+        命令檔案輸出目錄路徑。此目錄必須存在或可創建。
+        格式範例："/path/to/process/Deep_cmd_tools"
     dicom_study_path : str
         DICOM Study 路徑，當 inference_cmd.cmd_items 為空時，
         使用此路徑的目錄名稱作為檔案名稱。
+        格式範例："/path/to/dicom/study_id"
 
     Returns
     -------
     str
-        寫入的 JSON 檔案完整路徑。
+        寫入的 JSON 檔案完整路徑。路徑格式為：
+        {cmd_tools_path}/{study_id}_cmd.json 或
+        {cmd_tools_path}/{directory_name}_cmd.json
 
     Notes
     -----
     檔案命名規則：
     - 如果 cmd_items 不為空：使用第一個命令的 study_id
       格式：{study_id}_cmd.json
+      範例：10089413_20210201_MR_21002010079_cmd.json
     - 如果 cmd_items 為空：使用 dicom_study_path 的目錄名稱
       格式：{directory_name}_cmd.json
+      範例：study_id_cmd.json
 
     JSON 檔案內容為 cmd_items 列表的序列化結果，每個項目包含：
-    - study_id, name, cmd_str, input_list, output_list, input_dicom_dir
+    - study_id: Study 識別碼
+    - name: 推論任務名稱
+    - cmd_str: 命令字串
+    - input_list: 輸入檔案路徑列表
+    - output_list: 輸出檔案路徑列表
+    - input_dicom_dir: DICOM 輸入目錄
+
+    檔案寫入行為：
+    - 使用 'w' 模式打開檔案，如果檔案已存在會被覆蓋
+    - JSON 序列化使用 json.dumps()，不包含縮排（緊湊格式）
+    - 如果目錄不存在，會先創建目錄（由調用方確保）
+
+    See Also
+    --------
+    json.dumps : Python 標準庫函數，用於 JSON 序列化
+    InferenceCmd.model_dump : Pydantic 模型序列化方法
 
     Examples
     --------
+    基本使用：
+
     >>> inference_cmd = InferenceCmd(cmd_items=[...])
     >>> file_path = _save_commands_to_file(
     ...     inference_cmd,
@@ -284,6 +378,26 @@ def _save_commands_to_file(
     ... )
     >>> print(file_path)
     /path/to/cmd_tools/10089413_20210201_MR_21002010079_cmd.json
+
+    處理空命令列表的情況：
+
+    >>> inference_cmd = InferenceCmd(cmd_items=[])
+    >>> file_path = _save_commands_to_file(
+    ...     inference_cmd,
+    ...     "/path/to/cmd_tools",
+    ...     "/path/to/dicom/study_id"
+    ... )
+    >>> print(file_path)
+    /path/to/cmd_tools/study_id_cmd.json
+
+    讀取儲存的命令檔案：
+
+    >>> file_path = _save_commands_to_file(inference_cmd, ...)
+    >>> import json
+    >>> with open(file_path, 'r') as f:
+    ...     saved_commands = json.load(f)
+    >>> print(len(saved_commands))
+    3
     """
     # 決定檔案名稱：優先使用 study_id，否則使用目錄名稱
     if inference_cmd.cmd_items:
@@ -306,32 +420,75 @@ def _should_send_events(study_uid: Optional[str], study_id: Optional[str]) -> bo
 
     此函數用於統一判斷邏輯，避免重複的條件檢查。
     只有當 study_uid 和 study_id 都不為 None 時，才應該發送事件。
+    此函數確保狀態事件的完整性和可追蹤性。
 
     Parameters
     ----------
     study_uid : Optional[str]
         Study UID，來自 DICOM 標籤 (0020,000D)。
+        格式範例："1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703"
+        如果為 None，表示此推論任務不屬於任何 DICOM Study。
     study_id : Optional[str]
         Study ID，系統內部使用的識別碼。
+        格式範例："10089413_20210201_MR_21002010079"
+        如果為 None，表示此推論任務沒有對應的 Study ID。
 
     Returns
     -------
     bool
         如果兩個參數都不為 None，返回 True；否則返回 False。
+        True 表示應該發送狀態事件，False 表示不應該發送。
 
     Notes
     -----
     此函數消除了重複的條件檢查，符合 DRY 原則。
     用於統一判斷是否應該發送 RUNNING 和 COMPLETE 狀態事件。
 
+    事件發送條件：
+    - 兩個參數都必須不為 None
+    - 如果任一參數為 None，則不發送事件
+    - 空字串會被視為有效值（不為 None），但通常不應該出現
+
+    使用場景：
+    - 在發送 RUNNING 事件前調用
+    - 在發送 COMPLETE 事件前調用
+    - 確保狀態事件的完整性和可追蹤性
+
+    See Also
+    --------
+    _send_status_event : 實際發送狀態事件的函數
+    DCOPStatus : 狀態枚舉定義
+
     Examples
     --------
+    兩個參數都不為 None（應該發送事件）：
+
     >>> _should_send_events("1.2.3.4", "study-123")
     True
+
+    study_uid 為 None（不應該發送事件）：
+
     >>> _should_send_events(None, "study-123")
     False
+
+    study_id 為 None（不應該發送事件）：
+
     >>> _should_send_events("1.2.3.4", None)
     False
+
+    兩個參數都為 None（不應該發送事件）：
+
+    >>> _should_send_events(None, None)
+    False
+
+    在條件判斷中使用：
+
+    >>> study_uid = "1.2.3.4"
+    >>> study_id = "study-123"
+    >>> if _should_send_events(study_uid, study_id):
+    ...     _send_status_event(study_uid, study_id, ...)
+    ... else:
+    ...     print("跳過事件發送")
     """
     return study_uid is not None and study_id is not None
 
@@ -379,14 +536,24 @@ def _send_status_event(
     - 使用 funboost 任務隊列異步發送 HTTP POST 請求
     - 請求發送到 UPLOAD_DATA_API_URL + SYNC_PROT_OPE_NO 端點
     - 事件資料包含完整的推論命令和任務參數，用於審計追蹤
+    - 事件發送是異步的，不會阻塞主流程
 
     params_data 包含：
-    - inference_item_cmd: 推論命令列表
-    - func_params: 任務參數的序列化結果
-    - task: funboost 任務狀態資訊
+    - inference_item_cmd: 推論命令列表，包含所有要執行的命令
+    - func_params: 任務參數的序列化結果，包含輸入路徑和識別資訊
+    - task: funboost 任務狀態資訊，包含任務 ID 和執行狀態
 
     result_data 僅在 COMPLETE 狀態時包含，格式為：
     {'result': <JSON 序列化的執行結果>}
+    執行結果包含每個命令的 stdout 和 stderr。
+
+    事件發送失敗處理：
+    - 如果事件發送失敗，不會影響推論任務的執行
+    - 錯誤會被記錄到 funboost 的任務日誌中
+    - 建議監控事件發送的成功率，確保狀態追蹤的完整性
+
+    環境變數依賴：
+    - UPLOAD_DATA_API_URL: 同步 API 基礎 URL，必須設置
 
     See Also
     --------
@@ -476,15 +643,28 @@ def _execute_inference_commands(
     - 使用 subprocess.Popen 執行命令，支援 shell=True
     - 每個命令會等待完成（communicate() 會阻塞直到命令結束）
     - 標準輸出和錯誤都捕獲為位元組，然後解碼為 UTF-8 字串
+    - 命令執行是同步的，前一個命令完成後才會執行下一個
 
     執行順序：
     - 命令按照 cmd_items 列表的順序依序執行
     - 前一個命令完成後才會執行下一個命令
+    - 不支援並行執行（由 qps=1 配置保證）
 
     錯誤處理：
     - 目前不檢查命令的返回碼（returncode）
     - 錯誤輸出會包含在返回結果中，但不影響後續命令執行
-    - 階段三將添加錯誤處理邏輯
+    - 即使某個命令失敗，也會繼續執行後續命令
+    - 階段三將添加錯誤處理邏輯，包括返回碼檢查和錯誤重試
+
+    性能考量：
+    - 命令依序執行，總執行時間為所有命令執行時間的總和
+    - 如果某個命令執行時間很長，會阻塞整個推論流程
+    - 建議在推論命令中設置超時機制，避免無限等待
+
+    輸出處理：
+    - stdout 和 stderr 都使用 UTF-8 解碼
+    - 如果解碼失敗，可能會拋出 UnicodeDecodeError
+    - 建議推論命令確保輸出使用 UTF-8 編碼
 
     See Also
     --------
@@ -591,6 +771,12 @@ def task_pipeline_inference(func_params: Dict[str, Any]) -> str:
     - 命令依序執行，不並行（qps=1）
     - 每個命令會阻塞直到完成
     - 適合需要嚴格順序執行的推論任務
+    - 總執行時間為所有命令執行時間的總和
+
+    並發控制：
+    - qps=1 確保每秒最多執行一個推論任務
+    - 多個推論任務會排隊等待執行
+    - 適合資源受限的環境，避免資源競爭
 
     See Also
     --------
@@ -721,9 +907,15 @@ def task_subprocess_inference(func_params: Dict[str, Any]) -> str:
     - qps=1 限制每秒最多 1 個任務
 
     錯誤處理：
-    - 目前不檢查命令返回碼
+    - 目前不檢查命令返回碼（returncode）
     - 錯誤輸出記錄到日誌，但不影響返回值
-    - 階段三將添加錯誤處理邏輯
+    - 即使命令執行失敗，也會返回 stdout（可能為空字串）
+    - 階段三將添加錯誤處理邏輯，包括返回碼檢查和異常處理
+
+    返回值說明：
+    - 只返回標準輸出（stdout），不包含標準錯誤（stderr）
+    - 如果命令執行失敗，stdout 可能為空字串
+    - 建議檢查返回值的長度，判斷命令是否成功執行
 
     See Also
     --------
