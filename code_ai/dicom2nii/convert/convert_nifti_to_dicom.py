@@ -60,7 +60,6 @@ class Nifti2DicmConverter:
         Parameters:
         executor (Union[ThreadPoolExecutor, None]): Thread pool executor for parallel processing.
         """
-        input_path = self.input_path
         is_dir_flag = all(list(map(lambda x: x.is_dir(), self.input_path.iterdir())))
         if is_dir_flag:
             study_path_list = list(self.input_path.iterdir())
@@ -119,12 +118,12 @@ class Nifti2DicmConverter:
     ):
         if "COR" in nifti_file_path.name or "SAG" in nifti_file_path.name:
             return
-        nifti_obj = nib.load(str(nifti_file_path))
-        nifti_array = nifti_obj.get_fdata().round(0).astype(np.int16)
+        nifti_obj = nib.load(str(nifti_file_path))  # type: ignore[assignment]
+        nifti_array = nifti_obj.get_fdata().round(0).astype(np.int16)  # type: ignore[attr-defined]
         nifti_obj_axcodes = tuple(
-            nib.aff2axcodes(nifti_obj.affine)
+            nib.aff2axcodes(nifti_obj.affine)  # type: ignore[attr-defined]
         )  # ('R', 'A', 'S') ('L', 'A', 'S')
-        pixdim = nifti_obj.header.get("pixdim")
+        pixdim = nifti_obj.header.get("pixdim")  # type: ignore[attr-defined]
         if pixdim[0] == -1:
             nifti_array = self.do_reorientation(
                 nifti_array, nifti_obj_axcodes, ("S", "P", "L")
@@ -163,7 +162,7 @@ class Nifti2DicmConverter:
             # new_list = sorted(value, key=lambda x: x['00200032']['Value'][-1])
         else:
             new_list = sorted(dicom_header_list, key=lambda x: x[0x0020, 0x0013].value)
-        os.makedirs(f"{output_folder_path}/{meta_file_path.stem}", exist_ok=True)
+        os.makedirs(str(output_folder_path / meta_file_path.stem), exist_ok=True)
         for i in range(len(new_list)):
             ds = new_list[i]
             arr = nifti_array[i]

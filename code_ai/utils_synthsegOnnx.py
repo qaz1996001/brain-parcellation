@@ -640,12 +640,14 @@ class SegmentationProcessor(VolumeProcessor, SegmentationStrategy):
                 )
 
                 if return_seg:
+                    assert seg is not None, "seg should not be None when return_seg is True"
                     seg[
                         self.crop_idx[0] : self.crop_idx[3],
                         self.crop_idx[1] : self.crop_idx[4],
                         self.crop_idx[2] : self.crop_idx[5],
                     ] = seg_patch
                 if return_posteriors:
+                    assert posteriors is not None, "posteriors should not be None when return_posteriors is True"
                     posteriors[
                         self.crop_idx[0] : self.crop_idx[3],
                         self.crop_idx[1] : self.crop_idx[4],

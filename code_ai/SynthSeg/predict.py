@@ -17,10 +17,10 @@ License.
 import os
 import csv
 import numpy as np
-import tensorflow as tf
-import keras.layers as KL
-import keras.backend as K
-from keras.models import Model
+import tensorflow as tf  # type: ignore[import-untyped]
+import keras.layers as KL  # type: ignore[import-untyped]
+import keras.backend as K  # type: ignore[import-untyped]
+from keras.models import Model  # type: ignore[import-untyped]
 
 # project imports
 from . import evaluate

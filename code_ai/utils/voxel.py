@@ -214,14 +214,14 @@ class VolumeProcessor:
         label_index_mapping: dict,
     ) -> Optional[Union[pathlib.Path, str]]:
         mask_nii = nib.load(mask_file_path)
-        mask_array: np.ndarray = np.array(mask_nii.dataobj)
-        pixdim = mask_nii.header["pixdim"]
-        spacing = pixdim[3]
-        pixel_size = pixdim[1:]
+        mask_array: np.ndarray = np.array(mask_nii.dataobj)  # type: ignore[attr-defined]
+        pixdim = mask_nii.header["pixdim"]  # type: ignore[index]
+        pixdim[3]
+        pixdim[1:]
         ml_size = (pixdim[1] * pixdim[2] * pixdim[3]) / 1000
         unique_values, values_count = np.unique(mask_array, return_counts=True)
         mask_size = values_count * ml_size
-        df_mask_size = pd.DataFrame(mask_size, index=unique_values).T
+        pd.DataFrame(mask_size, index=unique_values).T
         return
 
 
@@ -241,9 +241,9 @@ if __name__ == "__main__":
             base_name = os.path.basename(file_path)
             synthseg_path = file_path
             mask_nii = nib.load(synthseg_path)
-            mask_array: np.ndarray = mask_nii.get_fdata()
+            mask_array: np.ndarray = mask_nii.get_fdata()  # type: ignore[attr-defined]
             mask_array = mask_array.astype(int)
-            pixdim = mask_nii.header["pixdim"]
+            pixdim = mask_nii.header["pixdim"]  # type: ignore[index]
             spacing = pixdim[3]
             pixel_size = pixdim[1:]
             ml_size = (pixdim[1] * pixdim[2] * pixdim[3]) / 1000

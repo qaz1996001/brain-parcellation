@@ -1,4 +1,7 @@
+import argparse
 from concurrent.futures import ThreadPoolExecutor
+
+from .dicom_rename_mr import ConvertManager
 
 
 def parse_arguments():

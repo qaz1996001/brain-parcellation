@@ -38,7 +38,9 @@ class SeriesProcessingStrategy(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def process(self, dicom_ds: FileDataset) -> str:
+    def process(
+        self, dicom_ds: FileDataset
+    ) -> Union[str, Enum, BaseEnum, ImageOrientationEnum, ContrastEnum, MRSeriesRenameEnum, NullEnum]:
         """
         Abstract method for processing a DICOM dataset.
 
@@ -49,7 +51,7 @@ class SeriesProcessingStrategy(metaclass=ABCMeta):
 
         Returns
         -------
-        str
+        Union[str, Enum, BaseEnum, ImageOrientationEnum, ContrastEnum, MRSeriesRenameEnum, NullEnum]
             Result of the processing operation.
         """
         pass
@@ -339,8 +341,8 @@ class MRRenameSeriesProcessingStrategy(SeriesProcessingStrategy, ABC):
     """
 
     modality: ModalityEnum = ModalityEnum.MR
-    mr_acquisition_type: Tuple[Union[MRAcquisitionTypeEnum, NullEnum]] = tuple(
-        MRAcquisitionTypeEnum.to_list()
+    mr_acquisition_type: Tuple[Union[MRAcquisitionTypeEnum, NullEnum], ...] = tuple(
+        MRAcquisitionTypeEnum.to_list()  # type: ignore[arg-type]
     )
     modality_processing_strategy: ModalityProcessingStrategy = (
         ModalityProcessingStrategy()

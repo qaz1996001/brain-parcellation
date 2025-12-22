@@ -2554,7 +2554,7 @@ class ConvertManager:
                 return output_study
         except (pydicom.errors.InvalidDicomError, pydicom.errors.BytesLengthException):
             print(f"except {instances}")
-        except:
+        except Exception:
             print(traceback.format_exc())
             print("Unknown except")
 

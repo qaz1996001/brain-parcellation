@@ -51,7 +51,7 @@ def fast_dice(x, y, labels):
         )
 
         # compute Dice and re-arrange scores in initial order
-        hst = np.histogram2d(x.flatten(), y.flatten(), bins=label_edges)[0]
+        hst = np.histogram2d(x.flatten(), y.flatten(), bins=label_edges)[0]  # type: ignore[arg-type]
         idx = np.arange(start=1, stop=2 * len(labels_sorted), step=2)
         dice_score = (
             2 * np.diag(hst)[idx] / (np.sum(hst, 0)[idx] + np.sum(hst, 1)[idx] + 1e-5)

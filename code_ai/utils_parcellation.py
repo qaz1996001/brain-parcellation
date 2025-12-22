@@ -1491,7 +1491,7 @@ class BullseyeProcess:
                             ]
                             max_dist = cur_dist
 
-                    except:
+                    except Exception:
                         print(
                             "something wrong with neighbor at: (%d, %d, %d)"
                             % (idx[0] + off[0], idx[1] + off[1], idx[2] + off[2])
@@ -2164,7 +2164,7 @@ class DWIProcess:
         for z in z_aixs_intersect:
             temp_index = index[index[:, 2] == z]
             x_center = int(temp_index[:, 0].mean())
-            y_center = int(temp_index[:, 1].mean())
+            int(temp_index[:, 1].mean())
             left_index = temp_index[(temp_index[:, 0] <= x_center)]
             right_index = temp_index[(temp_index[:, 0] >= x_center)]
             new_label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]] = (

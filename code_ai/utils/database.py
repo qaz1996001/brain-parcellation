@@ -1,3 +1,4 @@
+import atexit
 import copy
 import functools
 import threading
@@ -127,5 +128,4 @@ def query_result_status_to_sqlalchemy():
 
 
 
-import atexit
 atexit.register(_flush_pending_objects)

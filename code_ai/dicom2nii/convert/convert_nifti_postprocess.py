@@ -113,15 +113,15 @@ class ADCProcessingStrategy(ProcessingStrategy):
                 dwi_file_list.append(series_path.name)
         if len(dwi_file_list) > 0 and len(adc_file_list) > 0:
             for dwi_file in dwi_file_list:
-                dwi_nii = nib.load(str(study_path.joinpath(dwi_file)))
+                dwi_nii = nib.load(str(study_path.joinpath(dwi_file)))  # type: ignore[assignment]
                 for series_path in adc_file_list:
                     adc_path_str = str(study_path.joinpath(series_path))
-                    image_nii = nib.load(adc_path_str)
-                    if dwi_nii.get_fdata().shape == image_nii.get_fdata().shape:
-                        new_header = image_nii.header.copy()
-                        new_header["pixdim"] = dwi_nii.header["pixdim"]
-                        new_affine = dwi_nii.affine
-                        data = image_nii.get_fdata()
+                    image_nii = nib.load(adc_path_str)  # type: ignore[assignment]
+                    if dwi_nii.get_fdata().shape == image_nii.get_fdata().shape:  # type: ignore[attr-defined]
+                        new_header = image_nii.header.copy()  # type: ignore[attr-defined]
+                        new_header["pixdim"] = dwi_nii.header["pixdim"]  # type: ignore[attr-defined]
+                        new_affine = dwi_nii.affine  # type: ignore[attr-defined]
+                        data = image_nii.get_fdata()  # type: ignore[attr-defined]
                         output_nii = nib.Nifti1Image(data, new_affine, new_header)
                         nib.save(output_nii, adc_path_str)
 
@@ -162,16 +162,16 @@ class ADCProcessingStrategy(ProcessingStrategy):
                 else:
                     adc_nii_file_list = []
                     for adc_file in adc_file_list:
-                        adc_nii = nib.load(str(adc_file))
-                        data = adc_nii.get_fdata().round(0).astype(np.int32)
+                        adc_nii = nib.load(str(adc_file))  # type: ignore[assignment]
+                        data = adc_nii.get_fdata().round(0).astype(np.int32)  # type: ignore[attr-defined]
                         adc_nii_file_list.append((adc_nii, data, adc_file))
                     for i in adc_nii_file_list:
                         adc_nii = i[0]
                         data = i[1]
                         adc_file = i[2]
                         for dwi_file in dwi_file_list:
-                            dwi_nii = nib.load(str(dwi_file))
-                            if (dwi_nii.affine == adc_nii.affine).all():
+                            dwi_nii = nib.load(str(dwi_file))  # type: ignore[assignment]
+                            if (dwi_nii.affine == adc_nii.affine).all():  # type: ignore[attr-defined]
                                 adc_file.unlink()
                                 adc_file_str = dwi_file.name.replace("DWI0", "ADC")
                                 adc_file_path = adc_file.parent.joinpath(adc_file_str)

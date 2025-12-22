@@ -1,4 +1,3 @@
-import os
 import nibabel as nib
 import nibabel.processing
 import SimpleITK as sitk
@@ -48,10 +47,10 @@ def resampleSynthSEG2original_0204(
 ):
     # 會使用到的一些predict技巧
     img_nii = nib.load(str(raw_file))  # 256*256*22
-    img_array = np.array(img_nii.dataobj)
+    img_array = np.array(img_nii.dataobj)  # type: ignore[attr-defined]
 
     img_1mm_nii = nib.load(resample_image_file)  # 230*230*140
-    img_1mm_array = np.array(img_1mm_nii.dataobj)
+    img_1mm_array = np.array(img_1mm_nii.dataobj)  # type: ignore[attr-defined]
 
     SynthSEG_1mm_nii = nib.load(resample_seg_file)  # 230*230*140
 
@@ -59,9 +58,9 @@ def resampleSynthSEG2original_0204(
     y_i1, x_i1, z_i1 = img_1mm_array.shape
 
     header_img = img_nii.header.copy()  # 抓出nii header 去算體積
-    pixdim_img = header_img["pixdim"]  # 可以借此從nii的header抓出voxel size
+    pixdim_img = header_img["pixdim"]  # type: ignore[index]
     header_img_1mm = img_1mm_nii.header.copy()  # 抓出nii header 去算體積
-    pixdim_img_1mm = header_img_1mm["pixdim"]  # 可以借此從nii的header抓出voxel size
+    pixdim_img_1mm = header_img_1mm["pixdim"]  # type: ignore[index]
 
     # 先把影像從230*230*140轉成 original*original*140
     img_1mm_ori_nii = nibabel.processing.conform(
@@ -327,8 +326,8 @@ def nii_img_replace(data, new_img):
 
 def get_volume_info(file_path_str: str):
     img_nii = nib.load(file_path_str)  # 256*256*22
-    img_array = np.array(img_nii.dataobj)
+    img_array = np.array(img_nii.dataobj)  # type: ignore[attr-defined]
     y_i, x_i, z_i = img_array.shape
     header_img = img_nii.header.copy()  # 抓出nii header 去算體積
-    pixdim_img = header_img["pixdim"]  # 可以借此從nii的header抓出voxel size
+    pixdim_img = header_img["pixdim"]  # type: ignore[index]
     return img_nii, img_array, y_i, x_i, z_i, header_img, pixdim_img

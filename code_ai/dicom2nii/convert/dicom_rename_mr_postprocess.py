@@ -119,7 +119,7 @@ class MRProcessingStrategy(ProcessingStrategy):
                     file.write(
                         orjson.dumps(dicom_header, option=orjson.OPT_APPEND_NEWLINE)
                     )
-            except:
+            except Exception:
                 print(str(series_folder))
                 print(traceback.print_exc())
 
@@ -336,7 +336,7 @@ class ADCProcessingStrategy(MRDicomProcessingStrategy):
                 sorted_dwi_1000_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = (
                     sorted(dwi_dicom_list, key=lambda x: x[0][0x20, 0x13].value)
                 )
-            except:
+            except Exception:
                 # (0027,1041)	Unknown  Tag &  Data  -73.76799 (Image location (0027,1041) FL
                 sorted_adc_dicom_list: List[Tuple[FileDataset, pathlib.Path]] = sorted(
                     adc_dicom_list, key=lambda x: x[0][0x27, 0x1041].value
@@ -368,7 +368,7 @@ class ADCProcessingStrategy(MRDicomProcessingStrategy):
                     adc_dicom_ds.save_as(
                         str(adc_dicom_path),
                     )
-                except:
+                except Exception:
                     traceback.print_exc()
                     continue
         else:

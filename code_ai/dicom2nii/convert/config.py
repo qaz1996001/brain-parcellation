@@ -1,11 +1,13 @@
 from enum import Enum
-from typing import Union, List
+from typing import List, TypeVar
+
+T = TypeVar("T", bound=Enum)
 
 
 class BaseEnum(Enum):
     @classmethod
-    def to_list(cls) -> List[Union[Enum,]]:
-        return list(map(lambda c: c, cls))
+    def to_list(cls) -> List[Enum]:  # type: ignore[valid-type]
+        return list(map(lambda c: c, cls))  # type: ignore[return-value]
 
 
 class NullEnum(BaseEnum):

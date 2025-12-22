@@ -103,10 +103,10 @@ import argparse
 
 # Dynamic backend import
 try:
-    import cupy as xp
-    import cupyx.scipy.ndimage as ndimage
-    from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure
-    from cupyx.scipy.ndimage import iterate_structure, distance_transform_edt
+    import cupy as xp  # type: ignore[import-not-found]
+    import cupyx.scipy.ndimage as ndimage  # type: ignore[import-not-found]
+    from cupyx.scipy.ndimage import binary_dilation, generate_binary_structure  # type: ignore[import-not-found]
+    from cupyx.scipy.ndimage import iterate_structure, distance_transform_edt  # type: ignore[import-not-found]
 
     HAS_CUPY = True
     print("Using CuPy backend for GPU acceleration")
@@ -1517,7 +1517,7 @@ class BullseyeProcess:
 
             # sort TO-DO points by ndist
             Idx_TODO = xp.argwhere(TODO_mask)
-            Idx_ravel = xp.ravel_multi_index(Idx_TODO.T, label.shape)
+            Idx_ravel = xp.ravel_multi_index(Idx_TODO.T, label.shape)  # type: ignore[call-arg]
             I_sort = xp.argsort(ndist.ravel()[Idx_ravel])
 
             # iterate along TO-DO points
@@ -1545,7 +1545,7 @@ class BullseyeProcess:
                             ]
                             max_dist = cur_dist
 
-                    except:
+                    except Exception:
                         print(
                             "something wrong with neighbor at: (%d, %d, %d)"
                             % (idx[0] + off[0], idx[1] + off[1], idx[2] + off[2])
@@ -1603,9 +1603,7 @@ class BullseyeProcess:
                 bullseye_between_inner_mask = (bullsey_parcellation_array > (i)) & (
                     bullsey_parcellation_array <= (i + cls.inner_size)
                 )
-                bullseye_between_inner_index = xp.argwhere(
-                    bullseye_between_inner_mask == True
-                )
+                bullseye_between_inner_index = xp.argwhere(bullseye_between_inner_mask)
                 bullseye_between_inner_index_between = bullseye_between_inner_index[
                     (bullseye_between_inner_index[:, 2] <= z_higher)
                     & (bullseye_between_inner_index[:, 2] >= z_lower)
@@ -1614,9 +1612,7 @@ class BullseyeProcess:
                 bullseye_between_outer_mask = (
                     bullsey_parcellation_array > (i + cls.inner_size)
                 ) & (bullsey_parcellation_array <= (i + cls.outer_size))
-                bullseye_between_outer_index = xp.argwhere(
-                    bullseye_between_outer_mask == True
-                )
+                bullseye_between_outer_index = xp.argwhere(bullseye_between_outer_mask)
                 bullseye_between_outer_index_between = bullseye_between_outer_index[
                     (bullseye_between_outer_index[:, 2] <= z_higher)
                     & (bullseye_between_outer_index[:, 2] >= z_lower)
@@ -2219,7 +2215,7 @@ class DWIProcess:
         for z in z_aixs_intersect:
             temp_index = index[index[:, 2] == z]
             x_center = int(temp_index[:, 0].mean())
-            y_center = int(temp_index[:, 1].mean())
+            int(temp_index[:, 1].mean())
             left_index = temp_index[(temp_index[:, 0] <= x_center)]
             right_index = temp_index[(temp_index[:, 0] >= x_center)]
             new_label_array[left_index[:, 0], left_index[:, 1], left_index[:, 2]] = (
@@ -2955,11 +2951,11 @@ def main(args):
     # Process each file
     for file_path in file_list:
         synthseg_nii = nib.load(file_path)
-        synthseg_array = xp.array(synthseg_nii.dataobj)
+        synthseg_array = xp.array(synthseg_nii.dataobj)  # type: ignore[attr-defined]
         synthseg33_nii = nib.load(
             file_path.replace("synthseg.nii.gz", "synthseg33.nii.gz")
         )
-        synthseg33_array = xp.array(synthseg33_nii.dataobj)
+        synthseg33_array = xp.array(synthseg33_nii.dataobj)  # type: ignore[attr-defined]
         try:
             process_file(
                 file_path, depth_number, args, synthseg_array, synthseg33_array
