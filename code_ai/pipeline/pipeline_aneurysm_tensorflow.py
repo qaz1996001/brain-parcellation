@@ -7,18 +7,20 @@ Created on Tue Sep 22 13:18:23 2020
 @author: chuan
 """
 
+import logging
+import os
 import pathlib
+import shutil
 import subprocess
+import time
 import warnings
+from typing import Optional
+
+import pynvml  # 导包
+import tensorflow as tf
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
-from typing import Optional
-import os
-import logging
-import shutil
-import time
-import tensorflow as tf
-import pynvml  # 导包
+
 from code_ai import PYTHON3
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.chuan.util_aneurysm import (
@@ -89,7 +91,6 @@ def pipeline_aneurysm(
         # print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
         if gpumRate < 0.6:
             # 一些記憶體的配置
-            autotune = tf.data.experimental.AUTOTUNE
             gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
             tf.config.experimental.set_visible_devices(
                 devices=gpus[gpu_n], device_type="GPU"
@@ -133,10 +134,10 @@ def pipeline_aneurysm(
             path_nii = os.path.join(path_processID, "Image_nii")
             path_reslice = os.path.join(path_processID, "Image_reslice")
             path_excel = os.path.join(path_processID, "excel")
-            os.makedirs(path_dcm, exist_ok=True)
-            os.makedirs(path_nii, exist_ok=True)
-            os.makedirs(path_reslice, exist_ok=True)
-            os.makedirs(path_excel, exist_ok=True)
+            os.makedirs(str(path_dcm), exist_ok=True)
+            os.makedirs(str(path_nii), exist_ok=True)
+            os.makedirs(str(path_reslice), exist_ok=True)
+            os.makedirs(str(path_excel), exist_ok=True)
 
             # 複製nii到nii資料夾
             shutil.copy(
@@ -173,21 +174,21 @@ def pipeline_aneurysm(
             make_table_add_location(path_processID, path_excel)
             # 接下來製作dicom-seg
             path_dicomseg = os.path.join(path_dcm, "Dicom-Seg")
-            os.makedirs(path_dicomseg, exist_ok=True)
+            os.makedirs(str(path_dicomseg), exist_ok=True)
             # 上線版不用做vessel
             create_dicomseg_multi_file(
                 path_code, path_dcm, path_nii, path_reslice, path_dicomseg, ID
             )
             # 將dicom壓縮不包含dicom-seg  Dicom_JPEGlossless => 由於要用numpy > 2.0，之後補強
             path_dcmjpeglossless = os.path.join(path_processID, "Dicom_JPEGlossless")
-            os.makedirs(path_dcmjpeglossless, exist_ok=True)
+            os.makedirs(str(path_dcmjpeglossless), exist_ok=True)
             # compress_dicom_into_jpeglossless(path_dcm, path_dcmjpeglossless)
 
             # 建立json檔
             path_json_out = os.path.join(path_processID, "JSON")
-            os.makedirs(path_json_out, exist_ok=True)
+            os.makedirs(str(path_json_out), exist_ok=True)
             Series = ["MRA_BRAIN", "MIP_Pitch", "MIP_Yaw"]
-            GROUP_ID_ANEURYSM = os.getenv("GROUP_ID_ANEURYSM", 50)
+            GROUP_ID_ANEURYSM = int(os.getenv("GROUP_ID_ANEURYSM", "50"))
             excel_file = os.path.join(path_excel, "Aneurysm_Pred_list.xlsx")
             make_pred_json(
                 excel_file,
@@ -203,7 +204,7 @@ def pipeline_aneurysm(
 
             # 接下來上傳dicom到orthanc
             path_zip = os.path.join(path_processID, "Dicom_zip")
-            os.makedirs(path_zip, exist_ok=True)
+            os.makedirs(str(path_zip), exist_ok=True)
 
             Series = ["MRA_BRAIN", "MIP_Pitch", "MIP_Yaw", "Dicom-Seg"]
             orthanc_zip_upload(path_dcm, path_zip, Series)
@@ -248,10 +249,8 @@ def pipeline_aneurysm(
             return output_tuple
         else:
             logging.error("!!! " + str(ID) + " Insufficient GPU Memory.")
-            code_pass = 1
-            msg = "Insufficient GPU Memory"
 
-    except:
+    except Exception:
         logging.error("!!! " + str(ID) + " gpu have error code.")
         logging.error("Catch an exception.", exc_info=True)
 
@@ -290,9 +289,9 @@ if __name__ == "__main__":
     os.makedirs(
         path_processModel, exist_ok=True
     )  # 如果資料夾不存在就建立，製作nii資料夾
-    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_output, exist_ok=True)
+    os.makedirs(str(path_json), exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(str(path_log), exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(str(path_output), exist_ok=True)
 
     # 直接當作function的輸入，因為可能會切換成nnUNet的版本，所以自訂化模型移到跟model一起，synthseg自己做，不用統一
     (

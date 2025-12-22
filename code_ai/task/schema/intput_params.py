@@ -106,7 +106,7 @@ class InferenceTaskParams(BaseJsonAbleModel):
     def validate_paths(cls, v: str) -> str:
         """驗證路徑格式（不強制要求路徑存在，因為可能是遠程路徑）"""
         if not v or not v.strip():
-            raise ValueError(f"路徑不能為空")
+            raise ValueError("路徑不能為空")
         return v.strip()
     
     model_config = ConfigDict(extra="allow")

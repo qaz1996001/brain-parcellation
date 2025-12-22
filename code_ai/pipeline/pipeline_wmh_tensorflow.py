@@ -230,72 +230,14 @@ def pipeline_wmh(
 
         # 因為cronjob切點跟不同影像z軸大小的狀況，切成2種張碼去展示
         if z_i >= 21:
-            combine_num = [
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                6,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-                17,
-                18,
-                19,
-                20,
-            ]
-            combine_s_num = [
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-                17,
-                18,
-            ]  # 16張
+            pass
         elif z_i >= 19 and z_i < 21:
-            combine_num = [i for i in range(z_i)]  # 舊的12張，新的就20張
-            combine_s_num = [
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                14,
-                15,
-                16,
-                17,
-                18,
-            ]  # 16張
+            [i for i in range(z_i)]  # 舊的12張，新的就20張
         else:
-            combine_num = [i for i in range(z_i)]  # 舊的12張，新的就20張
-            combine_s_num = combine_num
+            [i for i in range(z_i)]  # 舊的12張，新的就20張
 
-        slice_y = int((ROWS - y_i) / 2)
-        slice_x = int((COLS - x_i) / 2)
+        int((ROWS - y_i) / 2)
+        int((COLS - x_i) / 2)
 
         path_predict = os.path.join(path_processID, "predict_map")
         # 讀取predict的結果，已經修改成nifti
@@ -355,10 +297,10 @@ def pipeline_wmh(
         WMHSlice_list = [
             1 for y in range(z_m) if np.sum(Y_pred_WMH[:, :, y]) > 0
         ]  # 如果有infarct的切片，記數為1
-        WMHSliceNum = len(WMHSlice_list)
+        len(WMHSlice_list)
 
         # 把WMH的mask大小與換算體積(ml)紀錄
-        WMHVoxel = np.sum(Y_pred_WMH)
+        np.sum(Y_pred_WMH)
         total_volume = round(np.sum(Y_pred_WMH) * ml_size, 1)
         WMHVolume = total_volume
 
@@ -416,7 +358,7 @@ def pipeline_wmh(
 
         return Pred_WMH_synthseg, Pred_WMH, json_path_name2
 
-    except:
+    except Exception:
         logging.warning("Retry!!! have error code or no any study.")
         logging.error("Catch an exception.", exc_info=True)
         print("error!!!")

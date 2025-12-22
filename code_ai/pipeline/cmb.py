@@ -139,7 +139,7 @@ class CMBServiceTF:
                 pred_label=pred_label,
                 output_path=output_nii_path_str,
             )
-            df_label = self.save_label_table(
+            self.save_label_table(
                 swan_path, df_pred, pred_label, seg_arr, output_json_path_str
             )
             gc.collect()
@@ -193,14 +193,13 @@ class CMBServiceTF:
             else:
                 volume = x.get_fdata()
             aff = x.affine
-            header = x.header
             spacing = list(x.header.get_zooms())
         else:  # npz
             volume = np.load(path_volume)["vol_data"]
             if squeeze:
                 volume = np.squeeze(volume)
             aff = np.eye(4)
-            header = nib.Nifti1Header()
+            nib.Nifti1Header()
             spacing = [1.0, 1.0, 1.0]
         if dtype is not None:
             if "int" in dtype:
@@ -535,8 +534,7 @@ class CMBServiceTF:
         img = nib.load(nifti_file)
         img = nib.as_closest_canonical(img)  # to RAS space
         aff = img.affine
-        hdr = img.header
-        spacing = tuple(img.header.get_zooms())
+        tuple(img.header.get_zooms())
         shape = tuple(img.header.get_data_shape())
 
         ## CMB label-map

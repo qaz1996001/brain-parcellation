@@ -186,11 +186,11 @@ def _prepare_directories() -> Dict[str, str]:
     path_process = os.getenv("PATH_PROCESS")
     path_json = os.getenv("PATH_JSON")
     path_log = os.getenv("PATH_LOG")
-    path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
+    path_cmd_tools = os.path.join(str(path_process or ""), "Deep_cmd_tools")
     
     directories = {
-        'json': path_json,
-        'log': path_log,
+        'json': str(path_json or ""),
+        'log': str(path_log or ""),
         'cmd_tools': path_cmd_tools,
     }
     
@@ -199,7 +199,7 @@ def _prepare_directories() -> Dict[str, str]:
         if path:
             os.makedirs(path, exist_ok=True)
     
-    return directories
+    return {k: str(v) for k, v in directories.items()}
 
 
 def _build_inference_commands(
@@ -831,8 +831,8 @@ def task_pipeline_inference(func_params: Dict[str, Any]) -> str:
     # 步驟 5: 發送 RUNNING 狀態事件（如果應該發送）
     if _should_send_events(params.study_uid, params.study_id):
         _send_status_event(
-            params.study_uid,
-            params.study_id,
+            str(params.study_uid or ""),
+            str(params.study_id or ""),
             DCOPStatus.STUDY_INFERENCE_RUNNING,
             inference_cmd,
             params
@@ -840,13 +840,13 @@ def task_pipeline_inference(func_params: Dict[str, Any]) -> str:
     
     # 步驟 6: 執行推論命令
     result_list = _execute_inference_commands(inference_cmd)
-    result = Serialization.to_json_str(result_list)
+    result = Serialization.to_json_str({"results": result_list})
     
     # 步驟 7: 發送 COMPLETE 狀態事件（如果應該發送）
     if _should_send_events(params.study_uid, params.study_id):
         _send_status_event(
-            params.study_uid,
-            params.study_id,
+            str(params.study_uid or ""),
+            str(params.study_id or ""),
             DCOPStatus.STUDY_INFERENCE_COMPLETE,
             inference_cmd,
             params,
@@ -941,7 +941,7 @@ def task_subprocess_inference(func_params: Dict[str, Any]) -> str:
     
     # 步驟 2: 準備命令工具目錄
     path_process = os.getenv("PATH_PROCESS")
-    path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
+    path_cmd_tools = os.path.join(str(path_process or ""), "Deep_cmd_tools")
     os.makedirs(path_cmd_tools, exist_ok=True)
     
     # 步驟 3: 執行命令
@@ -956,7 +956,7 @@ def task_subprocess_inference(func_params: Dict[str, Any]) -> str:
     
     # 步驟 4: 記錄執行結果到日誌
     logger.info(stdout.decode())  # 標準輸出記錄為 INFO
-    logger.warn(stderr.decode())  # 標準錯誤記錄為 WARN
+    logger.warning(stderr.decode())  # 標準錯誤記錄為 WARN
     
     # 步驟 5: 返回標準輸出
     return stdout.decode()

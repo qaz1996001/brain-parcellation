@@ -865,16 +865,16 @@ def run_workflow(args):
                     seg_array, synthseg_nii.affine, synthseg_nii.header
                 )
                 nib.save(out_nib, david_file_list[i])
-                original_seg_file = save_original_seg_by_argmin_z_index(
+                save_original_seg_by_argmin_z_index(
                     file_list[i], synthseg_file_list[i], argmin
                 )
-                original_seg_file = save_original_seg_by_argmin_z_index(
+                save_original_seg_by_argmin_z_index(
                     file_list[i], synthseg33_file_list[i], argmin
                 )
-                original_seg_file = save_original_seg_by_argmin_z_index(
+                save_original_seg_by_argmin_z_index(
                     file_list[i], wm_file_list[i], argmin
                 )
-                original_seg_file = save_original_seg_by_argmin_z_index(
+                save_original_seg_by_argmin_z_index(
                     file_list[i], david_file_list[i], argmin
                 )
                 if args.cmb:
@@ -883,7 +883,7 @@ def run_workflow(args):
                         cmb_array, synthseg_nii.affine, synthseg_nii.header
                     )
                     nib.save(out_nib, cmb_file_list[i])
-                    original_seg_file = save_original_seg_by_argmin_z_index(
+                    save_original_seg_by_argmin_z_index(
                         file_list[i], cmb_file_list[i], argmin
                     )
                 if args.dwi:
@@ -892,7 +892,7 @@ def run_workflow(args):
                         dwi_array, synthseg_nii.affine, synthseg_nii.header
                     )
                     nib.save(out_nib, dwi_file_list[i])
-                    original_seg_file = save_original_seg_by_argmin_z_index(
+                    save_original_seg_by_argmin_z_index(
                         file_list[i], dwi_file_list[i], argmin
                     )
                 if args.wmh:
@@ -905,7 +905,7 @@ def run_workflow(args):
                         wmh_array, synthseg_nii.affine, synthseg_nii.header
                     )
                     nib.save(out_nib, wmh_file_list[i])
-                    original_seg_file = save_original_seg_by_argmin_z_index(
+                    save_original_seg_by_argmin_z_index(
                         file_list[i], wmh_file_list[i], argmin
                     )
         # file_list

@@ -36,7 +36,7 @@ from code_ai.pipeline.dicomseg.schema.typing import MaskT, MaskSeriesT, MaskInst
 from code_ai import load_dotenv
 
 load_dotenv()
-GROUP_ID = os.getenv("GROUP_ID_CMB", 44)
+GROUP_ID = int(os.getenv("GROUP_ID_CMB", "44"))
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -265,7 +265,7 @@ class ReviewPlatformJSONBuilder(
         pred_json,
         *args,
         **kwargs,
-    ) -> "MaskSeriesClass":
+    ) -> MaskSeriesT:
         """
         dicom_seg_result : {"series_type": {}, "data":{} }
         dicom_seg_result : {"series_type": {}, "data":{} }
@@ -276,13 +276,15 @@ class ReviewPlatformJSONBuilder(
             "series_type": series_type,
             "model_type": self.model_type,
         }
+        # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('source_images', 'series_type', 'dicom_seg_result', 'pred_json')}
         mask_instance = self.get_mask_instance(
             source_images=source_images,
             series_type=series_type,
             dicom_seg_result=dicom_seg_result,
             pred_json=pred_json,
             *args,
-            **kwargs,
+            **filtered_kwargs,
         )
         mask_series_dict.update({"instances": mask_instance})
 
@@ -302,11 +304,11 @@ class ReviewPlatformJSONBuilder(
 
     @abc.abstractmethod
     def get_study_model(
-        self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any], *args, **kwargs
-    ) -> "StudyModelClass":
+        self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any], *args, **kwargs: Any
+    ) -> StudyModelT:
         pass
 
-    def build_study(self, *args, **kwargs) -> Self:
+    def build_study(self, *args, **kwargs: Any) -> Self:
         study_series_list = []
         study_model_list = []
         study_dict = {}
@@ -324,11 +326,13 @@ class ReviewPlatformJSONBuilder(
                 source_images=series_source_images, series_type=series_name
             )
             study_series_list.append(study_series)
+            # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('series_type', 'pred_data')}
             study_model = self.get_study_model(
                 series_type=series_name,
                 pred_data=pred_json_list[index],
                 *args,
-                **kwargs,
+                **filtered_kwargs,
             )
             study_model_list.append(study_model)
 
@@ -450,7 +454,7 @@ class ReviewPlatformJSONBuilder(
         return self
 
     def build_mask(
-        self, dicom_seg_result_list, pred_json_list, *args, **kwargs
+        self, dicom_seg_result_list, pred_json_list, *args, **kwargs: Any
     ) -> Self:
         mask_dict = {}
         if all((self._series_dict is not None, self.group_id is not None)):
@@ -474,13 +478,15 @@ class ReviewPlatformJSONBuilder(
         for index, (series_name, series_source_images) in enumerate(
             self._series_dict.items()
         ):
+            # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+            filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('source_images', 'series_type', 'dicom_seg_result', 'pred_json')}
             mask_series = self.get_mask_series(
                 source_images=series_source_images,
                 series_type=series_name,
                 dicom_seg_result=dicom_seg_result_list[index],
                 pred_json=pred_json_list[index],
                 *args,
-                **kwargs,
+                **filtered_kwargs,
             )
             series_list.append(mask_series)
 

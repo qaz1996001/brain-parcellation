@@ -1,8 +1,10 @@
 import enum
-from typing import List, Union
+from typing import List, TypeVar
 from code_ai import load_dotenv
 
 load_dotenv()
+
+T = TypeVar("T", bound=enum.Enum)
 
 
 class SeriesTypeEnum(enum.Enum):
@@ -19,8 +21,8 @@ class SeriesTypeEnum(enum.Enum):
     ADC = "10"
 
     @classmethod
-    def to_list(cls) -> List[Union[enum.Enum]]:
-        return list(map(lambda c: c, cls))
+    def to_list(cls) -> List["SeriesTypeEnum"]:  # type: ignore[valid-type]
+        return list(map(lambda c: c, cls))  # type: ignore[return-value]
 
 
 class ModelTypeEnum(enum.Enum):
@@ -31,5 +33,5 @@ class ModelTypeEnum(enum.Enum):
     Lacune = "5"
 
     @classmethod
-    def to_list(cls) -> List[Union[enum.Enum]]:
-        return list(map(lambda c: c, cls))
+    def to_list(cls) -> List["ModelTypeEnum"]:  # type: ignore[valid-type]
+        return list(map(lambda c: c, cls))  # type: ignore[return-value]

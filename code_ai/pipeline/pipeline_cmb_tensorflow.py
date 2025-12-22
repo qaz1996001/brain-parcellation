@@ -91,7 +91,6 @@ def pipeline_cmb(
         if gpumRate < 0.6:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
             # 一些記憶體的配置
-            autotune = tf.data.experimental.AUTOTUNE
             # print(keras.__version__)
             # print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
@@ -149,7 +148,7 @@ def pipeline_cmb(
         else:
             logging.error("!!! " + str(ID) + " Insufficient GPU Memory.")
 
-    except:
+    except Exception:
         logging.error("!!! " + str(ID) + " gpu have error code.")
         logging.error("Catch an exception.", exc_info=True)
 

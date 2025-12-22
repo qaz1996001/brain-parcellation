@@ -81,7 +81,7 @@ class PipelineConfig:
         input_paths: List[str],
         dicom_args: List[str],
     ) -> str:
-        path_root = pathlib.Path(os.getenv('PATH_ROOT'))
+        path_root = pathlib.Path(os.getenv('PATH_ROOT') or "")
         chuan_root = path_root.parent.joinpath('chuan')
         chuan_code = chuan_root.joinpath('code')
 

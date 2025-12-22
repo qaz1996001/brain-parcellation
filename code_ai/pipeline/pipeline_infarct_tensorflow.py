@@ -400,7 +400,7 @@ def pipeline_infarct(
         InfarctSlice_list = [
             1 for y in range(z_i) if np.sum(y_pred_cluster[:, :, y]) > 0
         ]  # 如果有infarct的切片，記數為1
-        InfarctSliceNum = len(InfarctSlice_list)
+        len(InfarctSlice_list)
 
         # 計算mask下的平均ADC是多少，寫入影像中，因為正規化ADC的方式是/600，所以最後乘600就好
         total_mean_ADC = np.sum(ADC_array * y_pred_cluster)
@@ -873,7 +873,7 @@ def pipeline_infarct(
             json_path_name2,
         )
 
-    except:
+    except Exception:
         logging.warning("Retry!!! have error code or no any study.")
         logging.error("Catch an exception.", exc_info=True)
         print("error!!!")

@@ -10,7 +10,7 @@ from .base import SeriesTypeEnum, SortedRequest
 
 load_dotenv()
 # // 目前 Orthanc 自動同步機制的 group 應為 44
-GROUP_ID = os.getenv("GROUP_ID", 44)
+GROUP_ID = int(os.getenv("GROUP_ID", "44"))
 
 
 class StudySeriesRequest(BaseModel):
@@ -72,7 +72,7 @@ class StudyRequest(BaseModel):
                 return datetime.date(int(value[:4]), int(value[4:6]), int(value[6:8]))
             else:
                 return datetime.datetime.strptime(value, "%Y-%m-%d").date()
-        except:
+        except Exception:
             return datetime.datetime.now().date()
 
     @field_validator("age", mode="before")

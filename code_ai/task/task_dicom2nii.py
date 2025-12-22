@@ -5,14 +5,12 @@ import shutil
 import os
 import pathlib
 import subprocess
-import traceback
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import httpx
-import orjson
 import pandas as pd
 import pydicom
-from funboost import BrokerEnum, Booster
+from funboost import Booster
 from pydicom import dcmread
 from pyorthanc import Orthanc, Study
 
@@ -370,7 +368,7 @@ def copy_dicom_file(input_tuple, instance_path, output_path):
     return None
 
 
-def file_processing(func_params: Dict[str, any]):
+def file_processing(func_params: Dict[str, Any]):
     """
     對研究資料夾執行後處理操作。
 
@@ -412,14 +410,14 @@ def file_processing(func_params: Dict[str, any]):
     """
     study_folder_path = func_params.get('study_folder_path')
     post_process_manager = func_params.get('post_process_manager')
-    if study_folder_path is None:
+    if study_folder_path is None or post_process_manager is None:
         return
     post_process_manager.post_process(study_folder_path)
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='post_httpx_queue',
                                  qps=5, ))
-def call_post_httpx(func_params: Dict[str, any]):
+def call_post_httpx(func_params: Dict[str, Any]):
     """
     透過 HTTP POST 請求發送 DCOP 事件到指定的 API 端點。
 
@@ -467,16 +465,16 @@ def call_post_httpx(func_params: Dict[str, any]):
     with httpx.Client(timeout=300) as clinet:
         if isinstance(data, list):
             dcop_event_list = [DCOPEventRequest.model_validate_json(temp).model_dump() for temp in data]
-            rep = clinet.post(url=url, json=dcop_event_list)
+            clinet.post(url=url, json=dcop_event_list)
         else:
             dcop_event = DCOPEventRequest.model_validate_json(data).model_dump()
-            rep = clinet.post(url=url, json=[dcop_event])
+            clinet.post(url=url, json=[dcop_event])
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
-def call_dcm2niix(func_params: Dict[str, any]):
+def call_dcm2niix(func_params: Dict[str, Any]):
     """
     呼叫 dcm2niix 工具將 DICOM 序列轉換為 NIfTI 格式。
 
@@ -567,7 +565,7 @@ def call_dcm2niix(func_params: Dict[str, any]):
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_file_queue',
                                  qps=10, ))
-def dicom_2_nii_file(func_params: Dict[str, any]):
+def dicom_2_nii_file(func_params: Dict[str, Any]):
     """
     將 DICOM 研究資料夾中的所有序列轉換為 NIfTI 格式。
 
@@ -650,7 +648,7 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
         else:
             result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
             workflows.append(result)
-    result_list = [async_result.result for async_result in workflows]
+    [async_result.result for async_result in workflows]
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
     file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
                                      post_process_manager=ConvertManager.nifti_post_process_manager))
@@ -659,7 +657,7 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_series_queue',
                                  qps=10, ))
-def dicom_2_nii_series(func_params: Dict[str, any]):
+def dicom_2_nii_series(func_params: Dict[str, Any]):
     """
     將單個 DICOM 序列轉換為 NIfTI 格式並發送轉換狀態事件。
 
@@ -721,16 +719,19 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
     """
     task_params = intput_params.Dicom2NiiSeriesParams.model_validate(func_params)
     output_dicom_path = task_params.output_dicom_path
-    dicom_study_folder_path = output_dicom_path.parent
     output_nifti_path = task_params.output_nifti_path
+    if output_dicom_path is None or output_nifti_path is None:
+        raise ValueError("output_dicom_path and output_nifti_path are required")
+
+    dicom_study_folder_path = output_dicom_path.parent
     series_path = output_dicom_path
     FILE_SIZE = 500
 
     UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
     if (series_path.name in Dicm2NiixConverter.exclude_set) or (output_dicom_path is None):
-        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
-                                      series_uid=task_params.series_uid,
+        dcop_event = DCOPEventRequest(study_uid=str(task_params.study_uid or ""),
+                                      series_uid=str(task_params.series_uid or ""),
                                       ope_no=DCOPStatus.SERIES_CONVERSION_SKIP.value,
                                       study_id=series_path.parent.name,
                                       tool_id='NIFTI_TOOL',
@@ -753,8 +754,8 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
 
         file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
                                          post_process_manager=ConvertManager.nifti_post_process_manager))
-        dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
-                                      series_uid=task_params.series_uid,
+        dcop_event = DCOPEventRequest(study_uid=str(task_params.study_uid or ""),
+                                      series_uid=str(task_params.series_uid or ""),
                                       ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
                                       study_id=series_path.parent.name,
                                       tool_id='NIFTI_TOOL',
@@ -773,7 +774,7 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
                                  log_level=logging.WARNING,
                                  # user_custom_record_process_info_func=save_result_status_to_sqlalchemy
                                  ))
-def process_instances(func_params: Dict[str, any]):
+def process_instances(func_params: Dict[str, Any]):
     """
     處理單個 DICOM 實例檔案：重新命名並複製到目標路徑。
 
@@ -959,8 +960,10 @@ def get_orthanc_study_uid_series_uid(instance_path_str: str):
     series_sop_uid = dicom_ds[0x0020, 0x000E].value
 
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+    if not UPLOAD_DATA_DICOM_SEG_URL:
+        raise ValueError("UPLOAD_DATA_DICOM_SEG_URL is required")
     # ./raw_dicom/ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30/10089413 GUO HSIOU HUA/21002010079 MRI Stroke Wall C C/MR 3D Ax SWAN/*.dcm
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    client = Orthanc(str(UPLOAD_DATA_DICOM_SEG_URL), timeout=300)
     study_uid = instance_path.parent.parent.parent.parent.name
     study = Study(study_uid, client=client)
     series_filter = list(filter(lambda series: series.uid == series_sop_uid, study.series))
@@ -1029,7 +1032,9 @@ def get_orthanc_series_uid(study_uid: str,
     1        1.2.3.4.5.7        series_id_2
     """
     UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-    client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    if not UPLOAD_DATA_DICOM_SEG_URL:
+        raise ValueError("UPLOAD_DATA_DICOM_SEG_URL is required")
+    client = Orthanc(str(UPLOAD_DATA_DICOM_SEG_URL), timeout=300)
     series_sop_uid_list = []
     for series_dir in series_dir_set:
         series_path_list = list(series_dir.rglob('*.dcm'))
@@ -1051,7 +1056,7 @@ def get_orthanc_series_uid(study_uid: str,
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
-def process_dir(func_params: Dict[str, any]):
+def process_dir(func_params: Dict[str, Any]):
     """
     處理目錄中的所有 DICOM 實例檔案並發送轉換完成事件。
 
@@ -1114,6 +1119,9 @@ def process_dir(func_params: Dict[str, any]):
                                                                strict=False)
     sub_dir = task_params.sub_dir
     output_dicom_path = task_params.output_dicom_path
+    if sub_dir is None or output_dicom_path is None:
+        raise ValueError("sub_dir and output_dicom_path are required")
+
     instances_list = sorted(sub_dir.rglob('*.dcm'))
     if len(instances_list) > 0:
         async_result_list = [process_instances.push(intput_params.ProcessInstancesParams(instance=instances,
@@ -1196,7 +1204,7 @@ def process_dir(func_params: Dict[str, any]):
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
-def dicom_to_nii(func_params: Dict[str, any]):
+def dicom_to_nii(func_params: Dict[str, Any]):
     """
     將 DICOM 檔案轉換為 NIfTI 格式的主要入口函數。
 
@@ -1266,6 +1274,9 @@ def dicom_to_nii(func_params: Dict[str, any]):
     """
     task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
                                                                strict=False)
+    if task_params.output_dicom_path is None or task_params.output_nifti_path is None:
+        raise ValueError("output_dicom_path and output_nifti_path are required")
+
     # 1. raw dicom -> rename dicom
     if task_params.sub_dir is not None:
         result = process_dir.push(func_params)
@@ -1287,7 +1298,7 @@ def dicom_to_nii(func_params: Dict[str, any]):
 #          broker_kind=BrokerEnum.RABBITMQ_AMQPSTORM, qps=10)
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_rename_queue',
                                  qps=10, ))
-def dicom_rename(func_params: Dict[str, any]):
+def dicom_rename(func_params: Dict[str, Any]):
     """
     重新命名 DICOM 檔案的主要入口函數。
 

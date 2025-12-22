@@ -268,7 +268,7 @@ class ReviewCMBPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
         pred_json: Dict[str, Any],
         *args,
         **kwargs,
-    ) -> List["MaskInstanceClass"]:
+    ) -> List[CMBMaskInstanceRequest]:
         result_data_list = dicom_seg_result["data"]
         pred_json_data_list = pred_json["data"]
         mask_instance_list = []
@@ -318,7 +318,7 @@ class ReviewCMBPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
 
     def get_study_model(
         self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any], *args, **kwargs
-    ) -> "StudyModelClass":
+    ) -> CMBStudyModelRequest:
         pred_json_list = pred_data["data"]
         study_model = dict(
             lession=len(pred_json_list),
@@ -348,7 +348,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
         pred_json: Dict[str, Any],
         *args,
         **kwargs,
-    ) -> List["MaskInstanceClass"]:
+    ) -> List[CMBMaskInstanceRequest]:
         result_data_list = dicom_seg_result["data"]
         pred_json_data_list = pred_json["data"]
         mask_instance_list = []
@@ -405,7 +405,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
         pred_json,
         *args,
         **kwargs,
-    ) -> "MaskSeriesClass":
+    ) -> CMBMaskSeries2Request:
         """
         dicom_seg_result : {"series_type": {}, "data":{} }
         dicom_seg_result : {"series_type": {}, "data":{} }
@@ -415,13 +415,15 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             "series_instance_uid": series_instance_uid,
             "series_type": series_type,
         }
+        # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('source_images', 'series_type', 'dicom_seg_result', 'pred_json')}
         mask_instance = self.get_mask_instance(
             source_images=source_images,
             series_type=series_type,
             dicom_seg_result=dicom_seg_result,
             pred_json=pred_json,
             *args,
-            **kwargs,
+            **filtered_kwargs,
         )
         mask_series_dict.update({"instances": mask_instance})
 
@@ -506,7 +508,7 @@ def main_review_cmd():
     path_nii = pathlib.Path(args.Inputs[0])
     path_dcmseg = pathlib.Path(args.Output_folder)
 
-    group_id = os.getenv("GROUP_ID_CMB", 44)
+    group_id = int(os.getenv("GROUP_ID_CMB", "44"))
 
     # Create output directory
     output_series_folder = path_dcmseg.joinpath(f"{_id}")

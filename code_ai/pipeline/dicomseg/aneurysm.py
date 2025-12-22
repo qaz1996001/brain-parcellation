@@ -96,7 +96,7 @@ class AneurysmPlatformJSONBuilder(PlatformJSONBuilder[AneurysmAITeamRequest]):
         source_images: List[Union[FileDataset, DicomDir]],
         dcm_seg: Union[FileDataset, DicomDir],
         *args,
-        **kwargs,
+        **kwargs: Any,
     ) -> Self:
         main_seg_slice = kwargs["main_seg_slice"]
         mask_instance_dict = dict()
@@ -144,7 +144,7 @@ class AneurysmPlatformJSONBuilder(PlatformJSONBuilder[AneurysmAITeamRequest]):
         reslut_list: List[Dict[str, Any]],
         pred_json_list: List[Dict[str, Any]],
         *args,
-        **kwargs,
+        **kwargs: Any,
     ) -> Union[Dict[str, Any], Any]:
         """
         one cmb lesion is one mask series
@@ -396,7 +396,7 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
         pred_json: Dict[str, Any],
         *args,
         **kwargs,
-    ) -> List["MaskInstanceClass"]:
+    ) -> List[AneurysmMaskInstanceRequest]:
         result_data_list = dicom_seg_result["data"]
         pred_json_data_list = pred_json["data"]
         mask_instance_list = []
@@ -453,7 +453,7 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
 
     def get_study_model(
         self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any], *args, **kwargs
-    ) -> "StudyModelClass":
+    ) -> AneurysmStudyModel2Request:
         pred_json_list = pred_data["data"]
         study_model = dict(
             lession=len(pred_json_list),
@@ -472,7 +472,7 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
         pred_json,
         *args,
         **kwargs,
-    ) -> "MaskSeriesClass":
+    ) -> AneurysmMaskSeries2Request:
         """
         dicom_seg_result : {"series_type": {}, "data":{} }
         dicom_seg_result : {"series_type": {}, "data":{} }
@@ -482,13 +482,15 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
             "series_instance_uid": series_instance_uid,
             "series_type": series_type,
         }
+        # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('source_images', 'series_type', 'dicom_seg_result', 'pred_json')}
         mask_instance = self.get_mask_instance(
             source_images=source_images,
             series_type=series_type,
             dicom_seg_result=dicom_seg_result,
             pred_json=pred_json,
             *args,
-            **kwargs,
+            **filtered_kwargs,
         )
         mask_series_dict.update({"instances": mask_instance})
 
@@ -570,20 +572,24 @@ class ReviewAneurysmPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
                         source_images=series_source_images, group_id=self.group_id
                     )
                 )
+                # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('series_type', 'pred_data')}
                 study_model = self.get_study_model(
                     series_type=series_name,
                     pred_data=pred_json_list[index],
                     *args,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 study_model_list.append(study_model)
             else:
                 study_model: StudyModelRequest = study_model_list[0]
+                # Filter out explicitly provided parameters from kwargs to avoid duplicate assignment
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ('series_type', 'pred_data')}
                 new_study_model = self.get_study_model(
                     series_type=series_name,
                     pred_data=pred_json_list[index],
                     *args,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 study_model.series_type.extend(new_study_model.series_type)
 

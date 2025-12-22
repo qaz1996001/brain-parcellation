@@ -93,7 +93,6 @@ def pipeline_synthseg(
         if gpumRate < 0.7:
             # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
             # 一些記憶體的配置
-            autotune = tf.data.experimental.AUTOTUNE
             gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
             for gpu in gpus:
                 tf.config.experimental.set_visible_devices(
@@ -138,19 +137,15 @@ def pipeline_synthseg(
         else:
             logging.error("!!! " + str(ID) + " Insufficient GPU Memory.")
             # 以json做輸出
-            code_pass = 1
-            msg = "Insufficient GPU Memory"
 
             # #刪除資料夾
             # if os.path.isdir(path_process):  #如果資料夾存在
             #     shutil.rmtree(path_process) #清掉整個資料夾
 
-    except:
+    except Exception:
         logging.error("!!! " + str(ID) + " gpu have error code.")
         logging.error("Catch an exception.", exc_info=True)
         # 以json做輸出
-        code_pass = 1
-        msg = "have error code"
         # 刪除資料夾
         # if os.path.isdir(path_process):  #如果資料夾存在
         #     shutil.rmtree(path_process) #清掉整個資料夾
