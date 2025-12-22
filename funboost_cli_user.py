@@ -27,7 +27,6 @@ sys.path.insert(1, str(project_root_path))  # 这个是为了方便命令行不�
 # 以上的sys.path代码需要放在最上面,先设置好pythonpath再导入funboost相关的模块
 # $$$$$$$$$$$$
 import fire
-from funboost.timing_job import ApsJobAdder
 from funboost.core.cli.funboost_fire import BoosterFire, env_dict
 from funboost import BoostersManager
 from funboost.core.cli.discovery_boosters import BoosterDiscovery

@@ -85,7 +85,7 @@ def quick_remove_task(task_id: str, dry_run: bool = False) -> bool:
         ttl = redis_client.ttl(task_key)
         task_data = redis_client.get(task_key)
 
-        print(f"\n找到任務:")
+        print("\n找到任務:")
         print(f"  Key: {task_key}")
         print(f"  TTL: {ttl} 秒 ({ttl // 60} 分鐘)")
 
@@ -106,7 +106,7 @@ def quick_remove_task(task_id: str, dry_run: bool = False) -> bool:
             print("\n" + "=" * 60)
             print("⚠️  測試模式: 不會實際刪除任務")
             print("=" * 60)
-            print(f"如要實際刪除，請將 DRY_RUN 設為 False")
+            print("如要實際刪除，請將 DRY_RUN 設為 False")
             return True
         else:
             print("\n正在刪除任務...")

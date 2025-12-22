@@ -9,9 +9,6 @@
 
 import os
 import sys
-import asyncio
-import json
-from datetime import datetime, timedelta
 from pathlib import Path
 
 # 添加專案路徑
@@ -104,7 +101,7 @@ class InferenceStuckDiagnostic:
                 print(f"   TTL: {ttl} 秒 ({ttl/3600:.1f} 小時)")
 
                 if value == "completed":
-                    print(f"\n✅ 任務已完成")
+                    print("\n✅ 任務已完成")
                     print(f"   保護期剩餘: {ttl} 秒 ({ttl/3600:.1f} 小時)")
                     print(f"   {ttl} 秒後將自動允許重新執行")
                 elif value == "queued":
@@ -115,7 +112,7 @@ class InferenceStuckDiagnostic:
                         print("   任務可能卡住，系統將自動強制重試")
                         print("   建議：檢查 funboost consumer 狀態")
                     else:
-                        print(f"\n🟡 任務正在排隊/執行中")
+                        print("\n🟡 任務正在排隊/執行中")
                         print(f"   最長等待時間: {ttl} 秒 ({ttl/60:.0f} 分鐘)")
                 else:
                     print(f"\n🔴 未知狀態: {value}")
@@ -235,7 +232,7 @@ class InferenceStuckDiagnostic:
                     rows = result.fetchall()
 
                     if rows:
-                        print(f"📋 最近 10 筆狀態記錄:")
+                        print("📋 最近 10 筆狀態記錄:")
                         for row in rows:
                             print(
                                 f"   [{row[0]}] {row[1]} - {row[2]} (更新: {row[3]})"

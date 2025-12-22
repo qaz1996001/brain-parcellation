@@ -16,7 +16,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional, List, Dict
+from typing import Optional
 
 # 載入環境變數
 import code_ai
@@ -120,7 +120,7 @@ class TaskRemover:
             found_target = False
             checked_count = 0
 
-            print(f"\n正在檢查佇列中的任務...")
+            print("\n正在檢查佇列中的任務...")
 
             # 逐一檢查佇列中的任務
             while True:
@@ -148,13 +148,13 @@ class TaskRemover:
                         print(f"  訊息預覽: {message_str[:200]}...")
 
                         if self.dry_run:
-                            print(f"  [DRY RUN] 將移除此任務")
+                            print("  [DRY RUN] 將移除此任務")
                             # 測試模式：放回佇列
                             messages_to_keep.append((method_frame, header_frame, body))
                         else:
                             # 實際模式：確認刪除（不 ack，不重新放回）
                             channel.basic_ack(delivery_tag=method_frame.delivery_tag)
-                            print(f"  ✓ 已從佇列移除")
+                            print("  ✓ 已從佇列移除")
                             self.removed_tasks.append(
                                 {"type": "rabbitmq", "queue": queue_name}
                             )
@@ -217,7 +217,7 @@ class TaskRemover:
             ttl = redis_client.ttl(task_key)
             task_data = redis_client.get(task_key)
 
-            print(f"✓ 找到 RPC 結果:")
+            print("✓ 找到 RPC 結果:")
             print(f"  Key: {task_key}")
             print(f"  TTL: {ttl} 秒 ({ttl // 60} 分鐘)")
 
@@ -228,16 +228,16 @@ class TaskRemover:
                 print(f"  資料預覽: {preview}")
 
             if self.dry_run:
-                print(f"\n  [DRY RUN] 將刪除此 RPC 結果")
+                print("\n  [DRY RUN] 將刪除此 RPC 結果")
                 return True
             else:
                 deleted = redis_client.delete(task_key)
                 if deleted > 0:
-                    print(f"\n  ✓ 已刪除 RPC 結果")
+                    print("\n  ✓ 已刪除 RPC 結果")
                     self.removed_tasks.append({"type": "redis_rpc", "key": task_key})
                     return True
                 else:
-                    print(f"\n  ✗ 刪除失敗")
+                    print("\n  ✗ 刪除失敗")
                     return False
 
         except Exception as e:
@@ -273,24 +273,24 @@ class TaskRemover:
             cache_value = redis_client.get(inference_key)
             ttl = redis_client.ttl(inference_key)
 
-            print(f"✓ 找到推論快取:")
+            print("✓ 找到推論快取:")
             print(f"  Key: {inference_key}")
             print(f"  狀態: {cache_value}")
             print(f"  TTL: {ttl} 秒 ({ttl // 60} 分鐘)")
 
             if self.dry_run:
-                print(f"\n  [DRY RUN] 將刪除此快取")
+                print("\n  [DRY RUN] 將刪除此快取")
                 return True
             else:
                 deleted = redis_client.delete(inference_key)
                 if deleted > 0:
-                    print(f"\n  ✓ 已刪除推論快取")
+                    print("\n  ✓ 已刪除推論快取")
                     self.removed_tasks.append(
                         {"type": "redis_cache", "key": inference_key}
                     )
                     return True
                 else:
-                    print(f"\n  ✗ 刪除失敗")
+                    print("\n  ✗ 刪除失敗")
                     return False
 
         except Exception as e:

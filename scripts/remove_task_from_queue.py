@@ -13,7 +13,6 @@
 import argparse
 import os
 import sys
-from typing import Optional
 
 # 載入環境變數
 import code_ai
@@ -94,8 +93,8 @@ def remove_task_from_redis(task_id: str, dry_run: bool = False) -> bool:
         task_data = redis_client.get(task_key)
         ttl = redis_client.ttl(task_key)
 
-        print(f"\n任務資訊:")
-        print(f"  存在: 是")
+        print("\n任務資訊:")
+        print("  存在: 是")
         print(f"  TTL: {ttl} 秒")
         if task_data:
             preview = task_data[:200] + "..." if len(task_data) > 200 else task_data
@@ -137,7 +136,7 @@ def remove_inference_cache(study_uid: str, study_id: str, dry_run: bool = False)
     redis_port = int(os.getenv("REDIS_PORT", "6379"))
     redis_db_filter = int(os.getenv("REDIS_DB_FILTER_AND_RPC_RESULT", "0"))
 
-    print(f"\n移除推論快取...")
+    print("\n移除推論快取...")
     print(f"連接 Redis: {redis_host}:{redis_port}, DB: {redis_db_filter}")
 
     try:
@@ -164,7 +163,7 @@ def remove_inference_cache(study_uid: str, study_id: str, dry_run: bool = False)
         cache_value = redis_client.get(inference_key)
         ttl = redis_client.ttl(inference_key)
 
-        print(f"\n快取資訊:")
+        print("\n快取資訊:")
         print(f"  Key: {inference_key}")
         print(f"  狀態: {cache_value}")
         print(f"  TTL: {ttl} 秒")
