@@ -1,5 +1,6 @@
 # app/server.py
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,24 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
+# Environment configuration support
+from backend.app.config import get_environment, get_config
+
+# Load environment configuration at module level (immutable after startup)
+ENVIRONMENT = get_environment()
+CONFIG = get_config()
+
+# Configure logging based on environment
+logging.basicConfig(
+    level=getattr(logging, CONFIG["log_level"]),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Log environment information for audit trail
+logger.info(f"Environment: {ENVIRONMENT}")
+logger.info(f"Log level: {CONFIG['log_level']}")
+logger.info(f"Data root: {CONFIG['data_root']}")
 
 
 async def init_cache():
@@ -34,10 +53,12 @@ async def lifespan(app: FastAPI):
     """
 
     # Startup event
+    logger.info(f"Starting application in {ENVIRONMENT} environment")
     await init_cache()
     # asyncio.create_task(task_scheduler.start())
     yield
     # Shutdown event
+    logger.info(f"Shutting down application in {ENVIRONMENT} environment")
     # await task_scheduler.stop()
 
 
@@ -59,3 +80,20 @@ app.add_middleware(
 )
 app.include_router(router, prefix="/api/v1")
 alchemy.init_app(app)
+
+
+@app.get("/health", tags=["health"])
+async def health_check() -> dict[str, str]:
+    """
+    Health check endpoint with environment information.
+
+    Requirement: 環境資訊 API 暴露 - Scenario: Health Check 包含環境
+
+    Returns:
+        Dictionary containing status and environment information
+    """
+    return {
+        "status": "healthy",
+        "environment": ENVIRONMENT,
+        "log_level": CONFIG["log_level"]
+    }
