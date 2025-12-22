@@ -45,8 +45,8 @@ backend.app.config.deps : 過濾器配置
 
 import logging
 from datetime import datetime
-from typing import Annotated
-from advanced_alchemy.extensions.fastapi.providers import FieldNameType
+from typing import Annotated, cast
+from advanced_alchemy.extensions.fastapi.providers import FieldNameType, FilterConfig
 from fastapi import APIRouter, Depends
 from advanced_alchemy.extensions.fastapi import service, filters
 
@@ -80,36 +80,39 @@ async def get_events_complex(
         list[filters.FilterTypes],
         Depends(
             provide_filters(
-                {
-                    # 多欄位搜索 - 支援在多個欄位中同時搜索
-                    "search": "params_data,result_data",
-                    "search_ignore_case": True,
-                    # 集合過濾器 - 支援 IN 過濾（多值）
-                    "in_fields": [
-                        FieldNameType(name="tool_id", type_hint=str),
-                        FieldNameType(name="ope_no", type_hint=str),
-                        FieldNameType(name="study_uid", type_hint=str),
-                        FieldNameType(name="study_id", type_hint=str),
-                        FieldNameType(name="series_uid", type_hint=str),
-                    ],
-                    # 日期範圍過濾器 - 支援 BEFORE/AFTER 過濾
-                    # FieldNameType(name='update_time', type_hint=datetime)
-                    "before_after_fields": [
-                        FieldNameType(name="create_time", type_hint=datetime),
-                    ],
-                    # 排序配置 - 支援多欄位排序
-                    "order_by": [
-                        "study_uid",
-                        "ope_no",
-                        "create_time",
-                    ],
-                    # 分頁配置 - 使用 limit/offset 分頁
-                    "pagination_type": "limit_offset",
-                    "limit": 50,
-                    "offset": 0,
-                    # ID 過濾器 - 使用 Orthanc ID 格式驗證
-                    "id_filter": OrthancID,
-                }
+                cast(
+                    FilterConfig,
+                    {
+                        # 多欄位搜索 - 支援在多個欄位中同時搜索
+                        "search": "params_data,result_data",
+                        "search_ignore_case": True,
+                        # 集合過濾器 - 支援 IN 過濾（多值）
+                        "in_fields": [
+                            FieldNameType(name="tool_id", type_hint=str),
+                            FieldNameType(name="ope_no", type_hint=str),
+                            FieldNameType(name="study_uid", type_hint=str),
+                            FieldNameType(name="study_id", type_hint=str),
+                            FieldNameType(name="series_uid", type_hint=str),
+                        ],
+                        # 日期範圍過濾器 - 支援 BEFORE/AFTER 過濾
+                        # FieldNameType(name='update_time', type_hint=datetime)
+                        "before_after_fields": [
+                            FieldNameType(name="create_time", type_hint=datetime),
+                        ],
+                        # 排序配置 - 支援多欄位排序
+                        "order_by": [
+                            "study_uid",
+                            "ope_no",
+                            "create_time",
+                        ],
+                        # 分頁配置 - 使用 limit/offset 分頁
+                        "pagination_type": "limit_offset",
+                        "limit": 50,
+                        "offset": 0,
+                        # ID 過濾器 - 使用 Orthanc ID 格式驗證
+                        "id_filter": OrthancID,
+                    },
+                )
             )
         ),
     ],

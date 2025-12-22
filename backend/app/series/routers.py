@@ -300,6 +300,10 @@ async def analyze_dicom_files_by_path(
     """
     rename_dicom_list = []
     
+    # 檢查 file_path_list 是否為 None
+    if file_path_list is None:
+        return rename_dicom_list
+    
     # 限制批次處理數量（最多 100 個檔案）
     if len(file_path_list) > 100:
         file_path_list = file_path_list[:100]
@@ -446,6 +450,10 @@ async def analyze_dicom_files_by_upload(
     """
     rename_dicom_list = []
     
+    # 檢查 dicom_file_list 是否為 None
+    if dicom_file_list is None:
+        return rename_dicom_list
+    
     # 限制批次處理數量（最多 100 個檔案）
     if len(dicom_file_list) > 100:
         dicom_file_list = dicom_file_list[:100]
@@ -468,7 +476,7 @@ async def analyze_dicom_files_by_upload(
         # 建立響應物件
         rename_dicom_list.append(
             SeriesResponse(
-                file_name=dicom_file.filename,
+                file_name=dicom_file.filename if dicom_file.filename is not None else "unknown",
                 series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
                 series_orientation=str(orientation.value),
             )

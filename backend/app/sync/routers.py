@@ -67,8 +67,8 @@ Notes
 """
 
 import logging
-from typing import Annotated, List, Optional
-from advanced_alchemy.extensions.fastapi.providers import FieldNameType
+from typing import Annotated, List, Optional, cast
+from advanced_alchemy.extensions.fastapi.providers import FieldNameType, FilterConfig
 from advanced_alchemy.service import OffsetPagination
 from fastapi import (
     APIRouter,
@@ -144,6 +144,7 @@ async def get_study_uuid() -> Response:
     summary="排程新 Study 同步",
     description="接收 Study UID，建立同步事件，排程後台任務",
     response_description="已建立的事件列表",
+    response_model=List[DCOPEventRequest],
     tags=["Study Management"],
 )
 async def post_study_uuid(
@@ -152,7 +153,7 @@ async def post_study_uuid(
         DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
     ],
     background_tasks: BackgroundTasks,
-) -> Response:
+) -> List[DCOPEventRequest]:
     """
     排程新 Study 同步，進入 Study 傳輸階段。
     
@@ -228,7 +229,9 @@ async def post_study_uuid(
         )
 
     # 建立初始事件並返回
-    result_list = await dcop_event_service.schedule_new_studies(study_ids)
+    # Convert OrthancID list to Optional[str] list
+    study_ids_str: List[Optional[str]] = [str(uid) if uid is not None else None for uid in study_ids]
+    result_list = await dcop_event_service.schedule_new_studies(study_ids_str)
     logger.info("post_study_uuid scheduled=%s", len(result_list))
 
     # 排程後台任務：擷取 Series 資訊
@@ -244,8 +247,8 @@ async def post_study_uuid(
        #     link_target,
     #        request.prev_study_uid,
      #   )
-    
-    return result_list
+    # 將資料庫模型轉換為 Pydantic schema（from_attributes=True）
+    return [DCOPEventRequest.model_validate(event) for event in result_list]
 
 
 @router.get(
@@ -265,12 +268,15 @@ async def get_ope_no(
         list[filters.FilterTypes],
         Depends(
             alchemy.provide_filters(
-                {
-                    "id_filter": OrthancID,
-                    "pagination_type": "limit_offset",
-                    "search": "study_uid,study_id,ope_no,tool_id",
-                    "search_ignore_case": True,
-                }
+                cast(
+                    FilterConfig,
+                    {
+                        "id_filter": str,  # type: ignore[dict-item]
+                        "pagination_type": "limit_offset",
+                        "search": "study_uid,study_id,ope_no,tool_id",
+                        "search_ignore_case": True,
+                    },
+                )
             )
         ),
     ],
@@ -648,7 +654,7 @@ async def post_check_study_series_conversion_complete(
     description="study rename id list",
     response_description="",
 )
-async def post_check_study_series_conversion_complete(
+async def post_check_study_series_conversion_complete_by_id(
     dcop_event_service: Annotated[
         DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
     ],
@@ -701,33 +707,36 @@ async def get_events_complex(
         list[filters.FilterTypes],
         Depends(
             alchemy.provide_filters(
-                {
-                    # 多欄位搜索
-                    "search": "params_data,result_data",
-                    "search_ignore_case": True,
-                    # 日期範圍過濾器
-                    "created_at": "before_after",
-                    # 集合過濾器
-                    "in_fields": [
-                        FieldNameType(name="tool_id", type_hint=str),
-                        FieldNameType(name="ope_no", type_hint=str),
-                        FieldNameType(name="study_uid", type_hint=str),
-                        FieldNameType(name="study_id", type_hint=str),
-                        FieldNameType(name="series_uid", type_hint=str),
-                    ],
-                    # 排序配置
-                    "order_by": [
-                        "study_uid",
-                        "ope_no",
-                        "create_time",
-                    ],
-                    # 分頁配置
-                    "pagination_type": "limit_offset",
-                    "limit": 50,
-                    "offset": 0,
-                    # ID 過濾器
-                    "id_filter": OrthancID,
-                }
+                cast(
+                    FilterConfig,
+                    {
+                        # 多欄位搜索
+                        "search": "params_data,result_data",
+                        "search_ignore_case": True,
+                        # 日期範圍過濾器
+                        "created_at": True,  # type: ignore[dict-item]
+                        # 集合過濾器
+                        "in_fields": [
+                            FieldNameType(name="tool_id", type_hint=str),
+                            FieldNameType(name="ope_no", type_hint=str),
+                            FieldNameType(name="study_uid", type_hint=str),
+                            FieldNameType(name="study_id", type_hint=str),
+                            FieldNameType(name="series_uid", type_hint=str),
+                        ],
+                        # 排序配置
+                        "order_by": [  # type: ignore[dict-item]
+                            "study_uid",
+                            "ope_no",
+                            "create_time",
+                        ],
+                        # 分頁配置
+                        "pagination_type": "limit_offset",
+                        "limit": 50,  # type: ignore[dict-item]
+                        "offset": 0,  # type: ignore[dict-item]
+                        # ID 過濾器
+                        "id_filter": str,  # type: ignore[dict-item]
+                    },
+                )
             )
         ),
     ],
@@ -752,7 +761,7 @@ async def get_events_complex(
     response_description="活躍的推論任務列表",
     tags=["Cache Management"],
 )
-async def get_events_complex():
+async def get_inference_cache():
     """
     列出推論任務快取鍵，用於偵錯和觀察推論隊列狀態。
     
@@ -779,7 +788,7 @@ async def get_events_complex():
     此端點用於操作監控和偵錯。可視為系統的 "推論隊列觀測窗口"。
     """
     redis_backend = FastAPICache.get_backend()
-    redis_client = redis_backend.redis
+    redis_client = redis_backend.redis  # type: ignore[attr-defined]
     cache_prefix = get_sync_settings().cache.inference_prefix
     
     # 從 Redis 取得所有推論任務快取鍵
@@ -873,7 +882,7 @@ async def delete_events_complex(
         若未提供任何搜尋條件，返回錯誤消息。
     """
     redis_backend = FastAPICache.get_backend()
-    redis_client = redis_backend.redis
+    redis_client = redis_backend.redis  # type: ignore[attr-defined]
     cache_prefix = get_sync_settings().cache.inference_prefix
 
     # 早期驗證：至少提供一種搜尋條件
@@ -973,6 +982,8 @@ async def get_study_series_ope_no_status(
     >>> GET /sync/query/study_series_ope_no_status?
     ...     study_uid=abc-123&ope_no=100.095&limit=50
     """
+    if study_uid is None:
+        raise HTTPException(status_code=422, detail="study_uid is required")
     result = await dcop_event_service.get_stydy_series_ope_no_status(
         study_uid=study_uid,
         ope_no=ope_no,
@@ -1028,6 +1039,8 @@ async def get_stydy_ope_no_status(
     >>> GET /sync/query/stydy_ope_no_status?
     ...     study_uid=abc-123&ope_no=200.200
     """
+    if study_uid is None:
+        raise HTTPException(status_code=422, detail="study_uid is required")
     result = await dcop_event_service.get_stydy_ope_no_status(
         study_uid=study_uid,
         ope_no=ope_no,

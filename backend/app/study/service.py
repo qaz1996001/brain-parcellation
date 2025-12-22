@@ -70,9 +70,9 @@ from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
-from .model import DCOPEventModel
+from backend.app.sync.model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
-from .urls import (
+from backend.app.sync.urls import (
     SYNC_PROT_OPE_NO,
     SYNC_PROT_STUDY_NIFTI_TOOL,
     SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,
@@ -317,11 +317,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
                     tool_id=dcop_event.tool_id,
                     study_uid=dcop_event.study_uid,
-                    series_uid=dcop_event.series_uid,
-                    study_id=dcop_event.study_id,
+                    series_uid=dcop_event.series_uid if dcop_event.series_uid is not None else "",
+                    study_id=dcop_event.study_id if dcop_event.study_id is not None else "",
                     ope_no=dcop_event.ope_no,
-                    result_data=dcop_event.result_data,
-                    params_data=dcop_event.params_data,
+                    result_data=dcop_event.result_data if dcop_event.result_data is not None else {},
+                    params_data=dcop_event.params_data if dcop_event.params_data is not None else {},
                     session=session,
                 )
                 session.add(new_data_obj)
@@ -330,16 +330,19 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
                 # new_data_obj = await self.create(data=new_data, auto_commit=True, auto_refresh=True)
                 # 識別是否需要觸發檢查點
-                match new_data_obj.ope_no:
-                    case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                        # Series 傳輸完成 → 檢查 Study 傳輸
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                        # Series 轉檔完成 → 檢查 Study 轉檔
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case _:
-                        # 其他事件不觸發檢查點
-                        url = None
+                if new_data_obj.ope_no is not None:
+                    match new_data_obj.ope_no:
+                        case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
+                            # Series 傳輸完成 → 檢查 Study 傳輸
+                            url = await self.get_check_url_by_ope_no(str(new_data_obj.ope_no))
+                        case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                            # Series 轉檔完成 → 檢查 Study 轉檔
+                            url = await self.get_check_url_by_ope_no(str(new_data_obj.ope_no))
+                        case _:
+                            # 其他事件不觸發檢查點
+                            url = None
+                else:
+                    url = None
                 
                 # 添加到檢查點集合（自動去重）
                 if url is not None and url not in check_url_set:
@@ -348,7 +351,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # 批次執行所有檢查點
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
-                rep = await client.post(url)
+                await client.post(url)
         return
 
     async def check_study_series_transfer_complete(
@@ -442,13 +445,15 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         # Process eligible studies for conversion
         if dcop_event_list:
-            await self._send_events(upload_data_api_url, dcop_event_dump_list)
-            await self._initiate_conversion_process(
-                upload_data_api_url,
-                dcop_event_list,
-                path_rename_dicom,
-                path_rename_nifti,
-            )
+            if upload_data_api_url is not None:
+                await self._send_events(upload_data_api_url, dcop_event_dump_list)
+            if upload_data_api_url is not None and path_rename_dicom is not None and path_rename_nifti is not None:
+                await self._initiate_conversion_process(
+                    upload_data_api_url,
+                    dcop_event_list,
+                    path_rename_dicom,
+                    path_rename_nifti,
+                )
 
         return dcop_event_list
 
@@ -503,9 +508,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         
         # 載入檔案路徑配置
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
 
         result_list = []
         async with self.session_manager.get_session() as session:
@@ -600,8 +605,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
-            event_data_json = json.dumps(event_data)
-            await client.post(url=url, timeout=180, data=event_data_json)
+            await client.post(url=url, timeout=180, json=event_data)
 
     async def _initiate_conversion_process(
         self,
@@ -623,7 +627,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
         for event in events:
             study_id = event.study_id
-            output_dicom_path = pathlib.Path(os.path.join(dicom_path, study_id))
+            if study_id is None:
+                continue
+            output_dicom_path = pathlib.Path(os.path.join(str(dicom_path), study_id))
             output_nifti_path = pathlib.Path(nifti_path)
 
             # Prepare conversion parameters
@@ -643,8 +649,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     result_data=None,
                 )
 
-                request_data = json.dumps([nifti_tool_request.model_dump()])
-                await client.post(url=url, data=request_data)
+                await client.post(url=url, json=[nifti_tool_request.model_dump()])
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
@@ -678,16 +683,19 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             )
                         )
                         execute = await session.execute(conf_query)
-                        dcop_event = execute.first()[0]
+                        first_result = execute.first()
+                        if first_result is None:
+                            continue
+                        dcop_event = first_result[0]
                         study_transfer_complete_data = (
                             await DCOPEventModel.create_event_ope_no(
                                 tool_id=dcop.tool_id,
                                 study_uid=dcop_event.study_uid,
-                                series_uid=None,
-                                study_id=dcop.study_id,
+                                series_uid="",
+                                study_id=dcop.study_id if dcop.study_id is not None else "",
                                 ope_no=dcop.ope_no,
-                                result_data=dcop.result_data,
-                                params_data=dcop.params_data,
+                                result_data=dcop.result_data if dcop.result_data is not None else {},
+                                params_data=dcop.params_data if dcop.params_data is not None else {},
                                 session=session,
                             )
                         )
@@ -713,7 +721,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai import load_dotenv
 
         load_dotenv()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
@@ -730,7 +737,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         for dcop_event in dcop_event_list:
             result_data = dcop_event.result_data[0]
             output_dicom_path = result_data["rename_dicom_path"]
-            output_nifti_path = pathlib.Path(path_rename_nifti)
+            output_nifti_path = pathlib.Path(path_rename_nifti if path_rename_nifti is not None else "")
             task_params = Dicom2NiiSeriesParams(
                 sub_dir=None,
                 study_uid=dcop_event.study_uid,
@@ -793,14 +800,16 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai import load_dotenv
 
         load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
 
         for dcop_event in data:
             study_uid = dcop_event.study_uid
             logger.info(f"1000000100 dcop_event {dcop_event}")
-            study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
+            if study_uid is None:
+                continue
+            study_uid_raw_dicom_path = raw_dicom_path.joinpath(str(study_uid))
             if study_uid_raw_dicom_path.exists():
                 async with self.session_manager.get_session() as session:
                     series_uid_path_list = sorted(study_uid_raw_dicom_path.iterdir())
@@ -813,13 +822,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
                     for series_uid_path in series_uid_path_list:
                         series_new_data = await DCOPEventModel.create_event(
-                            study_uid=study_uid,
+                            study_uid=str(study_uid),
                             series_uid=series_uid_path.name,
                             status=DCOPStatus.SERIES_NEW.name,
                             session=session,
                         )
                         series_transferring_data = await DCOPEventModel.create_event(
-                            study_uid=study_uid,
+                            study_uid=str(study_uid),
                             series_uid=series_uid_path.name,
                             status=DCOPStatus.SERIES_TRANSFERRING.name,
                             session=session,
@@ -837,7 +846,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         logger.info(
                             f"dicom_tool_get_series_info {new_data_list} {task}"
                         )
-                    except:
+                    except Exception:
                         await session.rollback()
                         logger.error(traceback.print_exc())
 
@@ -857,9 +866,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         # Environment variables setup
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
         logger.info(f"data {data}")
         # post_check_study_series_conversion_complete call check
         if data is None:
@@ -991,7 +1000,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     ):
         """Queue inference tasks for completed studies and send related events."""
         redis_backend = FastAPICache.get_backend()
-        redis_client = redis_backend.redis
+        redis_client = redis_backend.redis  # type: ignore[attr-defined]
 
         for dcop_event in study_events:
             dicom_study_path = rename_dicom_path.joinpath(dcop_event.study_id)

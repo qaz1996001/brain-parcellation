@@ -36,7 +36,6 @@ ReRunStudyService : 研究重新執行服務的主要類別，包含所有相關
 @author: sean Ho
 """
 
-import json
 import logging
 import os
 import pathlib
@@ -222,9 +221,9 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         """
         # 載入環境變數配置
         load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM") or "")
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM") or "")
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI") or "")
 
         # 組建該研究的原始 DICOM 路徑
         study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
@@ -695,7 +694,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         
         # 構建所有深度學習模型的輸出目錄路徑
-        process_path = pathlib.Path(os.getenv("PATH_PROCESS"))
+        process_path = pathlib.Path(os.getenv("PATH_PROCESS") or "")
         aneurysm_path = process_path.joinpath("Deep_Aneurysm")
         cmb_path = process_path.joinpath("Deep_CMB")
         cmd_tools_path = process_path.joinpath("Deep_cmd_tools")
@@ -704,8 +703,8 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         wmh_path = process_path.joinpath("Deep_WMH")
         
         # 構建重命名後檔案的路徑
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM") or "")
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI") or "")
         
         # 執行查詢，獲取要刪除的研究記錄
         async with self.session_manager.get_session() as session:
@@ -875,11 +874,8 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
             # 構建完整的 API 端點 URL
             url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
             
-            # 將事件列表序列化為 JSON 字符串
-            event_data_json = json.dumps(event_data)
-            
             # 發送 POST 請求，將事件資料傳送到 API
-            await client.post(url=url, timeout=180, data=event_data_json)
+            await client.post(url=url, timeout=180, json=event_data)
 
     @staticmethod
     async def del_path(input_path: pathlib.Path):

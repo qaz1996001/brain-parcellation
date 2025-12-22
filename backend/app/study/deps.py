@@ -123,20 +123,20 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
     annotations: dict[str, Any] = {}
 
     # Add id filter providers
-    if (id_filter := config.get("id_filter", False)) is not False:
+    if config.get("id_filter", False) is not False:
 
         def provide_id_filter(  # pyright: ignore[reportUnknownParameterType]
             ids: Annotated[  # type: ignore
-                Optional[list[id_filter]],  # pyright: ignore
+                Optional[list[Any]],  # pyright: ignore
                 Query(
                     alias="ids",
                     required=False,
                     description="IDs to filter by.",
                 ),
             ] = None,
-        ) -> Optional[CollectionFilter[id_filter]]:  # type: ignore
+        ) -> Optional[CollectionFilter[Any]]:  # type: ignore
             return (
-                CollectionFilter[id_filter](
+                CollectionFilter[Any](
                     field_name=config.get("id_field", "id"), values=ids
                 )
                 if ids
@@ -148,12 +148,12 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                 name=dep_defaults.ID_FILTER_DEPENDENCY_KEY,
                 kind=inspect.Parameter.KEYWORD_ONLY,
                 annotation=Annotated[
-                    Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)
+                    Optional[CollectionFilter[Any]], Depends(provide_id_filter)
                 ],  # type: ignore
             )
         )
         annotations[dep_defaults.ID_FILTER_DEPENDENCY_KEY] = Annotated[
-            Optional[CollectionFilter[id_filter]], Depends(provide_id_filter)  # type: ignore
+            Optional[CollectionFilter[Any]], Depends(provide_id_filter)  # type: ignore
         ]
 
     # Add created_at filter providers
@@ -534,16 +534,16 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             def create_not_in_filter_provider(  # pyright: ignore
                 local_field_name: str,
                 local_field_type: type[Any],
-            ) -> Callable[..., Optional[NotInCollectionFilter[field_def.type_hint]]]:  # type: ignore
+            ) -> Callable[..., Optional[NotInCollectionFilter[Any]]]:  # type: ignore[type-arg]
                 def provide_not_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
-                        Optional[set[local_field_type]],  # pyright: ignore
+                        Optional[set[Any]],  # pyright: ignore
                         Query(
                             alias=camelize(f"{local_field_name}_not_in"),
                             description=f"Filter {local_field_name} not in values",
                         ),
                     ] = None,
-                ) -> Optional[NotInCollectionFilter[local_field_type]]:  # type: ignore
+                ) -> Optional[NotInCollectionFilter[Any]]:  # type: ignore
                     return (
                         NotInCollectionFilter(
                             field_name=local_field_name, values=values
@@ -563,13 +563,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
                     annotation=Annotated[
-                        Optional[NotInCollectionFilter[field_def.type_hint]],
+                        Optional[NotInCollectionFilter[Any]],  # type: ignore[type-arg]
                         Depends(provider),
                     ],  # type: ignore
                 )
             )
             annotations[param_name] = Annotated[
-                Optional[NotInCollectionFilter[field_def.type_hint]], Depends(provider)
+                Optional[NotInCollectionFilter[Any]], Depends(provider)  # type: ignore[type-arg]
             ]  # type: ignore
 
     # Add in filter providers
@@ -582,16 +582,16 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
             def create_in_filter_provider(  # pyright: ignore
                 local_field_name: str,
                 local_field_type: type[Any],
-            ) -> Callable[..., Optional[CollectionFilter[field_def.type_hint]]]:  # type: ignore
+            ) -> Callable[..., Optional[CollectionFilter[Any]]]:  # type: ignore[type-arg]
                 def provide_in_filter(  # pyright: ignore
                     values: Annotated[  # type: ignore
-                        Optional[set[local_field_type]],  # pyright: ignore
+                        Optional[set[Any]],  # pyright: ignore
                         Query(
                             alias=camelize(f"{local_field_name}_in"),
                             description=f"Filter {local_field_name} in values",
                         ),
                     ] = None,
-                ) -> Optional[CollectionFilter[local_field_type]]:  # type: ignore
+                ) -> Optional[CollectionFilter[Any]]:  # type: ignore
                     return (
                         CollectionFilter(field_name=local_field_name, values=values)
                         if values
@@ -607,13 +607,13 @@ def _create_filter_aggregate_function_fastapi(  # noqa: C901, PLR0915
                     name=param_name,
                     kind=inspect.Parameter.KEYWORD_ONLY,
                     annotation=Annotated[
-                        Optional[CollectionFilter[field_def.type_hint]],
+                        Optional[CollectionFilter[Any]],  # type: ignore[type-arg]
                         Depends(provider),
                     ],  # type: ignore
                 )
             )
             annotations[param_name] = Annotated[
-                Optional[CollectionFilter[field_def.type_hint]], Depends(provider)
+                Optional[CollectionFilter[Any]], Depends(provider)  # type: ignore[type-arg]
             ]  # type: ignore
 
     _aggregate_filter_function.__signature__ = inspect.Signature(  # type: ignore

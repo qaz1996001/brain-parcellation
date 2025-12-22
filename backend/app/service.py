@@ -310,7 +310,9 @@ class SessionManager:
                         f"Database operation failed after {max_retries} attempts: {e}"
                     )
 
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError("Database operation failed but no exception was captured")
 
     async def close_all_sessions(self) -> None:
         """
@@ -344,7 +346,7 @@ ModelT = TypeVar("ModelT")
 
 
 class BaseRepositoryService(
-    service.SQLAlchemyAsyncRepositoryService[ModelT], Generic[ModelT]
+    service.SQLAlchemyAsyncRepositoryService[ModelT], Generic[ModelT]  # type: ignore[type-arg]
 ):
     """
     增強的服務基類 - 提供統一的會話管理能力。

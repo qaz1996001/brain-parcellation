@@ -204,10 +204,10 @@ def _cleanup_old_logs(log_dir: str, days: int = 7) -> None:
                     try:
                         os.remove(filepath)
                         # 可選：記錄刪除行為（但避免循環依賴）
-                    except Exception as e:
+                    except Exception:
                         # 刪除失敗時忽略（例如檔案被鎖定）
                         pass
-    except Exception as e:
+    except Exception:
         # 清理過程中的任何異常都被忽略（避免影響主流程）
         pass
 
@@ -452,11 +452,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
                     tool_id=dcop_event.tool_id,
                     study_uid=dcop_event.study_uid,
-                    series_uid=dcop_event.series_uid,
-                    study_id=dcop_event.study_id,
+                    series_uid=dcop_event.series_uid if dcop_event.series_uid is not None else "",
+                    study_id=dcop_event.study_id if dcop_event.study_id is not None else "",
                     ope_no=dcop_event.ope_no,
-                    result_data=dcop_event.result_data,
-                    params_data=dcop_event.params_data,
+                    result_data=dcop_event.result_data if dcop_event.result_data is not None else {},
+                    params_data=dcop_event.params_data if dcop_event.params_data is not None else {},
                     session=session
                 )
                 
@@ -466,16 +466,19 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 await session.refresh(new_data_obj)
 
                 # 識別是否需要觸發檢查點
-                match new_data_obj.ope_no:
-                    case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                        # Series 傳輸完成 → 檢查 Study 傳輸
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                        # Series 轉檔完成 → 檢查 Study 轉檔
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case _:
-                        # 其他事件不觸發檢查點
-                        url = None
+                if new_data_obj.ope_no is not None:
+                    match new_data_obj.ope_no:
+                        case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
+                            # Series 傳輸完成 → 檢查 Study 傳輸
+                            url = await self.get_check_url_by_ope_no(str(new_data_obj.ope_no))
+                        case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                            # Series 轉檔完成 → 檢查 Study 轉檔
+                            url = await self.get_check_url_by_ope_no(str(new_data_obj.ope_no))
+                        case _:
+                            # 其他事件不觸發檢查點
+                            url = None
+                else:
+                    url = None
                 
                 # 添加到檢查點集合（自動去重）
                 if url is not None and url not in check_url_set:
@@ -574,9 +577,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         # Process eligible studies for conversion
         if dcop_event_list:
-            await self._send_events(upload_data_api_url, dcop_event_dump_list)
-            await self._initiate_conversion_process(upload_data_api_url, dcop_event_list, path_rename_dicom,
-                                                    path_rename_nifti)
+            if upload_data_api_url is not None:
+                await self._send_events(upload_data_api_url, dcop_event_dump_list)
+            if upload_data_api_url is not None and path_rename_dicom is not None and path_rename_nifti is not None:
+                await self._initiate_conversion_process(upload_data_api_url, dcop_event_list, path_rename_dicom,
+                                                        path_rename_nifti)
 
         return dcop_event_list
 
@@ -671,9 +676,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         
         # 載入檔案路徑配置
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
 
         result_list = []
         async with self.session_manager.get_session() as session:
@@ -788,7 +793,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
         for event in events:
             study_id = event.study_id
-            output_dicom_path = pathlib.Path(os.path.join(dicom_path, study_id))
+            if study_id is None:
+                continue
+            output_dicom_path = pathlib.Path(os.path.join(str(dicom_path), study_id))
             output_nifti_path = pathlib.Path(nifti_path)
 
             # Prepare conversion parameters
@@ -808,8 +815,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     result_data=None
                 )
 
-                request_data = json.dumps([nifti_tool_request.model_dump()])
-                await client.post(url=url, data=request_data)
+                await client.post(url=url, json=[nifti_tool_request.model_dump()])
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
@@ -833,14 +839,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                                                            DCOPEventModel.tool_id == 'DICOM_TOOL',
                                                                            DCOPEventModel.ope_no == DCOPStatus.SERIES_TRANSFER_COMPLETE.value]))
                         execute = await session.execute(conf_query)
-                        dcop_event = execute.first()[0]
+                        first_result = execute.first()
+                        if first_result is None:
+                            continue
+                        dcop_event = first_result[0]
                         study_transfer_complete_data = await DCOPEventModel.create_event_ope_no(tool_id=dcop.tool_id,
                                                                                                 study_uid=dcop_event.study_uid,
-                                                                                                series_uid=None,
-                                                                                                study_id=dcop.study_id,
+                                                                                                series_uid="",
+                                                                                                study_id=dcop.study_id if dcop.study_id is not None else "",
                                                                                                 ope_no=dcop.ope_no,
-                                                                                                result_data=dcop.result_data,
-                                                                                                params_data=dcop.params_data,
+                                                                                                result_data=dcop.result_data if dcop.result_data is not None else {},
+                                                                                                params_data=dcop.params_data if dcop.params_data is not None else {},
                                                                                                 session=session)
 
                         session.add(study_transfer_complete_data)
@@ -1022,7 +1031,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 series_description = candidate_description_from_path
             
             # 檢查是否為 multi-output series
-            is_multi, required_outputs = is_multi_output_series(series_description)
+            if series_description is None:
+                is_multi, required_outputs = False, None
+            else:
+                is_multi, required_outputs = is_multi_output_series(str(series_description))
             log.info(f"[SERIES {idx}] Multi-output 檢測: is_multi={is_multi}, required_outputs={required_outputs}")
             
             # 提取所有 rename_dicom_path（去除重複）
@@ -1075,6 +1087,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     
                     try:
                         subdirs = [d for d in search_dir.iterdir() if d.is_dir()]
+                        if required_outputs is None:
+                            continue
                         for req_out in required_outputs:
                             # 如果已經找到了，就跳過
                             if req_out in found_outputs_map:
@@ -1095,12 +1109,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 final_task_paths = []
                 
                 if found_outputs_map:
-                    log.info(f"[SERIES {idx}] 🔀 File System Scan Results: Found {len(found_outputs_map)}/{len(required_outputs)} outputs")
-                    for req_out in required_outputs:
-                        if req_out in found_outputs_map:
-                             final_task_paths.append(found_outputs_map[req_out])
-                        else:
-                             log.warning(f"[SERIES {idx}]    - ⚠️ Required output '{req_out}' NOT found on disk.")
+                    if required_outputs is not None:
+                        log.info(f"[SERIES {idx}] 🔀 File System Scan Results: Found {len(found_outputs_map)}/{len(required_outputs)} outputs")
+                        for req_out in required_outputs:
+                            if req_out in found_outputs_map:
+                                final_task_paths.append(found_outputs_map[req_out])
+                            else:
+                                log.warning(f"[SERIES {idx}]    - ⚠️ Required output '{req_out}' NOT found on disk.")
                 else:
                     log.warning(f"[SERIES {idx}] ⚠️ Is multi-output but found no matching folders on disk via scan. Falling back to DB paths.")
                     final_task_paths = rename_paths
@@ -1114,7 +1129,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     log.info(f"[SERIES {idx}] [OUTPUT {path_idx}]    - Output Name: {output_name}")
                     log.info(f"[SERIES {idx}] [OUTPUT {path_idx}]    - Output Path: {output_dicom_path}")
                     
-                    output_nifti_path = pathlib.Path(path_rename_nifti)
+                    output_nifti_path = pathlib.Path(path_rename_nifti if path_rename_nifti is not None else "")
                     task_params = Dicom2NiiSeriesParams(
                         sub_dir=None,
                         study_uid=dcop_event.study_uid,
@@ -1130,7 +1145,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         series_uid=series_uid,
                         study_id=dcop_event.study_id,
                         ope_no=DCOPStatus.SERIES_CONVERTING.value,
-                        result_data=dcop_event.result_data,
+                        result_data=dcop_event.result_data if dcop_event.result_data is not None else {},
                         params_data=task_params.get_str_dict(),
                         session=session
                     )
@@ -1154,7 +1169,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         f"只使用第一個: {output_dicom_path}"
                     )
                 
-                output_nifti_path = pathlib.Path(path_rename_nifti)
+                output_nifti_path = pathlib.Path(path_rename_nifti if path_rename_nifti is not None else "")
                 task_params = Dicom2NiiSeriesParams(
                     sub_dir=None,
                     study_uid=dcop_event.study_uid,
@@ -1180,7 +1195,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 log.info(f"[SERIES {idx}] 📄 ✅ 任務已加入佇列")
 
         log.info(f"\n{'='*80}")
-        log.info(f"[SUMMARY] 處理完成")
+        log.info("[SUMMARY] 處理完成")
         log.info(f"[SUMMARY] 總共處理了 {len(dcop_event_list)} 個 series")
         log.info(f"[SUMMARY] 建立了 {len(dcop_model_list)} 個 NIFTI 轉換任務")
         log.info(f"{'='*80}")
@@ -1190,7 +1205,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 log.info(f'[DATABASE] 準備寫入 {len(dcop_model_list)} 個任務到資料庫')
                 session.add_all(dcop_model_list)
                 await session.commit()
-                log.info(f'[DATABASE] ✅ 資料庫寫入成功')
+                log.info('[DATABASE] ✅ 資料庫寫入成功')
                 
                 for idx, dcop_model in enumerate(dcop_model_list, 1):
                     await session.refresh(dcop_model)
@@ -1205,13 +1220,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     dicom_2_nii_series.push(task_params.get_str_dict())
                     log.info(f'[QUEUE] [{idx}/{len(task_params_list)}] ✅ 任務已發送')
                 
-                log.info(f'[QUEUE] ✅ 所有任務已成功發送到佇列')
+                log.info('[QUEUE] ✅ 所有任務已成功發送到佇列')
             else:
                 log.info("[RESULT] 沒有需要建立的 NIFTI 任務")
         except Exception as e:
             await session.rollback()
             log.error(f"[ERROR] ❌ 建立 NIFTI 任務時發生錯誤: {e}")
-            log.error(f"[ERROR] 資料庫事務已回滾")
+            log.error("[ERROR] 資料庫事務已回滾")
             log.exception("完整錯誤堆疊:")
             raise
         finally:
@@ -1227,7 +1242,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         with open(instance_path_str, mode='rb') as f:
             dicom_ds = pydicom.dcmread(f)
 
-        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+        if UPLOAD_DATA_DICOM_SEG_URL is None:
+            raise ValueError("UPLOAD_DATA_DICOM_SEG_URL environment variable is not set")
+        client = Orthanc(str(UPLOAD_DATA_DICOM_SEG_URL), timeout=300)
         study_uid = instance_path.parent.parent.parent.parent.name
         # (0020,000E)	Series Instance UID	1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703
         series_sop_uid = dicom_ds[0x0020, 0x000E].value
@@ -1243,7 +1260,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     def get_orthanc_series_uid(study_uid: str,
                                series_dir_set: set):
         UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+        if UPLOAD_DATA_DICOM_SEG_URL is None:
+            raise ValueError("UPLOAD_DATA_DICOM_SEG_URL environment variable is not set")
+        client = Orthanc(str(UPLOAD_DATA_DICOM_SEG_URL), timeout=300)
         series_sop_uid_list = []
         for series_dir in series_dir_set:
             series_path_list = list(series_dir.rglob('*.dcm'))
@@ -1321,18 +1340,20 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         
         # 載入檔案路徑配置
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
 
         for dcop_event in data:
             study_uid = dcop_event.study_uid
             self.logger.info(f'dicom_tool_get_series_info dcop_event {dcop_event}')
-            study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
+            if study_uid is None:
+                continue
+            study_uid_raw_dicom_path = raw_dicom_path.joinpath(str(study_uid))
             if study_uid_raw_dicom_path.exists():
                 dcm_path_list = sorted(study_uid_raw_dicom_path.rglob('*.dcm'))
                 series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
-                df = self.get_orthanc_series_uid(study_uid, series_dir_set)
+                df = self.get_orthanc_series_uid(str(study_uid), series_dir_set)
                 series_uid_list = df['uid'].to_list()
                 task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
                                               output_dicom_path=rename_dicom_path,
@@ -1342,11 +1363,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     new_data_list = []
                     async with self.session_manager.get_session() as session:
                         try:
-                            series_new_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                            series_new_data = await DCOPEventModel.create_event(study_uid=str(study_uid),
                                                                                 series_uid=series_uid,
                                                                                 status=DCOPStatus.SERIES_NEW.name,
                                                                                 session=session, )
-                            series_transferring_data = await DCOPEventModel.create_event(study_uid=study_uid,
+                            series_transferring_data = await DCOPEventModel.create_event(study_uid=str(study_uid),
                                                                                          series_uid=series_uid,
                                                                                          status=DCOPStatus.SERIES_TRANSFERRING.name,
                                                                                          session=session, )
@@ -1357,12 +1378,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             session.add_all(new_data_list)
                             await session.commit()
                             self.logger.info(f'dicom_tool_get_series_info {new_data_list}')
-                        except:
+                        except Exception:
                             flage = False
                             await session.rollback()
                             self.logger.error(f'Error: {traceback.format_exc()}')
                 if flage:
-                    task = dicom_to_nii.push(task_params.get_str_dict())
+                    dicom_to_nii.push(task_params.get_str_dict())
         return None
 
     async def check_study_series_conversion_complete(
@@ -1441,9 +1462,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         # Environment variables setup
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
         # post_check_study_series_conversion_complete call check
         if data is None:
             # Query studies not yet at STUDY_CONVERSION_COMPLETE status
@@ -1474,7 +1495,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 study_event = list(filter(lambda x:x.study_uid == completed_study.study_uid,study_events))
                 study_events_filter.extend(study_event)
             study_events_filter = list(map(lambda x:x.model_dump(),study_events_filter))
-            await self._send_events(upload_data_api_url, study_events_filter)
+            if upload_data_api_url is not None:
+                await self._send_events(upload_data_api_url, study_events_filter)
             # Queue inference tasks for completed studies
             await self._queue_inference_tasks(
                 completed_study_events,
@@ -1568,7 +1590,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                                      rename_nifti_path, task_pipeline_inference):
         """Queue inference tasks for completed studies and send related events."""
         redis_backend = FastAPICache.get_backend()
-        redis_client = redis_backend.redis
+        redis_client = redis_backend.redis  # type: ignore[attr-defined]
 
         for dcop_event in study_events:
             dicom_study_path = rename_dicom_path.joinpath(dcop_event.study_id)
@@ -1852,9 +1874,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         此方法用於前端查詢進度，不進行狀態轉遷。
         實際的狀態轉遷由 check_study_series_conversion_complete() 執行。
         """
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM", ""))
+        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM", ""))
+        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI", ""))
         
         # 查詢待完成的 Study
         completed_studies = await self.query_studies_pending_completion(study_uid=study_uid)

@@ -40,7 +40,6 @@ custom_prefix
 """
 
 import os
-from typing import Optional
 from pydantic import BaseModel, Field
 from functools import lru_cache
 

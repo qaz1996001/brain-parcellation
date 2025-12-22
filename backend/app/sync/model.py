@@ -19,14 +19,19 @@ Notes
 所有時間戳記預設使用 UTC 時間。
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
 from advanced_alchemy.extensions.fastapi import base
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy import Column, String, Integer, DateTime, JSON
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utc_now() -> datetime:
+    """返回當前 UTC 時間（時區感知）。"""
+    return datetime.now(timezone.utc)
 
 
 class DCOPConfModel(base.DefaultBase):
@@ -123,14 +128,14 @@ class DCOPConfModel(base.DefaultBase):
     )
     create_time = Column(
         DateTime,
-        default=datetime.utcnow,
+        default=utc_now,
         nullable=False,
         comment="配置建立時間"
     )
     update_time = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
         nullable=False,
         comment="最後修改時間"
     )
@@ -312,26 +317,26 @@ class DCOPEventModel(base.DefaultBase):
     claim_time = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=utc_now,
         comment="事件聲稱時間（來源系統報告）"
     )
     rec_time = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=utc_now,
         comment="事件接收時間"
     )
     create_time = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=utc_now,
         comment="事件紀錄建立時間"
     )
     update_time = Column(
         DateTime,
         nullable=True,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=utc_now,
+        onupdate=utc_now,
         comment="最後修改時間"
     )
 
@@ -356,8 +361,8 @@ class DCOPEventModel(base.DefaultBase):
         study_uid: str,
         status: str,
         tool_id: str = "DICOM_TOOL",
-        series_uid: str = None,
-        session: Session | AsyncSession = None,
+        series_uid: Optional[str] = None,
+        session: Optional[Session | AsyncSession] = None,
     ) -> "DCOPEventModel":
         """
         使用狀態碼建立新的事件紀錄（Study 或 Series 維度）。
@@ -466,8 +471,8 @@ class DCOPEventModel(base.DefaultBase):
             code_name=status,
             ope_no=ope_no,
             ope_name=ope_name,
-            claim_time=datetime.utcnow(),
-            rec_time=datetime.utcnow(),
+            claim_time=datetime.now(timezone.utc),
+            rec_time=datetime.now(timezone.utc),
         )
 
         return obj
@@ -482,7 +487,7 @@ class DCOPEventModel(base.DefaultBase):
         ope_no: str,
         result_data: Dict[str, str],
         params_data: Dict[str, str],
-        session: Session | AsyncSession = None,
+        session: Optional[Session | AsyncSession] = None,
     ) -> "DCOPEventModel":
         """
         根據 ope_no 和工具資訊建立事件，通常用於外部系統回報。
@@ -600,8 +605,8 @@ class DCOPEventModel(base.DefaultBase):
             study_id=study_id,
             result_data=result_data,      # 儲存外部工具的結果
             params_data=params_data,      # 儲存傳入的參數
-            claim_time=datetime.utcnow(),
-            rec_time=datetime.utcnow(),
+            claim_time=datetime.now(timezone.utc),
+            rec_time=datetime.now(timezone.utc),
         )
         
         return obj
@@ -685,7 +690,7 @@ class StudyPrevLinkModel(base.DefaultBase):
     created_at = Column(
         DateTime,
         nullable=False,
-        default=datetime.utcnow,
+        default=utc_now,
         comment="鏈結建立時間"
     )
 

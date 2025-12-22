@@ -77,6 +77,9 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
+from .routers import router
+from .database import alchemy
+
 
 async def init_cache() -> None:
     """
@@ -155,10 +158,6 @@ async def init_cache() -> None:
     )
 
 
-from .routers import router
-from .database import alchemy
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -232,7 +231,7 @@ app = FastAPI(
 # CORS 中間件配置
 # 允許跨域請求（開發環境配置，生產環境應限制）
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["*"],          # 允許所有來源（生產環境應限制）
     allow_credentials=True,       # 允許憑證
     allow_methods=["*"],          # 允許所有 HTTP 方法
