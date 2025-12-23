@@ -10,6 +10,12 @@ from redis import asyncio as aioredis
 
 # Environment configuration support
 from backend.app.config import get_environment, get_config
+from code_ai import load_dotenv
+
+load_dotenv()
+AI_APP_TITLE = os.getenv("AI_APP_TITLE",'SHH AI API')
+AI_APP_DESCRIPTION = os.getenv("AI_APP_DESCRIPTION",'API FOR SHH AI')
+AI_APP_VERSION = os.getenv("AI_APP_VERSION",'1.0.0')
 
 # Load environment configuration at module level (immutable after startup)
 ENVIRONMENT = get_environment()
@@ -62,14 +68,13 @@ async def lifespan(app: FastAPI):
     # await task_scheduler.stop()
 
 
-app = FastAPI(
-    title="SHH AI API",
-    description="API for SHH AI",
-    version="1.0.0",
-    lifespan=lifespan,
-    # root_path="/api/v1"
-)
 
+app = FastAPI(
+    title=AI_APP_TITLE,
+    description=AI_APP_DESCRIPTION,
+    version=AI_APP_VERSION,
+    lifespan=lifespan,
+)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
