@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# 設定變數
+#PROJECT_PATH="/var/www/brain-parcellation"
+##
+PROJECT_PATH="/mnt/d/00_Chen/Task04_git"
+CONDA_PATH="/opt/miniconda3"
+
+# 1. 建立 systemd 服務檔案
+sudo tee /etc/systemd/system/brain-parcellation.service > /dev/null << EOF
+[Unit]
+Description=Brain Parcellation Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=forking
+User=root
+WorkingDirectory=${PROJECT_PATH}
+Environment=PATH=${CONDA_PATH}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStartPre=/bin/sleep 5
+ExecStart=/bin/bash -c 'cd ${PROJECT_PATH} && source ${CONDA_PATH}/etc/profile.d/conda.sh && conda activate tf_2_14 && export PYTHONPATH=\$(pwd) && python3 backend/app/main.py &'
+ExecStartPost=/bin/bash -c 'cd ${PROJECT_PATH} && source ${CONDA_PATH}/etc/profile.d/conda.sh && conda activate tf_2_14 && export PYTHONPATH=\$(pwd) && python3 funboost_cli_user.py &'
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 2. 重新載入 systemd 配置
+sudo systemctl daemon-reload
+
+# 3. 啟用服務（開機自動啟動）
+sudo systemctl enable brain-parcellation.service
+
+# 4. 立即啟動服務（用於測試）
+sudo systemctl start brain-parcellation.service
+
+# 5. 檢查服務狀態
+sudo systemctl status brain-parcellation.service
+
+echo "服務已設定完成！"
+echo "專案路徑: ${PROJECT_PATH}"
+echo "Conda 路徑: ${CONDA_PATH}"
+echo ""
+echo "使用以下指令管理服務："
+echo "  檢查狀態: sudo systemctl status brain-parcellation.service"
+echo "  停止服務: sudo systemctl stop brain-parcellation.service"
+echo "  重啟服務: sudo systemctl restart brain-parcellation.service"
+echo "  查看日誌: sudo journalctl -u brain-parcellation.service -f"
+echo ""
+echo "如需修改路徑，請編輯腳本開頭的變數設定"

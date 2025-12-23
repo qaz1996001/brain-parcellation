@@ -1,0 +1,65 @@
+#!/bin/bash
+
+set -e
+
+# Parse environment argument (production|testing)
+# Default to production for backwards compatibility
+ENVIRONMENT="${1:-production}"
+
+# Validate environment parameter
+if [[ "$ENVIRONMENT" != "production" && "$ENVIRONMENT" != "testing" ]]; then
+    echo "Error: Invalid environment. Use: production or testing" >&2
+    echo "Usage: $0 [production|testing]" >&2
+    exit 1
+fi
+
+# Export ENV variable for Python processes
+export ENV="$ENVIRONMENT"
+
+# 设置环境
+WORK_DIR="/home/david/brain-parcellation"
+CONDA_PATH="/home/david/miniconda3"
+LOG_DIR="/var/log/brain-parcellation"
+
+# 创建日志目录
+mkdir -p "$LOG_DIR"
+
+# Log environment startup
+echo "[$(date)] Starting in $ENVIRONMENT environment" >> "$LOG_DIR/startup.log"
+echo "[$(date)] ENV=$ENV" >> "$LOG_DIR/startup.log"
+
+# 激活 conda 环境
+source "$CONDA_PATH/etc/profile.d/conda.sh"
+conda activate tf_2_14
+
+cd "$WORK_DIR"
+export PYTHONPATH="$WORK_DIR"
+
+# Environment validation passed
+echo "[$(date)] Environment validation passed" >> "$LOG_DIR/startup.log"
+
+# 启动 Docker Compose
+echo "[$(date)] 启动 Docker Compose..." >> "$LOG_DIR/startup.log"
+#docker compose restart -d
+# 等待 Docker 容器就绪
+sleep 3
+
+# 启动后端服务 (ENV variable will be inherited)
+echo "[$(date)] 启动后端服务 (backend/app/main.py) in $ENVIRONMENT environment..." >> "$LOG_DIR/startup.log"
+python3 backend/app/main.py >> "$LOG_DIR/backend.log" 2>&1 &
+BACKEND_PID=$!
+echo "Backend PID: $BACKEND_PID" >> "$LOG_DIR/startup.log"
+
+# 等待后端启动
+sleep 2
+
+# 启动 Funboost CLI 服务
+echo "[$(date)] 启动 Funboost CLI (funboost_cli_user.py)..." >> "$LOG_DIR/startup.log"
+python3 funboost_cli_user.py >> "$LOG_DIR/funboost.log" 2>&1 &
+FUNBOOST_PID=$!
+echo "Funboost PID: $FUNBOOST_PID" >> "$LOG_DIR/startup.log"
+
+echo "[$(date)] 所有服务启动完成" >> "$LOG_DIR/startup.log"
+
+# 等待任意进程终止
+wait -n

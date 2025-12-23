@@ -1,0 +1,45 @@
+services:
+  rabbitmq_server:
+    restart: always
+    container_name: rabbitmq_server
+    image: rabbitmq:3-management
+    environment:
+      - ENV=${ENV:-production}
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+    volumes:
+      - volume_rabbitmq_server:/var/lib/rabbitmq
+    ports:
+      # Expose the port for the worker to add/get tasks
+      - ${RABBITMQ_PORT}:5672
+      # OPTIONAL: Expose the GUI port
+      - ${RABBITMQ_UI_PORT}:15672
+  redis_server:
+    restart: always
+    container_name: redis_server
+    image: redis:7.4-alpine
+    environment:
+      - ENV=${ENV:-production}
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - volume_redis_server:/data
+  db_server:
+    image: postgres
+    restart: always
+    container_name: db_server
+    volumes:
+      - volume_db_server:/var/lib/postgresql/data
+    environment:
+      - ENV=${ENV:-production}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - ${POSTGRES_PORT}:5432
+volumes:
+  volume_rabbitmq_server:
+  volume_redis_server:
+  volume_db_server:

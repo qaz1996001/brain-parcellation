@@ -1,0 +1,55 @@
+[1mNAME[0m
+    funboost start -m funboost consume_all_queues --project_root_path=/mnt/d/00_Chen/Task04_git --import_modules_str code_ai.task --booster_dirs_str
+
+[1mSYNOPSIS[0m
+    funboost start -m funboost consume_all_queues --project_root_path=/mnt/d/00_Chen/Task04_git --import_modules_str code_ai.task --booster_dirs_str - [4mCOMMAND[0m | [4mVALUE[0m
+
+[1mCOMMANDS[0m
+    [1m[4mCOMMAND[0m[0m is one of the following:
+
+     clear
+       清空多个queue ; 例子: clear test_cli1_queue1  test_cli1_queue2   # 清空2个消息队列消息队列
+
+     consume
+       启动多个消息队列名的消费; 例子: consume queue1 queue2
+
+     consume_all
+       启动所有消息队列名的消费,无需指定队列名; 例子: consume_all_queues
+
+     consume_all_queues
+       启动所有消息队列名的消费,无需指定队列名; 例子: consume_all_queues
+
+     consume_queues
+       启动多个消息队列名的消费; 例子: consume queue1 queue2
+
+     continue_consume
+       继续多个消息队列名的消费; 例子: continue_consume queue1 queue2
+
+     m_consume
+       使用多进程启动消费,每个队列开启多个单独的进程消费; 例子:  m_consume --queue1=2 --queue2=3    # queue1启动两个单独进程消费  queue2 启动3个单独进程消费
+
+     m_consume_all
+       启动所有消息队列名的消费,无需指定队列名,每个队列启动n个单独的消费进程; 例子: multi_process_consume_all_queues 2
+
+     multi_process_consume_all_queues
+       启动所有消息队列名的消费,无需指定队列名,每个队列启动n个单独的消费进程; 例子: multi_process_consume_all_queues 2
+
+     multi_process_consume_queues
+       使用多进程启动消费,每个队列开启多个单独的进程消费; 例子:  m_consume --queue1=2 --queue2=3    # queue1启动两个单独进程消费  queue2 启动3个单独进程消费
+
+     pause
+       暂停多个消息队列名的消费; 例子: pause queue1 queue2
+
+     publish
+       publish发布消息到消息队列; 假设函数是 def  add(x,y)  队列名是 add_queue , 发布 1 + 2求和; publish add_queue "{'x':1,'y':2}"
+
+     push
+       push发布消息到消息队列 ; 例子: 假设函数是 def  add(x,y)  队列名是 add_queue , 发布 1 + 2求和; push add_queue 1 2; 或者 push add_queue --x=1 --y=2; 或者 push add_queue -x 1 -y 2;
+
+     show_all_queues
+       显示扫描到的所有queue name
+
+[1mVALUES[0m
+    [1m[4mVALUE[0m[0m is one of the following:
+
+     import_modules_str
