@@ -8,24 +8,29 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 
-# Environment configuration support
-from backend.app.config import get_environment, get_config
-
-# Load environment configuration at module level (immutable after startup)
-ENVIRONMENT = get_environment()
-CONFIG = get_config()
-
-# Configure logging based on environment
-logging.basicConfig(
-    level=getattr(logging, CONFIG["log_level"]),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# # Environment configuration support
+# from backend.app.config import get_environment, get_config
+#
+# # Load environment configuration at module level (immutable after startup)
+# ENVIRONMENT = get_environment()
+# CONFIG = get_config()
+#
+# # Configure logging based on environment
+# logging.basicConfig(
+#     level=getattr(logging, CONFIG["log_level"]),
+#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# )
 logger = logging.getLogger(__name__)
+#
+# # Log environment information for audit trail
+# logger.info(f"Environment: {ENVIRONMENT}")
+# logger.info(f"Log level: {CONFIG['log_level']}")
+# logger.info(f"Data root: {CONFIG['data_root']}")
 
-# Log environment information for audit trail
-logger.info(f"Environment: {ENVIRONMENT}")
-logger.info(f"Log level: {CONFIG['log_level']}")
-logger.info(f"Data root: {CONFIG['data_root']}")
+
+AI_APP_TITLE = os.getenv("AI_APP_TITLE",'SHH AI API')
+AI_APP_DESCRIPTION = os.getenv("AI_APP_DESCRIPTION",'API FOR SHH AI')
+AI_APP_VERSION = os.getenv("AI_APP_VERSION",'1.0.0')
 
 
 async def init_cache():
@@ -63,9 +68,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="SHH AI API",
-    description="API for SHH AI",
-    version="1.0.0",
+    title=AI_APP_TITLE,
+    description=AI_APP_DESCRIPTION,
+    version=AI_APP_VERSION,
     lifespan=lifespan,
     # root_path="/api/v1"
 )
