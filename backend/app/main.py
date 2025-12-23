@@ -8,6 +8,6 @@ if __name__ == "__main__":
     from backend.app.server import app
     load_dotenv()
     #
-    APP_PORT = int(os.getenv("APP_PORT",8000))
+    AI_APP_PORT = int(os.getenv("AI_APP_PORT",8000))
     uvicorn.run("backend.app.server:app", host="0.0.0.0",
-                port=APP_PORT, reload=False)
+                port=AI_APP_PORT, reload=False)
