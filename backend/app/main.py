@@ -1,8 +1,7 @@
 # app/main.py
 import os
 import uvicorn
-from code_ai import load_dotenv
-
+from dotenv import load_dotenv
 
 
 if __name__ == "__main__":
