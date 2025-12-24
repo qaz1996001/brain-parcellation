@@ -1,8 +1,9 @@
 from pathlib import Path
 from typing import List, Optional, Dict
+import os
 
 from funboost.core.func_params_model import BaseJsonAbleModel
-from pydantic import ConfigDict,field_serializer, model_serializer, BaseModel
+from pydantic import ConfigDict, field_serializer, model_serializer, model_validator, BaseModel
 
 
 class ResampleTaskParams(BaseJsonAbleModel):
@@ -46,9 +47,28 @@ class PostProcessSynthsegTaskParams(BaseJsonAbleModel):
 
 # *************************************************************************** #
 class Dicom2NiiParams(BaseJsonAbleModel):
-    sub_dir           : Optional[Path]
-    output_dicom_path : Optional[Path]
-    output_nifti_path : Optional[Path]
+    sub_dir             : Optional[Path]
+    output_dicom_path   : Optional[Path]
+    output_nifti_path   : Optional[Path]
+    upload_data_api_url : Optional[str] = None  # API URL for data upload callbacks
+
+    @model_validator(mode='after')
+    def validate_upload_url(self):
+        """Fallback to environment variable if not provided, with URL format validation."""
+        if self.upload_data_api_url is None:
+            self.upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+            if self.upload_data_api_url is None:
+                raise ValueError(
+                    "upload_data_api_url must be provided or UPLOAD_DATA_API_URL environment variable must be set"
+                )
+
+        # Validate URL format
+        if not self.upload_data_api_url.startswith(('http://', 'https://')):
+            raise ValueError(
+                f"upload_data_api_url must be a valid HTTP/HTTPS URL, got: {self.upload_data_api_url}"
+            )
+
+        return self
 
 
 class Dicom2NiiFileParams(BaseJsonAbleModel):

@@ -250,7 +250,8 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
     series_path             = output_dicom_path
     FILE_SIZE = 500
 
-    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+    # Use parameter from task_params (validated in schema with environment fallback)
+    UPLOAD_DATA_API_URL = task_params.upload_data_api_url
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
     if (series_path.name in Dicm2NiixConverter.exclude_set) or (output_dicom_path is None):
         dcop_event = DCOPEventRequest(study_uid=task_params.study_uid,
@@ -385,9 +386,10 @@ def get_orthanc_series_uid(study_uid: str,
                                  user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10,))
 def process_dir(func_params: Dict[str, any]):
-    UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
     task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
                                                                strict=False)
+    # Use parameter from task_params (validated in schema with environment fallback)
+    UPLOAD_DATA_API_URL = task_params.upload_data_api_url
     sub_dir = task_params.sub_dir
     output_dicom_path = task_params.output_dicom_path
     instances_list = sorted(sub_dir.rglob('*.dcm'))
