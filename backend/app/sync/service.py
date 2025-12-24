@@ -19,6 +19,7 @@ from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
+
 from backend.app.config.api_urls import get_upload_data_api_url
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID, \
@@ -96,7 +97,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     check_url_set.add(url)
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
-                rep = await client.post(url)
+                await client.post(url)
         return
 
     async def check_study_series_transfer_complete(self, data: Optional[List[DCOPEventRequest]] = None):
@@ -320,7 +321,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
         load_dotenv()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
@@ -368,7 +368,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
+                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
@@ -448,7 +450,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
                 try:
                     series_uid_list = list(map(lambda x:validate_orthanc_id(x.name),series_dir_set))
-                except ValueError as e:
+                except ValueError:
                     df = self.get_orthanc_series_uid(study_uid, series_dir_set)
                     series_uid_list = df['uid'].to_list()
                 task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
@@ -474,14 +476,16 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             session.add_all(new_data_list)
                             await session.commit()
                             logger.info(f'dicom_tool_get_series_info {new_data_list}')
-                        except:
+                        except Exception:
                             flage = False
                             await session.rollback()
                             logger.error(traceback.print_exc())
                 if flage:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
-                    task = dicom_to_nii.push(task_dict)
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
+                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
+                    dicom_to_nii.push(task_dict)
         return None
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):

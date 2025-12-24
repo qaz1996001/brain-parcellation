@@ -3,19 +3,11 @@
 import datetime
 import inspect
 from typing import (
-    TYPE_CHECKING,
     Annotated,
     Any,
     Callable,
-    Literal,
-    NamedTuple,
     Optional,
-    TypeVar,
-    Union,
-    cast,
-    overload,
 )
-from uuid import UUID
 
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
@@ -30,13 +22,7 @@ from advanced_alchemy.filters import (
 )
 
 from advanced_alchemy.utils.text import camelize
-from typing import TYPE_CHECKING, Callable
 
-from advanced_alchemy.filters import (
-    BeforeAfter,
-    CollectionFilter,
-    FilterTypes,
-)
 from advanced_alchemy.extensions.fastapi.providers import DEPENDENCY_DEFAULTS, FilterConfig, _make_hashable
 from advanced_alchemy.extensions.fastapi.providers import DependencyCache, SortOrder, FieldNameType
 from advanced_alchemy.extensions.fastapi.providers import _aggregate_filter_function,DependencyDefaults

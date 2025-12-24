@@ -1,10 +1,10 @@
 # app/sync/schemas.py
 import re
-from typing import List, Annotated, Dict, Any
+from typing import Annotated, Dict, Any
 
 from typing import Optional
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator, AfterValidator, ConfigDict
+from pydantic import BaseModel, Field, AfterValidator, ConfigDict
 
 
 def validate_orthanc_id(v: str) -> str:

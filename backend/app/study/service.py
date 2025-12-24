@@ -11,7 +11,6 @@ from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
@@ -92,7 +91,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     check_url_set.add(url)
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
-                rep = await client.post(url)
+                await client.post(url)
         return
 
     async def check_study_series_transfer_complete(self, data: Optional[List[DCOPEventRequest]] = None):
@@ -312,7 +311,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
         load_dotenv()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
@@ -360,7 +358,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
+                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
@@ -418,10 +418,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         await session.commit()
                         await session.flush()
                         task_dict = task_params.get_str_dict()
-                        task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                        base_api_url = get_upload_data_api_url()
+                        task_dict['upload_data_api_url'] = base_api_url
+                        # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                         task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
-                    except:
+                    except Exception:
                         await session.rollback()
                         logger.error(traceback.print_exc())
 

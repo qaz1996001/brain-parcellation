@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Annotated
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from fastapi import APIRouter, Depends
-from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import service, filters
 
 from backend.app.study import urls

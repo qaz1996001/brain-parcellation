@@ -3,9 +3,9 @@
 from typing import TYPE_CHECKING
 from fastapi import APIRouter,Request
 if TYPE_CHECKING:
-    import pathlib
+    pass
 
-from backend.app import series,sync,rerun, study, listen
+from backend.app import series,sync,rerun
 
 
 router = APIRouter()

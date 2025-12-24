@@ -5,7 +5,6 @@ import pathlib
 import shutil
 import traceback
 from typing import List, Optional, Tuple
-import re
 
 import aiofiles.os
 import httpx
@@ -94,7 +93,6 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
 
 
     async def re_run_by_study_uid_on_one(self, study_uid:str,dcop_event_service:DCOPEventDicomService) -> bool:
-        from code_ai.task.task_dicom2nii import dicom_to_nii
         logger.info('del_study_result_by_field 1')
         await self.del_study_result_by_field(field_name='study_uid',
                                              field_value=study_uid)
@@ -109,7 +107,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 await session.refresh(data_transferring_re)
                 logger.info('new_data_re {}'.format(new_data_re))
             flage = True
-        except:
+        except Exception:
             logger.info(traceback.print_exc())
             await session.rollback()
             flage = False
@@ -183,7 +181,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                     await session.commit()
                     logger.info(f'insert_execute {insert_execute}')
                     logger.info(f'delete_execute {delete_execute}')
-                except:
+                except Exception:
                     await session.rollback()
                     logger.error(f'except {traceback.print_exc()}')
 

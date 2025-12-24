@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 
 
 if __name__ == "__main__":
-    from backend.app.server import app
     load_dotenv()
     #
     AI_APP_PORT = int(os.getenv("AI_APP_PORT",8000))

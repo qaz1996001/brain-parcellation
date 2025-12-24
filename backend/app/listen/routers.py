@@ -1,14 +1,10 @@
 # app/listen/routers.py
 
 import logging
-from fastapi import APIRouter, Depends, Response
-from fastapi_cache import FastAPICache
-from advanced_alchemy.extensions.fastapi import service, filters
+from fastapi import APIRouter, Response
 
 from backend.app.listen import urls
 
-from backend.app.config.deps import provide_filters
-from ..database import alchemy
 
 logger = logging.getLogger(__name__)
 

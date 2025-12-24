@@ -1,14 +1,12 @@
 # app/sync/routers.py
 import logging
-import os
-import pathlib
-from typing import Annotated, Tuple, List, Optional, Any
+from typing import Annotated, List, Optional
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (service, filters,)
-from sqlalchemy import Select, text
+from sqlalchemy import Select
 from sqlalchemy.engine.row import Row
 
 from backend.app.sync import urls
@@ -143,7 +141,7 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
              summary="檢查 study series nifti conversion complete",
              description="study rename id list",
              response_description="",)
-async def post_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
+async def post_check_study_series_conversion_complete_by_study_id(dcop_event_service: Annotated[DCOPEventDicomService,
                                                                           Depends(alchemy.provide_service(DCOPEventDicomService))],
                                                       background_tasks: BackgroundTasks,
                                                       study_id_list    : Optional[List[str]] = Body(default=None),) -> Response:
@@ -218,7 +216,7 @@ async def get_events_complex(
 @router.get("/cache",
             status_code=200,
             summary="cache")
-async def get_events_complex():
+async def get_cache_keys():
     redis_backend = FastAPICache.get_backend()
     redis_client = redis_backend.redis
     cached_keys = await redis_client.keys("inference_task:*")
@@ -294,7 +292,7 @@ async def delete_events_complex(study_id:Optional[str]        = Query(None),
             logger.error(f"Error processing cache key {key}: {e}")
 
     return {
-        "message": f"Cache deletion completed",
+        "message": "Cache deletion completed",
         "deleted_keys": deleted_keys,
         "deleted_count": len(deleted_keys),
         "search_criteria": {

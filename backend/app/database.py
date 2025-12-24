@@ -1,5 +1,3 @@
-import os
-
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
     AsyncSessionConfig,
@@ -7,7 +5,7 @@ from advanced_alchemy.extensions.fastapi import (
 )
 from code_ai import load_dotenv
 load_dotenv()
-AI_APP_CONNECTION_STRING = os.getenv("AI_APP_CONNECTION_STRING",f"postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom")
+AI_APP_CONNECTION_STRING = os.getenv("AI_APP_CONNECTION_STRING","postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom")
 
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     # connection_string="sqlite+aiosqlite:///test.sqlite",

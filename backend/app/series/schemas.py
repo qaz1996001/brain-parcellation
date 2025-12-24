@@ -2,8 +2,6 @@
 import re
 
 from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
 
 
 class SeriesResponse(BaseModel):
