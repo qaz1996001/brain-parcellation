@@ -1,3 +1,4 @@
+import os
 from advanced_alchemy.extensions.fastapi import (
     AdvancedAlchemy,
     AsyncSessionConfig,
