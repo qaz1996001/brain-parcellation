@@ -107,7 +107,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 await session.refresh(data_transferring_re)
                 logger.info('new_data_re {}'.format(new_data_re))
             flage = True
-        except:
+        except Exception:
             logger.info(traceback.print_exc())
             await session.rollback()
             flage = False
@@ -181,7 +181,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                     await session.commit()
                     logger.info(f'insert_execute {insert_execute}')
                     logger.info(f'delete_execute {delete_execute}')
-                except:
+                except Exception:
                     await session.rollback()
                     logger.error(f'except {traceback.print_exc()}')
 

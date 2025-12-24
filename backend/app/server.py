@@ -11,6 +11,8 @@ from redis import asyncio as aioredis
 # Environment configuration support
 from backend.app.config import get_environment, get_config
 from code_ai import load_dotenv
+from .routers import router
+from .database import alchemy
 
 load_dotenv()
 AI_APP_TITLE = os.getenv("AI_APP_TITLE",'SHH AI API')
@@ -44,9 +46,6 @@ async def init_cache():
     REDIS_URL = f'redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
     redis = aioredis.from_url(REDIS_URL, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
-
-from .routers import router
-from .database import alchemy
 
 
 @asynccontextmanager

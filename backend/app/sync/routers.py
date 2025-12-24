@@ -141,7 +141,7 @@ async def post_check_study_series_conversion_complete(dcop_event_service: Annota
              summary="檢查 study series nifti conversion complete",
              description="study rename id list",
              response_description="",)
-async def post_check_study_series_conversion_complete(dcop_event_service: Annotated[DCOPEventDicomService,
+async def post_check_study_series_conversion_complete_by_study_id(dcop_event_service: Annotated[DCOPEventDicomService,
                                                                           Depends(alchemy.provide_service(DCOPEventDicomService))],
                                                       background_tasks: BackgroundTasks,
                                                       study_id_list    : Optional[List[str]] = Body(default=None),) -> Response:
@@ -216,7 +216,7 @@ async def get_events_complex(
 @router.get("/cache",
             status_code=200,
             summary="cache")
-async def get_events_complex():
+async def get_cache_keys():
     redis_backend = FastAPICache.get_backend()
     redis_client = redis_backend.redis
     cached_keys = await redis_client.keys("inference_task:*")

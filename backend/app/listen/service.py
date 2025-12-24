@@ -92,7 +92,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     check_url_set.add(url)
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
-                rep = await client.post(url)
+                await client.post(url)
         return
 
     async def check_study_series_transfer_complete(self, data: Optional[List[DCOPEventRequest]] = None):
@@ -312,7 +312,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
         load_dotenv()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
@@ -424,7 +423,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                         task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
-                    except:
+                    except Exception:
                         await session.rollback()
                         logger.error(traceback.print_exc())
 

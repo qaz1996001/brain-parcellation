@@ -20,7 +20,6 @@ from fastapi_cache import FastAPICache
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 
-from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from backend.app.config.api_urls import get_upload_data_api_url
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID, \
@@ -98,7 +97,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     check_url_set.add(url)
         async with httpx.AsyncClient(timeout=180) as client:
             for url in check_url_set:
-                rep = await client.post(url)
+                await client.post(url)
         return
 
     async def check_study_series_transfer_complete(self, data: Optional[List[DCOPEventRequest]] = None):
@@ -322,7 +321,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
         from code_ai import load_dotenv
         load_dotenv()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
@@ -478,7 +476,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             session.add_all(new_data_list)
                             await session.commit()
                             logger.info(f'dicom_tool_get_series_info {new_data_list}')
-                        except:
+                        except Exception:
                             flage = False
                             await session.rollback()
                             logger.error(traceback.print_exc())
@@ -487,7 +485,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
-                    task = dicom_to_nii.push(task_dict)
+                    dicom_to_nii.push(task_dict)
         return None
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):
