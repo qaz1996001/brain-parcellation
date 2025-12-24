@@ -58,12 +58,12 @@ async def lifespan(app: FastAPI):
     """
 
     # Startup event
-    logger.info(f"Starting application in {ENVIRONMENT} environment")
+    logger.info(f"Starting application ")
     await init_cache()
     # asyncio.create_task(task_scheduler.start())
     yield
     # Shutdown event
-    logger.info(f"Shutting down application in {ENVIRONMENT} environment")
+    logger.info(f"Shutting down application ")
     # await task_scheduler.stop()
 
 
@@ -98,7 +98,5 @@ async def health_check() -> dict[str, str]:
         Dictionary containing status and environment information
     """
     return {
-        "status": "healthy",
-        "environment": ENVIRONMENT,
-        "log_level": CONFIG["log_level"]
+        "status": "healthy"
     }
