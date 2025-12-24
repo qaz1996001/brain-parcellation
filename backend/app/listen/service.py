@@ -12,7 +12,6 @@ from funboost import AsyncResult
 # from fastapi import
 from sqlalchemy import text, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.ext.asyncio.engine import AsyncEngine
 from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
@@ -361,7 +360,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
                     dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
@@ -419,7 +419,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         await session.commit()
                         await session.flush()
                         task_dict = task_params.get_str_dict()
-                        task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                        base_api_url = get_upload_data_api_url()
+                        task_dict['upload_data_api_url'] = base_api_url
+                        # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                         task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
                     except:
