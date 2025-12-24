@@ -21,6 +21,7 @@ from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 
 from backend.app.config.api_urls import get_upload_data_api_url
+from backend.app.config.task_paths import get_task_execution_paths
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID, \
         validate_orthanc_id
@@ -366,10 +367,14 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
                 # If we reach here, create_many completed successfully and committed.
                 # Now, proceed with pushing tasks.
+                task_paths = get_task_execution_paths()
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
+                    task_dict['path_process'] = task_paths['path_process']
+                    task_dict['path_json'] = task_paths['path_json']
+                    task_dict['path_log'] = task_paths['path_log']
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
@@ -481,9 +486,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             await session.rollback()
                             logger.error(traceback.print_exc())
                 if flage:
+                    task_paths = get_task_execution_paths()
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
+                    task_dict['path_process'] = task_paths['path_process']
+                    task_dict['path_json'] = task_paths['path_json']
+                    task_dict['path_log'] = task_paths['path_log']
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_to_nii.push(task_dict)
         return None
@@ -635,6 +644,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
 
             # Create STUDY_INFERENCE_READY event
+            base_api_url = get_upload_data_api_url()
+            # Get task execution paths for parameter injection
+            # This enables dual deployment: Production and Testing backends can specify
+            # different execution paths when dispatching to the shared GPU worker
+            task_paths = get_task_execution_paths()
             dcop_event_inference_ready = DCOPEventRequest(
                 study_uid=dcop_event.study_uid,
                 series_uid=None,
@@ -645,7 +659,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     'nifti_study_path': str(nifti_study_path),
                     'dicom_study_path': str(dicom_study_path),
                     'study_uid': dcop_event.study_uid,
-                    'study_id': dcop_event.study_id
+                    'study_id': dcop_event.study_id,
+                    'upload_data_api_url': base_api_url,
+                    'path_process': task_paths['path_process'],
+                    'path_json': task_paths['path_json'],
+                    'path_log': task_paths['path_log']
                 }
             )
             inference_task_key = f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"
