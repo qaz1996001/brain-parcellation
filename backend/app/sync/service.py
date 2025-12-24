@@ -1,9 +1,10 @@
 import json
 import logging
+import os
 import pathlib
+import traceback
+from typing import List, Optional, Tuple, Dict, Any
 import re
-from typing import Any, Dict, List, Optional, Tuple
-
 import httpx
 import pandas as pd
 import pydicom
@@ -11,8 +12,11 @@ from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.service import OffsetPagination
 from fastapi_cache import FastAPICache
 from funboost import AsyncResult
-from pyorthanc import Orthanc, Study
-from sqlalchemy import Row, and_, select, text
+from pyorthanc import Study, Orthanc
+# from fastapi import
+from sqlalchemy import text, select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi_cache import FastAPICache
 
 from backend.app.config.api_urls import get_upload_data_api_url
 from backend.app.config.models import BackendConfig
