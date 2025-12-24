@@ -224,21 +224,6 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
     return nifti_study_folder_path
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name='raw_dicom_2_rename_dicom_queue',
-                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
-                                 qps=10,))
-def raw_dicom_2_rename_dicom(func_params: Dict[str, any]):
-
-    task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
-                                                               strict=False)
-    # 1. raw dicom -> rename dicom
-    if task_params.sub_dir is not None:
-        result = process_dir.push(func_params)
-        result.set_timeout(3600)
-        data = result.get()
-        return data
-    return None
-
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_2_nii_series_queue',
                                  qps=10, ))
@@ -318,12 +303,12 @@ def process_instances(func_params: Dict[str, any]):
 def process_dir_next(sub_dir: pathlib.Path, output_dicom_path: pathlib.Path):
     instances_list = list(sub_dir.rglob('*.dcm'))
     if len(instances_list) == 0:
+
         instances_list = sorted(sub_dir.rglob('*'))
         instances_list = list(filter(lambda x: x.is_file(), instances_list))
         instance_path: pathlib.Path = instances_list[0]
     else:
         instance_path: pathlib.Path = instances_list[0]
-
     with open(instance_path, mode='rb') as dcm:
         dicom_ds = dcmread(dcm, stop_before_pixels=True)
         study_folder_name = get_study_folder_name(dicom_ds)
