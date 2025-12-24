@@ -58,20 +58,6 @@ class PipelineConfig:
             #                                        [--Inputs INPUTS [INPUTS ...]]
             #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
             #                                        [--Output_folder OUTPUT_FOLDE
-            # if input_dicom_dir is None:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} ')
-            # else:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} '
-            #             f'--DicomDir {input_dicom_dir} '
-            #             )
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
                         f'bash {str(chuan_code)}/{self.script_name} '
