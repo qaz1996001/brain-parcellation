@@ -16,6 +16,8 @@ import pydicom
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from code_ai.utils.database import get_sqla_helper
 from code_ai.utils.model import RawDicomToNiiInference
+from backend.app.config.api_urls import get_upload_data_api_url
+from backend.app.config.task_paths import get_task_execution_paths
 
 # 設置日誌記錄器
 logger = nb_log.LogManager('add_raw_dicom_to_nii_inference').get_logger_and_add_handlers(
@@ -155,9 +157,16 @@ def process_nii_for_inference(session: Session, nifti_path: pathlib.Path,
     # 發送推理任務
     try:
         logger.info(f"提交NII推理任務: {nifti_path}")
+        base_api_url = get_upload_data_api_url()
+        # Get task execution paths for parameter injection
+        task_paths = get_task_execution_paths()
         task_data = {
             'nifti_study_path': nifti_path_str,
             'dicom_study_path': dicom_path_str,
+            'upload_data_api_url': base_api_url,
+            'path_process': task_paths['path_process'],
+            'path_json': task_paths['path_json'],
+            'path_log': task_paths['path_log']
         }
         task_pipeline_inference.push(task_data)
 
