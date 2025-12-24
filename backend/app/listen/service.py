@@ -118,7 +118,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
         logger.info(f'check_study_series_transfer_complete data {data}', )
         # Get configuration from environment
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = get_upload_data_api_url()
         path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
         path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
 
@@ -358,10 +358,14 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
                 # If we reach here, create_many completed successfully and committed.
                 # Now, proceed with pushing tasks.
+                task_paths = get_task_execution_paths()
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
+                    task_dict['path_process'] = task_paths['path_process']
+                    task_dict['path_json'] = task_paths['path_json']
+                    task_dict['path_log'] = task_paths['path_log']
                     dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
@@ -418,9 +422,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         session.add_all(new_data_list)
                         await session.commit()
                         await session.flush()
+                        task_paths = get_task_execution_paths()
                         task_dict = task_params.get_str_dict()
                         base_api_url = get_upload_data_api_url()
                         task_dict['upload_data_api_url'] = base_api_url
+                        task_dict['path_process'] = task_paths['path_process']
+                        task_dict['path_json'] = task_paths['path_json']
+                        task_dict['path_log'] = task_paths['path_log']
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                         task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
