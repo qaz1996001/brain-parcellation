@@ -19,6 +19,8 @@ from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
+
+from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from backend.app.config.api_urls import get_upload_data_api_url
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, StydySeriesOpeNoStatus,OpeNo,OrthancID, \
@@ -368,7 +370,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
+                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
@@ -448,7 +452,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
                 try:
                     series_uid_list = list(map(lambda x:validate_orthanc_id(x.name),series_dir_set))
-                except ValueError as e:
+                except ValueError:
                     df = self.get_orthanc_series_uid(study_uid, series_dir_set)
                     series_uid_list = df['uid'].to_list()
                 task_params = Dicom2NiiParams(sub_dir=study_uid_raw_dicom_path,
@@ -480,7 +484,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             logger.error(traceback.print_exc())
                 if flage:
                     task_dict = task_params.get_str_dict()
-                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    base_api_url = get_upload_data_api_url()
+                    task_dict['upload_data_api_url'] = base_api_url
+                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     task = dicom_to_nii.push(task_dict)
         return None
 

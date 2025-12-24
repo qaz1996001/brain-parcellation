@@ -4,7 +4,7 @@ from advanced_alchemy.extensions.fastapi import base
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON
+from sqlalchemy import Column, String, Integer, DateTime, JSON
 from datetime import datetime
 
 
