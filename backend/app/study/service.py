@@ -16,6 +16,7 @@ from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
+from backend.app.config.api_urls import get_upload_data_api_url
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
@@ -358,7 +359,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # If we reach here, create_many completed successfully and committed.
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
-                    dicom_2_nii_series.push(task_params.get_str_dict())
+                    task_dict = task_params.get_str_dict()
+                    task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                    dicom_2_nii_series.push(task_dict)
             else:
                 await session.rollback()
                 # If dcop_event_list is empty, there's nothing to create or push.
@@ -414,7 +417,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         session.add_all(new_data_list)
                         await session.commit()
                         await session.flush()
-                        task = dicom_to_nii.push(task_params.get_str_dict())
+                        task_dict = task_params.get_str_dict()
+                        task_dict['upload_data_api_url'] = get_upload_data_api_url()
+                        task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
                     except:
                         await session.rollback()
