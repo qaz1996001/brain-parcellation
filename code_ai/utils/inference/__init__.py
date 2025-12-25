@@ -231,7 +231,8 @@ def build_analysis(study_path: pathlib.Path):
 
 
 def build_inference_cmd(nifti_study_path: pathlib.Path,
-                        dicom_study_path: pathlib.Path,) -> Optional[InferenceCmd]:  #-> Optional[List[Tuple[str,str]]]:
+                        dicom_study_path: pathlib.Path,
+                        path_root: Optional[str] = None) -> Optional[InferenceCmd]:  #-> Optional[List[Tuple[str,str]]]:
     from code_ai.pipeline import pipelines
     analysis: Analysis = build_analysis(nifti_study_path)
     # 使用管道配置
@@ -253,7 +254,7 @@ def build_inference_cmd(nifti_study_path: pathlib.Path,
                 # print('dicom_study_path',dicom_study_path)
                 # print('nifti_study_path', nifti_study_path)
                 # print('input_dicom_dir',input_dicom_dir)
-                cmd_str = pipelines[key].generate_cmd(analysis.study_id, task,input_dicom_dir)
+                cmd_str = pipelines[key].generate_cmd(analysis.study_id, task, input_dicom_dir, path_root=path_root)
                 inference_item = InferenceCmdItem(study_id = analysis.study_id, name=key,
                                                   cmd_str=cmd_str,
                                                   input_list=task.input_path_list,

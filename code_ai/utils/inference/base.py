@@ -356,9 +356,15 @@ def build_analysis(study_path: pathlib.Path, config_path: str = "config.yaml"):
 
 
 def build_inference_cmd(nifti_study_path: pathlib.Path,
-                        dicom_study_path: pathlib.Path, ) -> Optional[InferenceCmd]:
+                        dicom_study_path: pathlib.Path,
+                        path_root: Optional[str] = None) -> Optional[InferenceCmd]:
     """
     Build inference command.
+
+    Args:
+        nifti_study_path: Path to NIfTI study
+        dicom_study_path: Path to DICOM study
+        path_root: Optional PATH_ROOT parameter (if None, will use env variable)
     """
     from code_ai.pipeline import pipelines
     analysis: Analysis = build_analysis(nifti_study_path)
@@ -379,7 +385,7 @@ def build_inference_cmd(nifti_study_path: pathlib.Path,
                     intput_dicom = dicom_study_path.joinpath(nifti_study_path.name, basename)
 
                 input_dicom_dir = str(intput_dicom)
-                cmd_str = pipelines[key].generate_cmd(analysis.study_id, task, input_dicom_dir)
+                cmd_str = pipelines[key].generate_cmd(analysis.study_id, task, input_dicom_dir, path_root=path_root)
                 inference_item = InferenceCmdItem(study_id=analysis.study_id,
                                                   name=key,
                                                   cmd_str=cmd_str,
