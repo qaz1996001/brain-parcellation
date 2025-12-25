@@ -367,14 +367,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
                 # If we reach here, create_many completed successfully and committed.
                 # Now, proceed with pushing tasks.
-                task_paths = get_task_execution_paths()
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
-                    task_dict['path_process'] = task_paths['path_process']
-                    task_dict['path_json'] = task_paths['path_json']
-                    task_dict['path_log'] = task_paths['path_log']
+                    # NOTE: dicom_2_nii_series does NOT need path_process/path_json/path_log
+                    # These are only needed by task_pipeline_inference
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
@@ -486,13 +484,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             await session.rollback()
                             logger.error(traceback.print_exc())
                 if flage:
-                    task_paths = get_task_execution_paths()
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
-                    task_dict['path_process'] = task_paths['path_process']
-                    task_dict['path_json'] = task_paths['path_json']
-                    task_dict['path_log'] = task_paths['path_log']
+                    # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
+                    # These are only needed by task_pipeline_inference
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_to_nii.push(task_dict)
         return None
