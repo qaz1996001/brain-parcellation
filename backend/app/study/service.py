@@ -16,6 +16,7 @@ from fastapi_cache import FastAPICache
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 from backend.app.config.api_urls import get_upload_data_api_url
+from backend.app.config.task_paths import get_task_execution_paths
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
@@ -360,6 +361,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict['upload_data_api_url'] = base_api_url
+                    # NOTE: dicom_2_nii_series does NOT need path_process/path_json/path_log
+                    # These are only needed by task_pipeline_inference
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                     dicom_2_nii_series.push(task_dict)
             else:
@@ -420,6 +423,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         task_dict = task_params.get_str_dict()
                         base_api_url = get_upload_data_api_url()
                         task_dict['upload_data_api_url'] = base_api_url
+                        # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
+                        # These are only needed by task_pipeline_inference
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
                         task = dicom_to_nii.push(task_dict)
                         logger.info(f'dicom_tool_get_series_info {new_data_list} {task}')
@@ -440,7 +445,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         from code_ai.task.task_pipeline import task_pipeline_inference
 
         # Environment variables setup
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = get_upload_data_api_url()
         raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
         rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
         rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
@@ -558,6 +563,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
 
             # Create STUDY_INFERENCE_READY event
+            # Get task execution paths for parameter injection
+            task_paths = get_task_execution_paths()
             dcop_event_inference_ready = DCOPEventRequest(
                 study_uid=dcop_event.study_uid,
                 series_uid=None,
@@ -568,7 +575,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     'nifti_study_path': str(nifti_study_path),
                     'dicom_study_path': str(dicom_study_path),
                     'study_uid': dcop_event.study_uid,
-                    'study_id': dcop_event.study_id
+                    'study_id': dcop_event.study_id,
+                    'upload_data_api_url': upload_data_api_url,
+                    'path_process': task_paths['path_process'],
+                    'path_json': task_paths['path_json'],
+                    'path_log': task_paths['path_log']
                 }
             )
             inference_task_key = f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"

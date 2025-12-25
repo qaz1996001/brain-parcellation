@@ -12,6 +12,7 @@ from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.filters import LimitOffset
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from backend.app.config.task_paths import get_task_execution_paths
 from backend.app.sync.model import DCOPEventModel
 from backend.app.sync.schemas import DCOPStatus, OrthancID
 from backend.app.sync.service import DCOPEventDicomService
@@ -146,7 +147,8 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
 
     async def del_study_result_by_parameters(self, sql: text, parameters: dict):
         load_dotenv()
-        process_path = pathlib.Path(os.getenv("PATH_PROCESS"))
+        task_paths = get_task_execution_paths()
+        process_path = pathlib.Path(task_paths['path_process'])
         aneurysm_path = process_path.joinpath('Deep_Aneurysm')
         cmb_path = process_path.joinpath('Deep_CMB')
         cmd_tools_path = process_path.joinpath('Deep_cmd_tools')
