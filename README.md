@@ -114,23 +114,24 @@ EOF
 
 ### 
 
-1. raw dicom -> rename dicom 
-   1. DCOPEventDicomService.get_series_info
-   2. dicom_to_nii - > process_dir
-   3. DCOPEventDicomService.post_ope_no_task 
-   4. DCOPEventDicomService.check_study_series_transfer_complete
+#### 第一步：測試目錄
+```
+mkdir test
+cd test
+cp ../brain-parcellation ./
+git reset --hard
 
-2. rename dicom -> rename nifti 
-   1. DCOPEventDicomService.check_study_series_transfer_complete
-   2. dicom_to_nii - > dicom_2_nii_file
-   3. DCOPEventDicomService.study_series_nifti_tool 
-   4. DCOPEventDicomService.check_study_series_conversion_complete
-   
-3. rename nifti -> pipeline_inference 
-   1. DCOPEventDicomService.check_study_series_conversion_complete 
-   2. 
-   3. DCOPEventDicomService.study_series_inference_nifti_tool
-   4. DCOPEventDicomService.check_study_series_inference_complete
-4. pipeline_inference -> upload 
-   1. DCOPEventDicomService.check_study_upload_complete 
 
+```
+
+#### 第一步：關閉連接
+```bash
+docker exec -it db_server psql -U postgres_n -d postgres -c "
+SELECT pg_terminate_backend(pg_stat_activity.pid)
+FROM pg_stat_activity
+WHERE pg_stat_activity.datname = 'dicom' AND pid <> pg_backend_pid();"
+```
+#### 第二步：建立新資料庫（分開執行）
+```bash
+docker exec -it db_server psql -U postgres_n -d postgres -c "CREATE DATABASE dicom_testing WITH TEMPLATE dicom OWNER postgres_n;"
+```
