@@ -46,10 +46,15 @@ class PipelineConfig:
         self.data_key = data_key
 
 
-    def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None):
+    def generate_cmd(self, study_id: str, task: Task, input_dicom_dir: Optional[str] = None, path_root: Optional[str] = None):
         input_path_list = [str(x) for x in task.input_path_list]
         output_path = os.path.dirname(task.output_path)
-        PATH_ROOT = pathlib.Path(os.getenv('PATH_ROOT'))
+        # Use path_root from parameter if given, otherwise fallback to environment variable
+        # This enables dual deployment: backends can pass different path_root to shared worker
+        if path_root is not None:
+            PATH_ROOT = pathlib.Path(path_root)
+        else:
+            PATH_ROOT = pathlib.Path(os.getenv('PATH_ROOT'))
         chuan_root = PATH_ROOT.parent.joinpath('chuan')
         chuan_code = chuan_root.joinpath('code')
         # PATH_ROOT = / mnt / e / pipeline / sean
@@ -58,20 +63,6 @@ class PipelineConfig:
             #                                        [--Inputs INPUTS [INPUTS ...]]
             #                                        [--DicomDir DICOMDIR [DICOMDIR ...]]
             #                                        [--Output_folder OUTPUT_FOLDE
-            # if input_dicom_dir is None:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} ')
-            # else:
-            #     return (f'cd {str(chuan_code)}  && '
-            #             f'{self.python3} {self.script_name} '
-            #             f'--ID {study_id} '
-            #             f'--Inputs {" ".join(input_path_list)} '
-            #             f'--Output_folder {task.output_path} '
-            #             f'--DicomDir {input_dicom_dir} '
-            #             )
             if input_dicom_dir is None:
                 return (f'cd {str(chuan_code)}  && '
                         f'bash {str(chuan_code)}/{self.script_name} '
