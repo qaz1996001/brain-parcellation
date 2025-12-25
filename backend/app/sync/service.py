@@ -490,7 +490,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
                     # These path parameters are only required by task_pipeline_inference
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
-                    dicom_to_nii.push(task_dict)
+                    logger.info(f'dicom_tool_get_series_info dicom_to_nii start')
+                    result = dicom_to_nii.push(task_dict)
+                    logger.info(f'dicom_tool_get_series_info dicom_to_nii {result}')
         return None
 
     async def check_study_series_conversion_complete(self, data: Optional[List[DCOPEventRequest]] = None):
