@@ -448,6 +448,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             study_uid = dcop_event.study_uid
             logger.info(f'dicom_tool_get_series_info dcop_event {dcop_event}')
             study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
+            logger.info(f'dicom_tool_get_series_info study_uid_raw_dicom_path {study_uid_raw_dicom_path}')
             if study_uid_raw_dicom_path.exists():
                 dcm_path_list = sorted(study_uid_raw_dicom_path.rglob('*.dcm'))
                 series_dir_set = set([dcm_path.parent for dcm_path in dcm_path_list])
