@@ -579,7 +579,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     'upload_data_api_url': upload_data_api_url,
                     'path_process': task_paths['path_process'],
                     'path_json': task_paths['path_json'],
-                    'path_log': task_paths['path_log']
+                    'path_log': task_paths['path_log'],
+                    'path_root': task_paths['path_root']
                 }
             )
             inference_task_key = f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"

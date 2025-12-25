@@ -42,7 +42,8 @@ def get_task_execution_paths(override: Optional[Dict[str, str]] = None) -> Dict[
         >>> test_paths = {
         ...     'path_process': 'D:/00_Chen/Task04_git_test/process',
         ...     'path_json': 'D:/00_Chen/Task04_git_test/json',
-        ...     'path_log': 'D:/00_Chen/Task04_git_test/logs'
+        ...     'path_log': 'D:/00_Chen/Task04_git_test/logs',
+        ...     'path_root': 'D:/00_Chen/Task04_git_test'
         ... }
         >>> paths = get_task_execution_paths(override=test_paths)
         >>> task_dict.update(paths)
@@ -55,6 +56,7 @@ def get_task_execution_paths(override: Optional[Dict[str, str]] = None) -> Dict[
         'path_process': paths.get('path_process') or os.getenv("PATH_PROCESS"),
         'path_json': paths.get('path_json') or os.getenv("PATH_JSON"),
         'path_log': paths.get('path_log') or os.getenv("PATH_LOG"),
+        'path_root': paths.get('path_root') or os.getenv("PATH_ROOT"),
     }
 
     # Validate that all required paths are configured
