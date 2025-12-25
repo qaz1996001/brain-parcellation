@@ -483,6 +483,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             flage = False
                             await session.rollback()
                             logger.error(traceback.print_exc())
+                logger.info(f'dicom_tool_get_series_info flage {flage}')
                 if flage:
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
