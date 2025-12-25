@@ -38,9 +38,9 @@ async def init_cache():
     REDIS_USERNAME = os.getenv("REDIS_USERNAME")
     REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
     REDIS_PORT     = os.getenv("REDIS_PORT")
-    REDIS_DB       = os.getenv("REDIS_DB_FASTAPI_CACHE",6)
+    REDIS_DB_FASTAPI_CACHE       = os.getenv("REDIS_DB_FASTAPI_CACHE",6)
 
-    REDIS_URL = f'redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+    REDIS_URL = f'redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_FASTAPI_CACHE}'
     redis = aioredis.from_url(REDIS_URL, encoding="utf8", decode_responses=True)
     FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
 
