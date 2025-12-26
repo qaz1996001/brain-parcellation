@@ -1,10 +1,9 @@
 import json
 import logging
-import os
 import pathlib
 import shutil
 import traceback
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import aiofiles.os
 import httpx
@@ -12,20 +11,24 @@ from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.filters import LimitOffset
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.app.config.task_paths import get_task_execution_paths
+from backend.app.config.models import BackendConfig
 from backend.app.sync.model import DCOPEventModel
 from backend.app.sync.schemas import DCOPStatus, OrthancID
 from backend.app.sync.service import DCOPEventDicomService
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from backend.app.service import BaseRepositoryService
 from code_ai.task.schema.intput_params import Dicom2NiiParams
-from code_ai import load_dotenv
 
 
 logger = logging.getLogger(__name__)
 
 
 class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
+    """ReRun study service.
+
+    This service uses injected configuration instead of os.getenv() calls.
+    Configuration is loaded via BackendConfig dependency injection.
+    """
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         model_type = DCOPEventModel
 
@@ -41,15 +44,33 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
     delete_sql = text("""delete from dcop_event_bt where vsprimarykey in (select vsprimarykey from dcop_event_bt where study_uid=:study_uid)
                       """)
 
+    def __init__(self, config: Optional[BackendConfig] = None, **kwargs: Any) -> None:
+        """Initialize service with optional config injection.
+
+        Args:
+            config: BackendConfig instance. If None, auto-loads from environment.
+            **kwargs: Additional arguments passed to parent class.
+        """
+        super().__init__(**kwargs)
+        if config is None:
+            from backend.app.config.loader import load_backend_config_from_env
+            self._config = load_backend_config_from_env(fail_safe=True)
+        else:
+            self._config = config
+
+    @property
+    def config(self) -> BackendConfig:
+        """Get the configuration for this service."""
+        return self._config
+
     async def get_study_new_re_model(
         self, study_uid: str, session: AsyncSession
     ) -> Tuple[
         DCOPEventModel, DCOPEventModel, DCOPEventModel, DCOPEventModel, Dicom2NiiParams
     ]:
-        load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
 
         study_uid_raw_dicom_path = raw_dicom_path.joinpath(study_uid)
 
@@ -187,17 +208,15 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         await self.del_study_result_by_parameters(sql=sql, parameters=parameters)
 
     async def del_study_result_by_parameters(self, sql: text, parameters: dict):
-        load_dotenv()
-        task_paths = get_task_execution_paths()
-        process_path = pathlib.Path(task_paths["path_process"])
+        process_path = self.config.paths.path_process
         aneurysm_path = process_path.joinpath("Deep_Aneurysm")
         cmb_path = process_path.joinpath("Deep_CMB")
         cmd_tools_path = process_path.joinpath("Deep_cmd_tools")
         infarct_path = process_path.joinpath("Deep_Infarct")
         synthseg_path = process_path.joinpath("Deep_synthseg")
         wmh_path = process_path.joinpath("Deep_WMH")
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
         # engine: AsyncEngine = self.repository.session.bind
         # async with engine.connect() as conn:
         #     execute = await conn.execute(sql, parameters)
@@ -240,22 +259,19 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                     logger.error(f"except {traceback.print_exc()}")
 
     async def del_study_cache(self, field_name: str, field_value: str):
-        load_dotenv()
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = self.config.api.upload_data_url
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{upload_data_api_url}/cache"
             await client.delete(url=url, timeout=180, params={field_name: field_value})
 
-    @staticmethod
-    async def _send_events(event_data: List[dict]) -> None:
+    async def _send_events(self, event_data: List[dict]) -> None:
         """
         Sends study transfer complete events to the API.
 
         Args:
-            api_url: Base URL for the upload data API.
             event_data: List of serialized DCOPEventRequest objects.
         """
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = self.config.api.upload_data_url
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
             event_data_json = json.dumps(event_data)

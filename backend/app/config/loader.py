@@ -33,13 +33,18 @@ logger = logging.getLogger(__name__)
 # Default configuration for fail-safe production mode
 # Ensures application can always start, even without environment variables
 DEFAULT_CONFIG = BackendConfig(
-    api=APIConfig(upload_data_url="http://localhost:8000/upload"),
+    api=APIConfig(
+        upload_data_url="http://localhost:8000/upload",
+        dicom_seg_url="http://localhost:8042",
+    ),
     paths=PathConfig(
         path_process=Path("/tmp/process"),
         path_json=Path("/tmp/json"),
         path_log=Path("/tmp/logs"),
         path_root=Path("/tmp/root"),
         path_rename_dicom=Path("/tmp/rename_dicom"),
+        path_raw_dicom=Path("/tmp/raw_dicom"),
+        path_rename_nifti=Path("/tmp/rename_nifti"),
     ),
     database=DatabaseConfig(
         connection_string="postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom"
@@ -166,7 +171,16 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
         fail_safe=fail_safe,
     ) or DEFAULT_CONFIG.api.upload_data_url  # Ensure non-None
 
-    api_config = APIConfig(upload_data_url=upload_data_url)
+    dicom_seg_url = _get_env_or_default(
+        "UPLOAD_DATA_DICOM_SEG_URL",
+        default=DEFAULT_CONFIG.api.dicom_seg_url,
+        fail_safe=fail_safe,
+    ) or DEFAULT_CONFIG.api.dicom_seg_url  # Ensure non-None
+
+    api_config = APIConfig(
+        upload_data_url=upload_data_url,
+        dicom_seg_url=dicom_seg_url,
+    )
 
     # Path Configuration
     path_process = _convert_to_path(
@@ -199,12 +213,26 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
         fail_safe=fail_safe,
     )
 
+    path_raw_dicom = _convert_to_path(
+        _get_env_or_default("PATH_RAW_DICOM", None, fail_safe),
+        default=DEFAULT_CONFIG.paths.path_raw_dicom,
+        fail_safe=fail_safe,
+    )
+
+    path_rename_nifti = _convert_to_path(
+        _get_env_or_default("PATH_RENAME_NIFTI", None, fail_safe),
+        default=DEFAULT_CONFIG.paths.path_rename_nifti,
+        fail_safe=fail_safe,
+    )
+
     paths_config = PathConfig(
         path_process=path_process,
         path_json=path_json,
         path_log=path_log,
         path_root=path_root,
         path_rename_dicom=path_rename_dicom,
+        path_raw_dicom=path_raw_dicom,
+        path_rename_nifti=path_rename_nifti,
     )
 
     # Database Configuration

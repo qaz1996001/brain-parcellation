@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import pathlib
 import traceback
 from typing import List, Optional, Tuple, Dict, Any
@@ -23,6 +22,7 @@ from backend.app.service import BaseRepositoryService
 
 from backend.app.config.api_urls import get_upload_data_api_url
 from backend.app.config.task_paths import get_task_execution_paths
+from backend.app.config.models import BackendConfig
 from .model import DCOPEventModel
 from .schemas import (
     DCOPStatus,
@@ -44,7 +44,16 @@ logger = logging.getLogger(__name__)
 
 
 class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
-    """Author repository."""
+    """
+    DCOP Event DICOM Service with configuration injection.
+
+    This service uses injected configuration instead of os.getenv() calls.
+    Configuration is automatically loaded from environment if not provided.
+
+    Design Pattern: Dependency Injection with auto-load fallback
+    - Explicit config: service = DCOPEventDicomService(config=my_config)
+    - Auto-load: service = DCOPEventDicomService()  # loads from env
+    """
 
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         """Author repository."""
@@ -62,28 +71,45 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     )
     can_inference_pattern = re.compile(pattern_str)
 
-    async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
-        from code_ai import load_dotenv
+    def __init__(self, config: Optional[BackendConfig] = None, **kwargs: Any) -> None:
+        """
+        Initialize service with injected or auto-loaded configuration.
 
-        load_dotenv()
-        UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+        Args:
+            config: Optional BackendConfig instance. If None, loads from environment.
+            **kwargs: Additional arguments passed to parent class
+        """
+        super().__init__(**kwargs)
+        if config is None:
+            from backend.app.config.loader import load_backend_config_from_env
+
+            self._config = load_backend_config_from_env(fail_safe=True)
+        else:
+            self._config = config
+
+    @property
+    def config(self) -> BackendConfig:
+        """Access the injected configuration."""
+        return self._config
+
+    async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
+        """Get check URL based on operation number using injected config."""
+        upload_data_api_url = self.config.api.upload_data_url
         match ope_no:
             case DCOPStatus.STUDY_TRANSFER_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
+                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.STUDY_CONVERSION_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
+                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
+                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
             case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
+                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
             case _:
                 url = None
         return url
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
-        from code_ai import load_dotenv
-
-        load_dotenv()
+        """Post operation number task using injected config."""
         check_url_set = set()
         # async with AsyncSession(self.repository.session.bind) as session:
         async with self.session_manager.get_session() as session:
@@ -137,16 +163,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             data: Optional list of DCOPEventRequest objects. If None, retrieves study status from database.
 
         """
-        from code_ai import load_dotenv
-
-        load_dotenv()
         logger.info(
             f"check_study_series_transfer_complete data {data}",
         )
-        # Get configuration from environment
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
-        path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
+        # Get configuration from injected config
+        upload_data_api_url = self.config.api.upload_data_url
+        path_rename_dicom = self.config.paths.path_rename_dicom
+        path_rename_nifti = self.config.paths.path_rename_nifti
 
         # Retrieve study status information if not provided
         if data is None:
@@ -177,13 +200,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return dcop_event_list
 
     async def add_study_new(self, data_list):
+        """Add new study using injected config paths."""
         from code_ai.task.schema.intput_params import Dicom2NiiParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
 
         result_list = []
         async with self.session_manager.get_session() as session:
@@ -317,16 +339,14 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
+        Process NIFTI tool operations using injected config.
+
         建立
            DCOPStatus.STUDY_CONVERTING
            DCOPStatus.SERIES_CONVERTING
            DCOPStatus.SERIES_CONVERSION_COMPLETE
            DCOPStatus.STUDY_CONVERSION_COMPLETE
         """
-
-        from code_ai import load_dotenv
-
-        load_dotenv()
         # session: AsyncSession = self.repository.session
         for dcop in data:
             match dcop.ope_no:
@@ -371,18 +391,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
 
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = self.config.api.upload_data_url
         url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
         async with httpx.AsyncClient(timeout=180) as client:
             await client.post(url=url)
 
     async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
+        """Get series info for NIFTI tool using injected config."""
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
+        path_rename_nifti = self.config.paths.path_rename_nifti
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
         sql = text(
@@ -461,15 +480,15 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         finally:
             pass
 
-    @staticmethod
-    def get_orthanc_study_uid_series_uid(instance_path_str: str):
+    def get_orthanc_study_uid_series_uid(self, instance_path_str: str):
+        """Get Orthanc study and series UID using injected config."""
         instance_path = pathlib.Path(instance_path_str)
-        UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
+        dicom_seg_url = self.config.api.dicom_seg_url
         # raw_dicom\ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30\10089413 GUO HSIOU HUA\21002010079 MRI Stroke Wall C C\MR 3D Ax SWAN\*.dcm
         with open(instance_path_str, mode="rb") as f:
             dicom_ds = pydicom.dcmread(f)
 
-        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+        client = Orthanc(str(dicom_seg_url), timeout=300)
         study_uid = instance_path.parent.parent.parent.parent.name
         # (0020,000E)	Series Instance UID	1.2.840.113619.2.44.5554020.7707121.19025.1612063861.703
         series_sop_uid = dicom_ds[0x0020, 0x000E].value
@@ -483,10 +502,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         else:
             return None
 
-    @staticmethod
-    def get_orthanc_series_uid(study_uid: str, series_dir_set: set):
-        UPLOAD_DATA_DICOM_SEG_URL = os.getenv("UPLOAD_DATA_DICOM_SEG_URL")
-        client = Orthanc(UPLOAD_DATA_DICOM_SEG_URL, timeout=300)
+    def get_orthanc_series_uid(self, study_uid: str, series_dir_set: set):
+        """Get Orthanc series UID using injected config."""
+        dicom_seg_url = self.config.api.dicom_seg_url
+        client = Orthanc(str(dicom_seg_url), timeout=300)
         series_sop_uid_list = []
         for series_dir in series_dir_set:
             series_path_list = list(series_dir.rglob("*.dcm"))
@@ -514,14 +533,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return df2
 
     async def dicom_tool_get_series_info(self, data: List[DCOPEventModel]):
+        """Get DICOM series info using injected config."""
         from code_ai.task.task_dicom2nii import dicom_to_nii
         from code_ai.task.schema.intput_params import Dicom2NiiParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
 
         for dcop_event in data:
             study_uid = dcop_event.study_uid
@@ -602,11 +620,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         from code_ai.task.task_pipeline import task_pipeline_inference
 
-        # Environment variables setup
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        # Get configuration from injected config
+        upload_data_api_url = self.config.api.upload_data_url
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
         logger.info(f"data {data}")
         # post_check_study_series_conversion_complete call check
         if data is None:
@@ -968,9 +986,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def get_check_study_series_conversion_complete(
         self, study_uid: Optional[str] = None
     ) -> Dict[str, Any]:
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        """Get check study series conversion complete status using injected config."""
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
         completed_studies = await self.query_studies_pending_completion(
             study_uid=study_uid
         )

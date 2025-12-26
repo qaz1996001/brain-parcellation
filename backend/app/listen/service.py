@@ -1,10 +1,9 @@
 # app/listen/service.py
 import json
 import logging
-import os
 import pathlib
 import traceback
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 import re
 import httpx
 from advanced_alchemy.extensions.fastapi import repository
@@ -17,8 +16,7 @@ from fastapi_cache import FastAPICache
 
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
-from backend.app.config.api_urls import get_upload_data_api_url
-from backend.app.config.task_paths import get_task_execution_paths
+from backend.app.config.models import BackendConfig
 from .model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
 from .urls import (
@@ -32,7 +30,11 @@ logger = logging.getLogger(__name__)
 
 
 class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
-    """Author repository."""
+    """Author repository.
+
+    This service uses injected configuration instead of os.getenv() calls.
+    Configuration is loaded via BackendConfig dependency injection.
+    """
 
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         """Author repository."""
@@ -50,11 +52,27 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     )
     can_inference_pattern = re.compile(pattern_str)
 
-    async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
-        from code_ai import load_dotenv
+    def __init__(self, config: Optional[BackendConfig] = None, **kwargs: Any) -> None:
+        """Initialize service with optional config injection.
 
-        load_dotenv()
-        UPLOAD_DATA_API_URL = os.getenv("UPLOAD_DATA_API_URL")
+        Args:
+            config: BackendConfig instance. If None, auto-loads from environment.
+            **kwargs: Additional arguments passed to parent class.
+        """
+        super().__init__(**kwargs)
+        if config is None:
+            from backend.app.config.loader import load_backend_config_from_env
+            self._config = load_backend_config_from_env(fail_safe=True)
+        else:
+            self._config = config
+
+    @property
+    def config(self) -> BackendConfig:
+        """Get the configuration for this service."""
+        return self._config
+
+    async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
+        UPLOAD_DATA_API_URL = self.config.api.upload_data_url
         match ope_no:
             case DCOPStatus.STUDY_TRANSFER_COMPLETE.value:
                 url = f"{UPLOAD_DATA_API_URL}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
@@ -69,9 +87,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return url
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
-        from code_ai import load_dotenv
-
-        load_dotenv()
         check_url_set = set()
         # async with AsyncSession(self.repository.session.bind) as session:
         async with self.session_manager.get_session() as session:
@@ -125,16 +140,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             data: Optional list of DCOPEventRequest objects. If None, retrieves study status from database.
 
         """
-        from code_ai import load_dotenv
-
-        load_dotenv()
         logger.info(
             f"check_study_series_transfer_complete data {data}",
         )
-        # Get configuration from environment
-        upload_data_api_url = get_upload_data_api_url()
-        path_rename_dicom = os.getenv("PATH_RENAME_DICOM")
-        path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
+        # Get configuration from injected config
+        upload_data_api_url = self.config.api.upload_data_url
+        path_rename_dicom = str(self.config.paths.path_rename_dicom)
+        path_rename_nifti = str(self.config.paths.path_rename_nifti)
 
         # Retrieve study status information if not provided
         if data is None:
@@ -164,12 +176,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def add_study_new(self, data_list):
         from code_ai.task.schema.intput_params import Dicom2NiiParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
 
         result_list = []
         async with self.session_manager.get_session() as session:
@@ -307,10 +317,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
            DCOPStatus.SERIES_CONVERSION_COMPLETE
            DCOPStatus.STUDY_CONVERSION_COMPLETE
         """
-
-        from code_ai import load_dotenv
-
-        load_dotenv()
         # session: AsyncSession = self.repository.session
         for dcop in data:
             match dcop.ope_no:
@@ -355,7 +361,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
 
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        upload_data_api_url = self.config.api.upload_data_url
         url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
         async with httpx.AsyncClient(timeout=180) as client:
             await client.post(url=url)
@@ -363,10 +369,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        path_rename_nifti = os.getenv("PATH_RENAME_NIFTI")
+        path_rename_nifti = str(self.config.paths.path_rename_nifti)
         # engine: AsyncEngine = session.bind
         # async with engine.connect() as conn:
         sql = text(
@@ -421,8 +425,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 # Now, proceed with pushing tasks.
                 for task_params in task_params_list:
                     task_dict = task_params.get_str_dict()
-                    base_api_url = get_upload_data_api_url()
-                    task_dict["upload_data_api_url"] = base_api_url
+                    task_dict["upload_data_api_url"] = self.config.api.upload_data_url
                     # NOTE: dicom_2_nii_series does NOT need path_process/path_json/path_log
                     # These are only needed by task_pipeline_inference
                     dicom_2_nii_series.push(task_dict)
@@ -447,12 +450,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     async def dicom_tool_get_series_info(self, data: List[DCOPEventModel]):
         from code_ai.task.task_dicom2nii import dicom_to_nii
         from code_ai.task.schema.intput_params import Dicom2NiiParams
-        from code_ai import load_dotenv
 
-        load_dotenv()
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
 
         for dcop_event in data:
             study_uid = dcop_event.study_uid
@@ -491,8 +492,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         await session.commit()
                         await session.flush()
                         task_dict = task_params.get_str_dict()
-                        base_api_url = get_upload_data_api_url()
-                        task_dict["upload_data_api_url"] = base_api_url
+                        task_dict["upload_data_api_url"] = self.config.api.upload_data_url
                         # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
                         # These are only needed by task_pipeline_inference
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
@@ -518,11 +518,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         from code_ai.task.task_pipeline import task_pipeline_inference
 
-        # Environment variables setup
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        raw_dicom_path = pathlib.Path(os.getenv("PATH_RAW_DICOM"))
-        rename_dicom_path = pathlib.Path(os.getenv("PATH_RENAME_DICOM"))
-        rename_nifti_path = pathlib.Path(os.getenv("PATH_RENAME_NIFTI"))
+        # Configuration from injected config
+        upload_data_api_url = self.config.api.upload_data_url
+        raw_dicom_path = self.config.paths.path_raw_dicom
+        rename_dicom_path = self.config.paths.path_rename_dicom
+        rename_nifti_path = self.config.paths.path_rename_nifti
         logger.info(f"data {data}")
         # post_check_study_series_conversion_complete call check
         if data is None:
@@ -661,8 +661,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
 
             # Create STUDY_INFERENCE_READY event
-            # Get task execution paths for parameter injection
-            task_paths = get_task_execution_paths()
+            # Get task execution paths from injected config
             dcop_event_inference_ready = DCOPEventRequest(
                 study_uid=dcop_event.study_uid,
                 series_uid=None,
@@ -675,10 +674,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     "study_uid": dcop_event.study_uid,
                     "study_id": dcop_event.study_id,
                     "upload_data_api_url": upload_data_api_url,
-                    "path_process": task_paths["path_process"],
-                    "path_json": task_paths["path_json"],
-                    "path_log": task_paths["path_log"],
-                    "path_root": task_paths["path_root"],
+                    "path_process": str(self.config.paths.path_process),
+                    "path_json": str(self.config.paths.path_json),
+                    "path_log": str(self.config.paths.path_log),
+                    "path_root": str(self.config.paths.path_root),
                 },
             )
             inference_task_key = (

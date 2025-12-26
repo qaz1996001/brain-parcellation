@@ -26,9 +26,11 @@ class APIConfig:
 
     Attributes:
         upload_data_url: URL for uploading data (e.g., http://localhost:8000/upload)
+        dicom_seg_url: URL for DICOM-SEG server / Orthanc PACS
     """
 
     upload_data_url: str
+    dicom_seg_url: str
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,8 @@ class PathConfig:
         path_log: Directory for log files
         path_root: Root directory for application data
         path_rename_dicom: Directory for renamed DICOM files
+        path_raw_dicom: Directory for raw DICOM input files
+        path_rename_nifti: Directory for NIfTI conversion output
     """
 
     path_process: Path
@@ -54,6 +58,8 @@ class PathConfig:
     path_log: Path
     path_root: Path
     path_rename_dicom: Path
+    path_raw_dicom: Path
+    path_rename_nifti: Path
 
 
 @dataclass(frozen=True)

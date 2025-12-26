@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.exc import SQLAlchemyError
 from advanced_alchemy.extensions.fastapi import service
+from advanced_alchemy.base import ModelProtocol
 import logging
 
 logger = logging.getLogger(__name__)
@@ -159,9 +160,14 @@ class SessionManager:
             The result of the function execution
 
         Raises:
-            The last exception if all retries fail
+            SQLAlchemyError: The last exception if all retries fail
+            RuntimeError: If max_retries is 0 or negative
         """
-        last_exception = None
+        # Linus: Eliminate special cases - ensure max_retries is valid
+        if max_retries < 1:
+            raise RuntimeError("max_retries must be at least 1")
+
+        last_exception: Optional[SQLAlchemyError] = None
 
         for attempt in range(max_retries):
             try:
@@ -181,6 +187,9 @@ class SessionManager:
                         f"Database operation failed after {max_retries} attempts: {e}"
                     )
 
+        # Linus: Data structure first - type system guarantees last_exception is set
+        # After at least one iteration with SQLAlchemyError caught, last_exception is never None
+        assert last_exception is not None, "Logic error: last_exception should be set"
         raise last_exception
 
     async def close_all_sessions(self) -> None:
@@ -211,7 +220,8 @@ class SessionManager:
         return len(self._active_sessions)
 
 
-ModelT = TypeVar("ModelT")
+# Linus: Data structure first - use correct type bounds from the library
+ModelT = TypeVar("ModelT", bound=ModelProtocol)
 
 
 class BaseRepositoryService(

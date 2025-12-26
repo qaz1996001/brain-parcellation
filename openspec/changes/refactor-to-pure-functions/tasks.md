@@ -75,7 +75,15 @@
   - [x] Verify `provide_sync_service_class()` returns correct class based on flags
   - [x] Verify `create_v2_service_with_config()` creates configured V2 instance
   - [x] Verify config caching works correctly
-- [x] Backward compatibility: routers use DI, no code changes required
+- [x] Update `backend/app/sync/routers.py` to use dynamic service selection:
+  - [x] Import `provide_sync_service_class` from deps.py
+  - [x] Use `_SyncServiceClass = provide_sync_service_class()` at module load
+  - [x] Replace all `alchemy.provide_service(DCOPEventDicomService)` with `alchemy.provide_service(_SyncServiceClass)`
+- [x] Update `backend/app/services/sync_v2.py` for alchemy compatibility:
+  - [x] Make `config` parameter optional with default `None`
+  - [x] Auto-load config from environment when not provided
+  - [x] Supports both explicit injection and auto-load patterns
+- [x] Backward compatibility: routers use DI, V2 selected via feature flag
 
 ### Feature Flags System
 - [x] Create `backend/app/config/feature_flags.py` with `FeatureFlags` class:
@@ -96,6 +104,27 @@
 - [x] Verify backward compatibility: old tests pass unchanged
 - [x] Git commit: "Phase B: SyncService V2 with adapter pattern"
 - [x] Git tag: `v2.0.0-phase-b-parallel`
+
+### Legacy Backend Services Migration ✅ COMPLETED
+All legacy backend services have been migrated to use config injection pattern:
+- [x] Update `backend/app/sync/service.py` (DCOPEventDicomService):
+  - [x] Add `__init__(self, config: Optional[BackendConfig] = None, **kwargs)` constructor
+  - [x] Add `config` property for accessing BackendConfig
+  - [x] Replace all `os.getenv()` calls with `self.config.*` properties
+  - [x] Remove all `from code_ai import load_dotenv` and `load_dotenv()` calls
+  - [x] Update static methods to instance methods where needed for config access
+- [x] Update `backend/app/study/service.py` (DCOPEventDicomService):
+  - [x] Same pattern as sync/service.py
+  - [x] Replace `get_upload_data_api_url()` with `self.config.api.upload_data_url`
+  - [x] Replace `get_task_execution_paths()` with direct `self.config.paths.*` access
+- [x] Update `backend/app/listen/service.py` (DCOPEventDicomService):
+  - [x] Same pattern as sync/service.py
+  - [x] Full config injection for all path and API URL access
+- [x] Update `backend/app/rerun/service.py` (ReRunStudyService):
+  - [x] Same pattern as sync/service.py
+  - [x] Convert `@staticmethod _send_events()` to instance method for config access
+- [x] Verify syntax for all modified files
+- [ ] Git commit: "Phase B.2: Legacy services config injection migration"
 
 ---
 
