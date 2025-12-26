@@ -28,9 +28,13 @@ import logging
 import pynvml  # 导包
 import tensorflow as tf
 autotune = tf.data.experimental.AUTOTUNE
+from typing import Optional, Tuple
+
 from code_ai import PYTHON3, load_dotenv
+from code_ai.config import CodeAIConfig
 from code_ai.pipeline.cmb import CMBServiceTF
-from code_ai.pipeline import get_study_id,pipeline_parser
+from code_ai.pipeline import get_study_id, pipeline_parser
+from code_ai.pipeline.base import get_config, get_gpu_n
 from code_ai.pipeline.dicomseg import dicom_seg_cmb_file
 from code_ai.pipeline.upload import upload_dicom_seg, upload_json
 
@@ -38,16 +42,49 @@ from code_ai.pipeline.upload import upload_dicom_seg, upload_json
 load_dotenv()
 
 
-def pipeline_cmb(ID :str,
-                 swan_file :str,
-                 t1_file :str,
-                 path_output :str,
-                 path_code = '/mnt/d/wsl_ubuntu/pipeline/sean/code/',
-                 path_processModel = '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_CMB/',
-                 path_json = '/mnt/d/wsl_ubuntu/pipeline/sean/json/',
-                 path_log = '/mnt/d/wsl_ubuntu/pipeline/sean/log/',
-                 path_synthseg = '/mnt/d/wsl_ubuntu/pipeline_synthseg/',
-                 gpu_n = 0):
+def pipeline_cmb(
+    ID: str,
+    swan_file: str,
+    t1_file: str,
+    path_output: str,
+    path_code: str = '/mnt/d/wsl_ubuntu/pipeline/sean/code/',
+    path_processModel: str = '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_CMB/',
+    path_json: str = '/mnt/d/wsl_ubuntu/pipeline/sean/json/',
+    path_log: str = '/mnt/d/wsl_ubuntu/pipeline/sean/log/',
+    path_synthseg: str = '/mnt/d/wsl_ubuntu/pipeline_synthseg/',
+    gpu_n: int = 0,
+    config: Optional[CodeAIConfig] = None
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    CMB (Cerebral Microbleed) detection pipeline.
+
+    Supports dual-mode configuration:
+    - Old pattern: pipeline_cmb(ID, swan, t1, output, ...) - uses explicit params
+    - New pattern: pipeline_cmb(ID, swan, t1, output, config=config) - uses config
+
+    Args:
+        ID: Study identifier
+        swan_file: Path to SWAN (SWI) input file
+        t1_file: Path to T1 input file
+        path_output: Output directory
+        path_code: Code directory (default from hardcoded path)
+        path_processModel: Processing model directory
+        path_json: JSON output directory
+        path_log: Log directory
+        path_synthseg: SynthSeg model directory
+        gpu_n: GPU device number
+        config: Optional CodeAIConfig for pure function pattern
+
+    Returns:
+        Tuple of (synthseg_path, output_nii_path, output_json_path) or (None, None, None)
+    """
+    # Dual-mode: use config if provided, otherwise use explicit parameters
+    if config is not None:
+        # Pure function pattern: paths from config
+        path_log = str(config.paths.path_log)
+        path_json = str(config.paths.path_json)
+        path_code = str(config.paths.path_code)
+        gpu_n = config.model.gpu_n
     # 當使用gpu有錯時才確認
     logger = tf.get_logger()
     logger.setLevel(logging.ERROR)
