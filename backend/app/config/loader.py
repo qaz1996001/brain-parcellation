@@ -49,7 +49,7 @@ DEFAULT_CONFIG = BackendConfig(
 
 def _get_env_or_default(
     key: str, default: Optional[str] = None, fail_safe: bool = True
-) -> str:
+) -> Optional[str]:
     """
     Get environment variable with fail-safe/strict mode support.
 
@@ -164,7 +164,7 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
         "UPLOAD_DATA_API_URL",
         default=DEFAULT_CONFIG.api.upload_data_url,
         fail_safe=fail_safe,
-    )
+    ) or DEFAULT_CONFIG.api.upload_data_url  # Ensure non-None
 
     api_config = APIConfig(upload_data_url=upload_data_url)
 
@@ -212,7 +212,7 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
         "AI_APP_CONNECTION_STRING",
         default=DEFAULT_CONFIG.database.connection_string,
         fail_safe=fail_safe,
-    )
+    ) or DEFAULT_CONFIG.database.connection_string  # Ensure non-None
 
     database_config = DatabaseConfig(connection_string=connection_string)
 

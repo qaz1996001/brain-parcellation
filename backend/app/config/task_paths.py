@@ -62,6 +62,7 @@ def get_task_execution_paths(
     }
 
     # Validate that all required paths are configured
+    validated_result: Dict[str, str] = {}
     for key, value in result.items():
         if value is None:
             raise ValueError(
@@ -73,9 +74,11 @@ def get_task_execution_paths(
         if not os.path.isabs(value):
             raise ValueError(f"{key} must be an absolute path, got: {value}")
 
+        validated_result[key] = value
+
     # Note: We don't validate path existence/writability here because:
     # 1. Paths may not exist yet and will be created by tasks (os.makedirs)
     # 2. Permission checks at dispatch time may not reflect worker environment
     # 3. Workers will validate and create paths as needed during execution
 
-    return result
+    return validated_result
