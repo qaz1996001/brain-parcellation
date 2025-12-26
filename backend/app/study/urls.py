@@ -1,3 +1,2 @@
-prefix             = "/study"
-STUDY_GET_LIST    = f"{prefix}/list"
-
+prefix = "/study"
+STUDY_GET_LIST = f"{prefix}/list"

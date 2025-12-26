@@ -11,10 +11,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get(urls.LISTEN_GET_,
-            status_code=200,
-            summary="",
-            )
+@router.get(
+    urls.LISTEN_GET_,
+    status_code=200,
+    summary="",
+)
 async def get_():
     # 1. listen 1 new study
     # {

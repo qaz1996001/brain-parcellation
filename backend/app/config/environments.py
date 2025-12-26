@@ -25,6 +25,7 @@ class EnvironmentConfig(TypedDict):
         log_level: Logging level for the environment
         model_config_path: Path to model configuration file
     """
+
     data_root: str
     log_level: str
     model_config_path: str
@@ -47,6 +48,7 @@ ENVIRONMENT_CONFIGS: dict[Environment, EnvironmentConfig] = {
 
 class EnvironmentError(Exception):
     """Raised when environment configuration is invalid."""
+
     pass
 
 
@@ -78,8 +80,7 @@ def get_environment() -> Environment:
     # Knuth: Precise validation with clear error messages
     if env not in ("production", "testing"):
         raise EnvironmentError(
-            f"Invalid environment: ENV={env}. "
-            f"Valid values: production, testing"
+            f"Invalid environment: ENV={env}. Valid values: production, testing"
         )
 
     return env  # type: ignore
@@ -108,9 +109,7 @@ def get_config() -> EnvironmentConfig:
 
     # Knuth: Verify configuration exists (defensive programming)
     if env not in ENVIRONMENT_CONFIGS:
-        raise EnvironmentError(
-            f"Configuration missing for environment: {env}"
-        )
+        raise EnvironmentError(f"Configuration missing for environment: {env}")
 
     config = ENVIRONMENT_CONFIGS[env]
 

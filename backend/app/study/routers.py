@@ -18,42 +18,53 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get(urls.STUDY_GET_LIST,
-            status_code=200,
-            summary="複雜多條件搜索",
-            response_model=service.OffsetPagination[DCOPEventRequest])
+@router.get(
+    urls.STUDY_GET_LIST,
+    status_code=200,
+    summary="複雜多條件搜索",
+    response_model=service.OffsetPagination[DCOPEventRequest],
+)
 async def get_events_complex(
-        dcop_event_service: Annotated[DCOPEventDicomService,
-        Depends(alchemy.provide_service(DCOPEventDicomService))],
-        filters_list: Annotated[list[filters.FilterTypes],
-        Depends(provide_filters({
-            # 多欄位搜索
-            "search": "params_data,result_data",
-            "search_ignore_case": True,
-
-            # 集合過濾器
-            "in_fields":[FieldNameType(name='tool_id',type_hint=str),
-                         FieldNameType(name='ope_no',type_hint=str),
-                         FieldNameType(name='study_uid',type_hint=str),
-                         FieldNameType(name='study_id',type_hint=str),
-                         FieldNameType(name='series_uid',type_hint=str),
-                         ],
-            # BeforeAfter 日期時間過濾器
-            # FieldNameType(name='update_time', type_hint=datetime)
-            "before_after_fields": [
-                FieldNameType(name='create_time', type_hint=datetime),
-            ],
-
-            # 排序配置
-            "order_by": ["study_uid", "ope_no","create_time", ],
-
-            # 分頁配置
-            "pagination_type": "limit_offset",
-            "limit": 50,
-            "offset": 0,
-            # ID 過濾器
-            "id_filter": OrthancID,
-        }))],
+    dcop_event_service: Annotated[
+        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+    ],
+    filters_list: Annotated[
+        list[filters.FilterTypes],
+        Depends(
+            provide_filters(
+                {
+                    # 多欄位搜索
+                    "search": "params_data,result_data",
+                    "search_ignore_case": True,
+                    # 集合過濾器
+                    "in_fields": [
+                        FieldNameType(name="tool_id", type_hint=str),
+                        FieldNameType(name="ope_no", type_hint=str),
+                        FieldNameType(name="study_uid", type_hint=str),
+                        FieldNameType(name="study_id", type_hint=str),
+                        FieldNameType(name="series_uid", type_hint=str),
+                    ],
+                    # BeforeAfter 日期時間過濾器
+                    # FieldNameType(name='update_time', type_hint=datetime)
+                    "before_after_fields": [
+                        FieldNameType(name="create_time", type_hint=datetime),
+                    ],
+                    # 排序配置
+                    "order_by": [
+                        "study_uid",
+                        "ope_no",
+                        "create_time",
+                    ],
+                    # 分頁配置
+                    "pagination_type": "limit_offset",
+                    "limit": 50,
+                    "offset": 0,
+                    # ID 過濾器
+                    "id_filter": OrthancID,
+                }
+            )
+        ),
+    ],
 ) -> service.OffsetPagination[DCOPEventModel]:
     """
     複雜多條件搜索範例：
@@ -65,4 +76,3 @@ async def get_events_complex(
     """
     results, total = await dcop_event_service.list_and_count(*filters_list)
     return dcop_event_service.to_schema(results, total, filters=filters_list)
-

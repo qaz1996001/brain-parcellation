@@ -33,26 +33,22 @@ logger = logging.getLogger(__name__)
 # Default configuration for fail-safe production mode
 # Ensures application can always start, even without environment variables
 DEFAULT_CONFIG = BackendConfig(
-    api=APIConfig(
-        upload_data_url="http://localhost:8000/upload"
-    ),
+    api=APIConfig(upload_data_url="http://localhost:8000/upload"),
     paths=PathConfig(
         path_process=Path("/tmp/process"),
         path_json=Path("/tmp/json"),
         path_log=Path("/tmp/logs"),
         path_root=Path("/tmp/root"),
-        path_rename_dicom=Path("/tmp/rename_dicom")
+        path_rename_dicom=Path("/tmp/rename_dicom"),
     ),
     database=DatabaseConfig(
         connection_string="postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom"
-    )
+    ),
 )
 
 
 def _get_env_or_default(
-    key: str,
-    default: Optional[str] = None,
-    fail_safe: bool = True
+    key: str, default: Optional[str] = None, fail_safe: bool = True
 ) -> str:
     """
     Get environment variable with fail-safe/strict mode support.
@@ -92,9 +88,7 @@ def _get_env_or_default(
 
 
 def _convert_to_path(
-    path_str: Optional[str],
-    default: Path,
-    fail_safe: bool = True
+    path_str: Optional[str], default: Path, fail_safe: bool = True
 ) -> Path:
     """
     Convert string to Path object with validation.
@@ -118,14 +112,10 @@ def _convert_to_path(
         return path
     except (TypeError, ValueError) as e:
         if fail_safe:
-            logger.warning(
-                f"Invalid path '{path_str}': {e}. Using default: {default}"
-            )
+            logger.warning(f"Invalid path '{path_str}': {e}. Using default: {default}")
             return default
         else:
-            raise TypeError(
-                f"Invalid path value '{path_str}': {e}"
-            ) from e
+            raise TypeError(f"Invalid path value '{path_str}': {e}") from e
 
 
 def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
@@ -173,42 +163,40 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
     upload_data_url = _get_env_or_default(
         "UPLOAD_DATA_API_URL",
         default=DEFAULT_CONFIG.api.upload_data_url,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
-    api_config = APIConfig(
-        upload_data_url=upload_data_url
-    )
+    api_config = APIConfig(upload_data_url=upload_data_url)
 
     # Path Configuration
     path_process = _convert_to_path(
         _get_env_or_default("PATH_PROCESS", None, fail_safe),
         default=DEFAULT_CONFIG.paths.path_process,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
     path_json = _convert_to_path(
         _get_env_or_default("PATH_JSON", None, fail_safe),
         default=DEFAULT_CONFIG.paths.path_json,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
     path_log = _convert_to_path(
         _get_env_or_default("PATH_LOG", None, fail_safe),
         default=DEFAULT_CONFIG.paths.path_log,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
     path_root = _convert_to_path(
         _get_env_or_default("PATH_ROOT", None, fail_safe),
         default=DEFAULT_CONFIG.paths.path_root,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
     path_rename_dicom = _convert_to_path(
         _get_env_or_default("PATH_RENAME_DICOM", None, fail_safe),
         default=DEFAULT_CONFIG.paths.path_rename_dicom,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
     paths_config = PathConfig(
@@ -216,29 +204,21 @@ def load_backend_config_from_env(fail_safe: bool = True) -> BackendConfig:
         path_json=path_json,
         path_log=path_log,
         path_root=path_root,
-        path_rename_dicom=path_rename_dicom
+        path_rename_dicom=path_rename_dicom,
     )
 
     # Database Configuration
     connection_string = _get_env_or_default(
         "AI_APP_CONNECTION_STRING",
         default=DEFAULT_CONFIG.database.connection_string,
-        fail_safe=fail_safe
+        fail_safe=fail_safe,
     )
 
-    database_config = DatabaseConfig(
-        connection_string=connection_string
-    )
+    database_config = DatabaseConfig(connection_string=connection_string)
 
     # Root Configuration
-    config = BackendConfig(
-        api=api_config,
-        paths=paths_config,
-        database=database_config
-    )
+    config = BackendConfig(api=api_config, paths=paths_config, database=database_config)
 
-    logger.info(
-        f"Backend configuration loaded successfully (fail_safe={fail_safe})"
-    )
+    logger.info(f"Backend configuration loaded successfully (fail_safe={fail_safe})")
 
     return config

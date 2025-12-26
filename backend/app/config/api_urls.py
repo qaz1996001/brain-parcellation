@@ -50,7 +50,7 @@ def get_upload_data_api_url(override: Optional[str] = None) -> str:
         )
 
     # Validate URL format
-    if not api_url.startswith(('http://', 'https://')):
+    if not api_url.startswith(("http://", "https://")):
         raise ValueError(
             f"upload_data_api_url must be a valid HTTP/HTTPS URL, got: {api_url}"
         )

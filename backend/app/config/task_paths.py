@@ -9,7 +9,9 @@ import os
 from typing import Dict, Optional
 
 
-def get_task_execution_paths(override: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+def get_task_execution_paths(
+    override: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
     """Get task execution path configuration for task parameter injection.
 
     This function provides the path configuration that task dispatchers should pass to workers
@@ -53,10 +55,10 @@ def get_task_execution_paths(override: Optional[Dict[str, str]] = None) -> Dict[
     paths = override or {}
 
     result = {
-        'path_process': paths.get('path_process') or os.getenv("PATH_PROCESS"),
-        'path_json': paths.get('path_json') or os.getenv("PATH_JSON"),
-        'path_log': paths.get('path_log') or os.getenv("PATH_LOG"),
-        'path_root': paths.get('path_root') or os.getenv("PATH_ROOT"),
+        "path_process": paths.get("path_process") or os.getenv("PATH_PROCESS"),
+        "path_json": paths.get("path_json") or os.getenv("PATH_JSON"),
+        "path_log": paths.get("path_log") or os.getenv("PATH_LOG"),
+        "path_root": paths.get("path_root") or os.getenv("PATH_ROOT"),
     }
 
     # Validate that all required paths are configured
@@ -69,9 +71,7 @@ def get_task_execution_paths(override: Optional[Dict[str, str]] = None) -> Dict[
 
         # Validate that paths are absolute
         if not os.path.isabs(value):
-            raise ValueError(
-                f"{key} must be an absolute path, got: {value}"
-            )
+            raise ValueError(f"{key} must be an absolute path, got: {value}")
 
     # Note: We don't validate path existence/writability here because:
     # 1. Paths may not exist yet and will be created by tasks (os.makedirs)

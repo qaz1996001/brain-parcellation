@@ -27,6 +27,7 @@ class APIConfig:
     Attributes:
         upload_data_url: URL for uploading data (e.g., http://localhost:8000/upload)
     """
+
     upload_data_url: str
 
 
@@ -47,6 +48,7 @@ class PathConfig:
         path_root: Root directory for application data
         path_rename_dicom: Directory for renamed DICOM files
     """
+
     path_process: Path
     path_json: Path
     path_log: Path
@@ -65,6 +67,7 @@ class DatabaseConfig:
     Attributes:
         connection_string: Full database connection string with credentials
     """
+
     connection_string: str
 
 
@@ -86,6 +89,7 @@ class BackendConfig:
         paths: File system path configuration
         database: Database connection configuration
     """
+
     api: APIConfig
     paths: PathConfig
     database: DatabaseConfig

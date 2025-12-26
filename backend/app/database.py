@@ -5,8 +5,12 @@ from advanced_alchemy.extensions.fastapi import (
     SQLAlchemyAsyncConfig,
 )
 from code_ai import load_dotenv
+
 load_dotenv()
-AI_APP_CONNECTION_STRING = os.getenv("AI_APP_CONNECTION_STRING","postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom")
+AI_APP_CONNECTION_STRING = os.getenv(
+    "AI_APP_CONNECTION_STRING",
+    "postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom",
+)
 
 sqlalchemy_config = SQLAlchemyAsyncConfig(
     # connection_string="sqlite+aiosqlite:///test.sqlite",
@@ -15,7 +19,9 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     commit_mode="autocommit",
     create_all=True,
 )
-alchemy = AdvancedAlchemy(config=sqlalchemy_config,)
+alchemy = AdvancedAlchemy(
+    config=sqlalchemy_config,
+)
 
 
 def get_db_connection_string() -> str:
