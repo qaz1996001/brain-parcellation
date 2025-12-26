@@ -51,7 +51,6 @@ LOG_FILE_SIZE = 1000  # 单位是M,每个文件的切片大小，超过多少后
 LOG_FILE_BACKUP_COUNT = 10  # 对同一个日志文件，默认最多备份几个文件，超过就删除了。
 
 LOG_PATH = os.getenv("LOG_PATH")  # 优先从环境变量获取,启动代码之前可以 export LOG_PATH = '/你的日志目录/'
-os.makedirs(LOG_PATH, exist_ok=True)
 if not LOG_PATH:
     LOG_PATH = '/pythonlogs'  # 默认的日志文件夹,如果不写明磁盘名，则是项目代码所在磁盘的根目录下的/pythonlogs
     # LOG_PATH = Path(__file__).absolute().parent / Path("pythonlogs")   #这么配置就会自动在你项目的根目录下创建pythonlogs文件夹了并写入。
@@ -59,6 +58,7 @@ if not LOG_PATH:
         home_path = os.environ.get("HOME", '/')  # 这个是获取linux系统的当前用户的主目录，不需要亲自设置
         LOG_PATH = Path(home_path) / Path('python_logs')  # linux mac 权限很严格，非root权限不能在/pythonlogs写入，修改一下默认值。
 # print('LOG_PATH:',LOG_PATH)
+os.makedirs(LOG_PATH, exist_ok=True)
 
 LOG_FILE_HANDLER_TYPE = 6  # 1 2 3 4 5 6 7   # nb_log 的日志切割,全都追求多进程下切割正常.
 """

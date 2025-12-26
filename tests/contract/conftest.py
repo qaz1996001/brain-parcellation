@@ -41,12 +41,15 @@ def test_env_backend(clean_env) -> dict:
     """
     test_vars = {
         "UPLOAD_DATA_API_URL": "http://test-api.example.com/upload",
+        "UPLOAD_DATA_DICOM_SEG_URL": "http://test-orthanc.example.com:8042",
         "PATH_PROCESS": "/test/process",
         "PATH_JSON": "/test/json",
         "PATH_LOG": "/test/logs",
         "PATH_ROOT": "/test/root",
         "PATH_RENAME_DICOM": "/test/rename_dicom",
-        "AI_APP_CONNECTION_STRING": "postgresql+asyncpg://test:test@localhost:5432/test_db"
+        "PATH_RAW_DICOM": "/test/raw_dicom",
+        "PATH_RENAME_NIFTI": "/test/rename_nifti",
+        "AI_APP_CONNECTION_STRING": "postgresql+asyncpg://test:test@localhost:5432/test_db",
     }
     os.environ.update(test_vars)
     return test_vars
@@ -81,5 +84,13 @@ def empty_env(clean_env) -> None:
 
     All environment variables are cleared to test fail-safe mode.
     """
-    # Environment is already clean from clean_env fixture
-    pass
+    # Clear all config-related environment variables to test defaults
+    config_vars = [
+        "UPLOAD_DATA_API_URL", "UPLOAD_DATA_DICOM_SEG_URL",
+        "PATH_PROCESS", "PATH_JSON", "PATH_LOG", "PATH_ROOT",
+        "PATH_RENAME_DICOM", "PATH_RAW_DICOM", "PATH_RENAME_NIFTI",
+        "AI_APP_CONNECTION_STRING", "PATH_CODE", "PATH_SYNTHSEG",
+        "GPU_N", "TF_CPP_MIN_LOG_LEVEL", "TF_ENABLE_AUTO_MIXED_PRECISION",
+    ]
+    for var in config_vars:
+        os.environ.pop(var, None)
