@@ -235,11 +235,14 @@ class TestUrlGenerationEquivalence:
     def legacy_service(self, test_env_backend):
         """Create legacy service instance for testing (with mocked session)."""
         from backend.app.sync.service import DCOPEventDicomService
+        from backend.app.sync.deps import get_backend_config
         from unittest.mock import MagicMock
 
         # Create service instance bypassing __init__ to avoid session requirement
         service = DCOPEventDicomService.__new__(DCOPEventDicomService)
-        # Use object.__setattr__ to bypass property descriptor
+        # Use object.__setattr__ to bypass property descriptors
+        config = get_backend_config()
+        object.__setattr__(service, '_config', config)
         object.__setattr__(service, '_session_manager', MagicMock())
         return service
 

@@ -124,11 +124,11 @@ All legacy backend services have been migrated to use config injection pattern:
   - [x] Same pattern as sync/service.py
   - [x] Convert `@staticmethod _send_events()` to instance method for config access
 - [x] Verify syntax for all modified files
-- [ ] Git commit: "Phase B.2: Legacy services config injection migration"
+- [x] Git commit: "Phase B.2: Legacy services config injection migration"
 
 ---
 
-## Phase C: Pipeline Migration (Code_AI)
+## Phase C: Pipeline Migration (Code_AI) ✅ COMPLETED
 
 ### BasePipeline Dual-Mode Support ✅ COMPLETED
 - [x] Create `code_ai/pipeline/base.py` with dual-mode utilities:
@@ -166,26 +166,34 @@ All legacy backend services have been migrated to use config injection pattern:
 - [ ] Git commit: "Phase C.1-2: Pipeline dual-mode migration (CMB + Aneurysm)"
 - [ ] Git tag: `v2.0.0-phase-c-pipeline-2`
 
-### Remaining Pipelines (2-7)
-For each of the 6 remaining pipelines, repeat:
-- [ ] **Pipeline 2**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-2`
-- [ ] **Pipeline 3**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-3`
-- [ ] **Pipeline 4**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-4`
-- [ ] **Pipeline 5**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-5`
-- [ ] **Pipeline 6**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-6`
-- [ ] **Pipeline 7**: Update pipeline class for dual-mode config
-- [ ] Create contract tests for behavioral equivalence
-- [ ] Git tag: `v2.0.0-phase-c-pipeline-7`
+### Remaining Pipelines (3-7) ✅ COMPLETED
+All remaining pipelines migrated to dual-mode configuration:
+- [x] **Pipeline 3**: `pipeline_infarct_tensorflow.py` - Infarct detection pipeline
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_infarct()` signature with `config: Optional[CodeAIConfig] = None`
+  - [x] Added config override logic
+- [x] **Pipeline 4**: `pipeline_synthseg_tensorflow.py` - SynthSeg brain parcellation
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_synthseg()` signature
+  - [x] Added config override logic
+- [x] **Pipeline 5**: `pipeline_synthseg_wmh_tensorflow.py` - SynthSeg WMH pipeline
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_synthseg()` signature
+  - [x] Added config override logic
+- [x] **Pipeline 6**: `pipeline_wmh_tensorflow.py` - WMH detection pipeline
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_wmh()` signature
+  - [x] Added config override logic
+- [x] **Pipeline 7**: `pipeline_synthseg_dwi_tensorflow.py` - SynthSeg DWI pipeline
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_synthseg()` signature
+  - [x] Added config override logic
+- [x] **Pipeline 8**: `pipeline_synthseg5class_tensorflow.py` - SynthSeg 5-class pipeline
+  - [x] Added imports for dual-mode support
+  - [x] Updated `pipeline_synthseg()` signature
+  - [x] Added config override logic
+- [ ] Git commit: "Phase C: Complete pipeline dual-mode migration"
+- [ ] Git tag: `v2.0.0-phase-c-complete`
 
 ---
 

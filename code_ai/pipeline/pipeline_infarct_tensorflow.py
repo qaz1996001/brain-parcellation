@@ -6,9 +6,12 @@ Created on Tue Sep 22 13:18:23 2020
 @author: chuan
 """
 import warnings
+from typing import Optional
 
 from code_ai.pipeline import pipeline_parser, dicom_seg_multi_file, upload_dicom_seg, upload_json
 from code_ai.utils.inference import InferenceEnum
+from code_ai.config import CodeAIConfig
+from code_ai.pipeline.base import get_config, get_gpu_n
 
 warnings.filterwarnings("ignore")  # 忽略警告输出
 
@@ -99,19 +102,50 @@ def case_json(json_file_path, ID, volume, MeanADC, Report):
                   ensure_ascii=False)  # 讓json能中文顯示
 
 
-def pipeline_infarct(ID,
-                     ADC_file,
-                     DWI0_file,
-                     DWI1000_file,
-                     SynthSEG_file,
-                     path_output,
-                     path_code='/data/pipeline/chuan/code/',
-                     path_processModel='/data/pipeline/chuan/process/Deep_Infarct/',
-                     path_json='/data/pipeline/chuan/json/',
-                     path_log='/data/pipeline/chuan/log/',
-                     cuatom_model='/data/pipeline/chuan/code/model_weights/ResUnet-025-0.14466-0.29462-0.81407.h5',
-                     gpu_n=0
-                     ):
+def pipeline_infarct(
+    ID: str,
+    ADC_file: str,
+    DWI0_file: str,
+    DWI1000_file: str,
+    SynthSEG_file: str,
+    path_output: str,
+    path_code: str = '/data/pipeline/chuan/code/',
+    path_processModel: str = '/data/pipeline/chuan/process/Deep_Infarct/',
+    path_json: str = '/data/pipeline/chuan/json/',
+    path_log: str = '/data/pipeline/chuan/log/',
+    cuatom_model: str = '/data/pipeline/chuan/code/model_weights/ResUnet-025-0.14466-0.29462-0.81407.h5',
+    gpu_n: int = 0,
+    config: Optional[CodeAIConfig] = None
+) -> None:
+    """
+    Infarct detection pipeline.
+
+    Supports dual-mode configuration:
+    - Old pattern: pipeline_infarct(ID, files..., paths...) - uses explicit params
+    - New pattern: pipeline_infarct(ID, files..., config=config) - uses config
+
+    Args:
+        ID: Study identifier
+        ADC_file: Path to ADC input file
+        DWI0_file: Path to DWI0 input file
+        DWI1000_file: Path to DWI1000 input file
+        SynthSEG_file: Path to SynthSEG input file
+        path_output: Output directory
+        path_code: Code directory
+        path_processModel: Processing model directory
+        path_json: JSON output directory
+        path_log: Log directory
+        cuatom_model: Custom model weights path
+        gpu_n: GPU device number
+        config: Optional CodeAIConfig for pure function pattern
+    """
+    # Dual-mode: use config if provided, otherwise use explicit parameters
+    if config is not None:
+        path_log = str(config.paths.path_log)
+        path_json = str(config.paths.path_json)
+        path_code = str(config.paths.path_code)
+        gpu_n = config.model.gpu_n
+
     # 當使用gpu有錯時才確認
     logger = tf.get_logger()
     logger.setLevel(logging.ERROR)

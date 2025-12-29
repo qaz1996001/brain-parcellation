@@ -27,6 +27,8 @@ import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
 from code_ai import PYTHON3, load_dotenv
+from code_ai.config import CodeAIConfig
+from code_ai.pipeline.base import get_config, get_gpu_n
 from code_ai.pipeline import study_id_pattern, pipeline_parser, upload_dicom_seg
 from code_ai.pipeline.dicomseg import dicom_seg_multi_file
 load_dotenv()
@@ -39,14 +41,45 @@ def get_study_id(file_name:str) -> Optional[str]:
     return ""
 
 
-def pipeline_synthseg(ID :str,
-                      file_path_str :str,
-                      path_output :str,
-                      path_code = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/code/',
-                      path_processModel = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/process/Deep_CMB/',
-                      path_json = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/json/',
-                      path_log = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/log/',
-                      gpu_n = 0):
+def pipeline_synthseg(
+    ID: str,
+    file_path_str: str,
+    path_output: str,
+    path_code: str = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/code/',
+    path_processModel: str = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/process/Deep_CMB/',
+    path_json: str = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/json/',
+    path_log: str = '/mnt/d/wsl_ubuntu/pipeline/sean/sean/log/',
+    gpu_n: int = 0,
+    config: Optional[CodeAIConfig] = None
+) -> Optional[str]:
+    """
+    SynthSeg brain parcellation pipeline.
+
+    Supports dual-mode configuration:
+    - Old pattern: pipeline_synthseg(ID, file, output, ...) - uses explicit params
+    - New pattern: pipeline_synthseg(ID, file, output, config=config) - uses config
+
+    Args:
+        ID: Study identifier
+        file_path_str: Path to input file
+        path_output: Output directory
+        path_code: Code directory
+        path_processModel: Processing model directory
+        path_json: JSON output directory
+        path_log: Log directory
+        gpu_n: GPU device number
+        config: Optional CodeAIConfig for pure function pattern
+
+    Returns:
+        Optional path to output file
+    """
+    # Dual-mode: use config if provided, otherwise use explicit parameters
+    if config is not None:
+        path_log = str(config.paths.path_log)
+        path_json = str(config.paths.path_json)
+        path_code = str(config.paths.path_code)
+        gpu_n = config.model.gpu_n
+
     # 當使用gpu有錯時才確認
     logger = tf.get_logger()
     logger.setLevel(logging.ERROR)
