@@ -385,7 +385,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
                     "location": filter_cmd["type_name"],
                     "prob_max": filter_cmd["CMB_prob"],
                     "main_seg_slice": len(source_images) - result["main_seg_slice"],
-                    "IM": im,
+                    "im": im,
                     # 'main_seg_slice' : result['main_seg_slice'],
                     "mask_index": result["mask_index"],
                     "mask_name": "A{}".format(result["mask_index"]),
@@ -430,10 +430,8 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             *args,
             **filtered_kwargs,
         )
-        print('mask_instance',mask_instance)
         mask_series_dict.update({"instances": mask_instance})
         mask_series = self.MaskSeriesClass.model_validate(mask_series_dict)
-        print('mask_series',mask_series)
         return mask_series
 
     def get_mask_model(
@@ -454,7 +452,6 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
         )
         mask_model_dict.update({"series": [mask_series], "model_type": self.model_type})
         mask_model = self.MaskModelClass.model_validate(mask_model_dict)
-        print('mask_model',mask_model)
         return mask_model
 
     def build_mask(
@@ -498,7 +495,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
         mask_model_dict.update({"series": model_series_list})
         mask_dict.update({"model": [mask_model_dict]})
         self._mask_request = self.MaskClass.model_validate(mask_dict)
-        print('_mask_request',self._mask_request)
+
         return self
 
 
@@ -572,13 +569,11 @@ def main_review_cmd():
         )
         .build()
     )
-    print('cmb_platform_json.model_dump_json()',cmb_platform_json.model_dump_json())
     platform_json_path = output_series_folder.joinpath(
         path_nii.name.replace(".nii.gz", "_platform_json.json")
     )
     with open(platform_json_path, "w") as f:
         f.write(cmb_platform_json.model_dump_json())
-    print("Processing complete!")
     return None
 
 

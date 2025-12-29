@@ -9,7 +9,7 @@ from .base import AITeamRequest, StudyRequest, SortedRequest, StudyModelRequest
 
 class CMBMaskInstanceRequest(MaskInstanceRequest):
     sub_location: Optional[str] = Field(None, exclude=True)  # 標記為排除
-    IM          : Optional[int] = Field(None, exclude=False)
+    im          : Optional[int] = Field(None, exclude=False)
 
 
 class CMBMaskSeriesRequest(MaskSeriesRequest):
@@ -55,6 +55,7 @@ class CMBMaskSeries2Request(CMBMaskSeriesRequest):
 
 
 class CMBMaskModel2Request(BaseModel):
+
     model_config = ConfigDict(from_attributes=True)
     model_type: Optional[str] = Field(None)
     series: Optional[List[CMBMaskSeries2Request]] = Field(None)
