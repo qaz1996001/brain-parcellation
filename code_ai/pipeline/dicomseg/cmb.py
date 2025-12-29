@@ -373,6 +373,10 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             dicom_sop_instance_uid = (
                 source_images[int(result["main_seg_slice"])].get((0x008, 0x0018)).value
             )
+            # (0020,0013)	Instance Number	104
+            im = (
+                source_images[int(result["main_seg_slice"])].get((0x0020, 0x0013)).value
+            )
 
             mask_instance_dict.update(
                 {
@@ -381,6 +385,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
                     "location": filter_cmd["type_name"],
                     "prob_max": filter_cmd["CMB_prob"],
                     "main_seg_slice": len(source_images) - result["main_seg_slice"],
+                    "IM": im,
                     # 'main_seg_slice' : result['main_seg_slice'],
                     "mask_index": result["mask_index"],
                     "mask_name": "A{}".format(result["mask_index"]),
@@ -425,9 +430,11 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             *args,
             **filtered_kwargs,
         )
+        print('mask_instance',mask_instance)
         mask_series_dict.update({"instances": mask_instance})
-
-        return self.MaskSeriesClass.model_validate(mask_series_dict)
+        mask_series = self.MaskSeriesClass.model_validate(mask_series_dict)
+        print('mask_series',mask_series)
+        return mask_series
 
     def get_mask_model(
         self,
@@ -446,7 +453,9 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
             pred_json=pred_json,
         )
         mask_model_dict.update({"series": [mask_series], "model_type": self.model_type})
-        return self.MaskModelClass.model_validate(mask_model_dict)
+        mask_model = self.MaskModelClass.model_validate(mask_model_dict)
+        print('mask_model',mask_model)
+        return mask_model
 
     def build_mask(
         self, dicom_seg_result_list, pred_json_list, *args, **kwargs
@@ -489,6 +498,7 @@ class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
         mask_model_dict.update({"series": model_series_list})
         mask_dict.update({"model": [mask_model_dict]})
         self._mask_request = self.MaskClass.model_validate(mask_dict)
+        print('_mask_request',self._mask_request)
         return self
 
 
@@ -562,6 +572,7 @@ def main_review_cmd():
         )
         .build()
     )
+    print('cmb_platform_json.model_dump_json()',cmb_platform_json.model_dump_json())
     platform_json_path = output_series_folder.joinpath(
         path_nii.name.replace(".nii.gz", "_platform_json.json")
     )
