@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 
 def utc_now() -> datetime:
     """返回當前 UTC 時間（時區感知）。"""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return utc_now().replace(tzinfo=None)
 
 
 class DCOPConfModel(base.DefaultBase):
@@ -471,8 +471,8 @@ class DCOPEventModel(base.DefaultBase):
             code_name=status,
             ope_no=ope_no,
             ope_name=ope_name,
-            claim_time=datetime.now(timezone.utc),
-            rec_time=datetime.now(timezone.utc),
+            claim_time=utc_now(),
+            rec_time=utc_now(),
         )
 
         return obj
@@ -605,8 +605,8 @@ class DCOPEventModel(base.DefaultBase):
             study_id=study_id,
             result_data=result_data,      # 儲存外部工具的結果
             params_data=params_data,      # 儲存傳入的參數
-            claim_time=datetime.now(timezone.utc),
-            rec_time=datetime.now(timezone.utc),
+            claim_time=utc_now(),
+            rec_time=utc_now(),
         )
         
         return obj
