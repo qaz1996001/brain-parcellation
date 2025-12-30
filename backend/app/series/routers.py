@@ -82,7 +82,7 @@ router = APIRouter()
     summary="健康檢查",
     description="檢查 DICOM 序列分析服務是否正常運行",
     response_description="返回服務狀態訊息",
-    tags=["Series"],
+    
 )
 async def get_health_check() -> Response:
     """
@@ -122,7 +122,7 @@ async def get_health_check() -> Response:
     description="返回系統支援的所有 DICOM 序列類型名稱列表",
     response_description="DICOM 序列類型的字串陣列",
     response_model=List[str],
-    tags=["Series"],
+    
 )
 async def get_available_series_types() -> List[str]:
     """
@@ -199,7 +199,7 @@ async def get_available_series_types() -> List[str]:
     description="根據提供的檔案路徑列表，分析 DICOM 序列類型和影像方向",
     response_description="包含分析結果的 DICOM 序列列表",
     response_model=List[SeriesResponse],
-    tags=["Series"],
+    
 )
 async def analyze_dicom_files_by_path(
     file_path_list: Optional[List[FilePath]],
@@ -339,7 +339,6 @@ async def analyze_dicom_files_by_path(
     description="透過 HTTP 檔案上傳的方式，分析 DICOM 序列類型和影像方向",
     response_description="包含分析結果的 DICOM 序列列表",
     response_model=List[SeriesResponse],
-    tags=["Series"],
 )
 async def analyze_dicom_files_by_upload(
     dicom_file_list: Optional[List[UploadFile]],

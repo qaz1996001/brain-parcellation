@@ -69,7 +69,6 @@ router = APIRouter()
     status_code=200,
     summary="研究事件 - 複雜多條件搜索",
     response_model=service.OffsetPagination[DCOPEventRequest],
-    tags=["Study"],
     description="查詢研究事件，支援多種過濾、搜索和排序選項。",
 )
 async def get_events_complex(

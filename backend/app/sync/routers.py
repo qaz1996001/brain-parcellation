@@ -114,7 +114,6 @@ router = APIRouter()
     summary="健康檢查：確認 DICOM sync service 正常運作",
     description="簡單的健康檢查端點，用於監控和負載平衡器探測",
     response_description="服務狀態消息",
-    tags=["Health Check"],
 )
 async def get_study_uuid() -> Response:
     """
@@ -145,7 +144,6 @@ async def get_study_uuid() -> Response:
     description="接收 Study UID，建立同步事件，排程後台任務",
     response_description="已建立的事件列表",
     response_model=List[DCOPEventRequest],
-    tags=["Study Management"],
 )
 async def post_study_uuid(
     request: PostStudyRequest,
@@ -258,7 +256,6 @@ async def post_study_uuid(
     description="查詢 DICOM 同步事件，支援多條件搜尋、排序和分頁",
     response_description="分頁的事件列表",
     response_model=service.OffsetPagination[DCOPEventRequest],
-    tags=["Event Queries"],
 )
 async def get_ope_no(
     dcop_event_service: Annotated[
@@ -349,7 +346,6 @@ async def get_ope_no(
     summary="批次寫入事件紀錄",
     description="接收事件列表，寫入資料庫，排程後續處理",
     response_description="已排程任務的確認消息",
-    tags=["Event Management"],
 )
 async def post_ope_no(
     data: List[DCOPEventRequest],
@@ -424,7 +420,6 @@ async def post_ope_no(
     summary="檢查 Study/Series 傳輸是否完成",
     description="檢查條件並觸發下一階段（進入轉檔）",
     response_description="已排程檢查任務的確認消息",
-    tags=["State Transitions"],
 )
 async def post_check_study_series_transfer_complete(
     background_tasks: BackgroundTasks,
@@ -502,7 +497,6 @@ async def post_check_study_series_transfer_complete(
     summary="接收 NIFTI_TOOL 回報",
     description="接收外部 NIFTI 轉檔工具的執行結果",
     response_description="已排程更新任務的確認消息",
-    tags=["Tool Integration"],
 )
 async def post_study_series_nifti_tool(
     data_list: List[DCOPEventNIFTITOOLRequest],
@@ -575,7 +569,6 @@ async def post_study_series_nifti_tool(
     summary="檢查 Study/Series NIFTI 轉檔是否完成",
     description="檢查條件並觸發下一階段（進入推論）",
     response_description="已排程檢查任務的確認消息",
-    tags=["State Transitions"],
 )
 async def post_check_study_series_conversion_complete(
     dcop_event_service: Annotated[
@@ -759,7 +752,6 @@ async def get_events_complex(
     summary="列出推論任務快取",
     description="查詢 Redis 中的推論任務快取鍵",
     response_description="活躍的推論任務列表",
-    tags=["Cache Management"],
 )
 async def get_inference_cache():
     """
@@ -824,7 +816,6 @@ async def get_inference_cache():
     summary="清除推論任務快取",
     description="根據 study_id 或 study_uid 刪除 Redis 快取",
     response_description="刪除結果和統計",
-    tags=["Cache Management"],
 )
 async def delete_events_complex(
     study_id: Optional[str] = Query(None),
@@ -943,7 +934,6 @@ async def delete_events_complex(
     summary="查詢 Series 操作狀態（按操作編號）",
     description="查詢單一 Study 下所有 Series 的特定操作狀態",
     response_description="分頁的 Series 操作狀態列表",
-    tags=["Status Queries"],
 )
 async def get_study_series_ope_no_status(
     dcop_event_service: Annotated[
@@ -999,7 +989,6 @@ async def get_study_series_ope_no_status(
     summary="查詢 Study 操作狀態（按操作編號）",
     description="查詢 Study 維度的特定操作狀態及所有 Series 狀態",
     response_description="分頁的 Study 操作狀態",
-    tags=["Status Queries"],
 )
 async def get_stydy_ope_no_status(
     dcop_event_service: Annotated[
@@ -1056,7 +1045,6 @@ async def get_stydy_ope_no_status(
     summary="查詢已完成轉檔的 Study 列表",
     description="查詢轉檔完成的 Study 列表，方便前端顯示進度",
     response_description="已完成轉檔的 Study 列表",
-    tags=["Status Queries"],
 )
 async def get_check_study_series_conversion_complete(
     dcop_event_service: Annotated[
