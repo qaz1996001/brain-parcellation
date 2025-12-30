@@ -1674,6 +1674,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             for study_events in study_events_list:
                 done_count = 0  # Reset counter for each study
                 undone = 0      # Reset counter for each study
+                series_count = 0  # Count only series-level records
                 sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                           'study_uid': study_events.study_uid}
@@ -1681,6 +1682,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 results = execute.all()
                 self.logger.info(f"[DEBUG] identify_completed_studies: study_uid={study_events.study_uid}, results count={len(results)}")
                 for result in results:
+                    # Skip study-level records (no series_uid)
+                    if not result.series_uid:
+                        self.logger.info(f"[DEBUG] skipping study-level record: ope_no={result.ope_no}")
+                        continue
+                    series_count += 1
                     self.logger.info(f"[DEBUG] series {result.series_uid}: ope_no={result.ope_no}")
                     if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
                         done_count += 1
@@ -1688,8 +1694,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         done_count += 1
                     else:
                         undone += 1
-                self.logger.info(f"[DEBUG] identify_completed_studies: study_uid={study_events.study_uid}, done_count={done_count}, undone={undone}, len(results)={len(results)}, will_complete={done_count == len(results) and len(results) > 0}")
-                if done_count == len(results) and len(results) > 0:
+                self.logger.info(f"[DEBUG] identify_completed_studies: study_uid={study_events.study_uid}, done_count={done_count}, undone={undone}, series_count={series_count}, will_complete={done_count == series_count and series_count > 0}")
+                if done_count == series_count and series_count > 0:
                     completed_study_events.append(study_events)  # Append study event, not result
         return completed_study_events
 
