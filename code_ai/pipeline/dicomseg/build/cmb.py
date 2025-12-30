@@ -28,13 +28,13 @@ from pydicom.dicomdir import DicomDir
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import utils
 from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
-from code_ai.pipeline.dicomseg.schema.base import StudyRequest, StudySeriesRequest
+from code_ai.pipeline.dicomseg.schema.base import StudySeriesRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest, CMBStudyModelRequest, CMBStudyRequest
 from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeam2Request,CMBMask2Request,CMBMaskModel2Request,CMBMaskSeries2Request
 
 
-from code_ai.pipeline.dicomseg.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
+from code_ai.pipeline.dicomseg.build.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
 from code_ai import load_dotenv
 
 load_dotenv()
