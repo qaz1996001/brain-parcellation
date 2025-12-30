@@ -1488,9 +1488,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             rename_dicom_path,
             rename_nifti_path
         )
+        self.logger.info(f"[DEBUG] create_study_complete_events returned {len(study_events)} events: {[e.study_uid for e in study_events]}")
         # Process events from the provided data list
         completed_study_events = await self.identify_completed_studies(study_events)
         # Process completed studies and queue them for inference
+        self.logger.info(f"[DEBUG] identify_completed_studies returned {len(completed_study_events)} completed: {[e.study_uid for e in completed_study_events]}")
         if completed_study_events:
             study_events_filter = []
             for completed_study in completed_study_events:
@@ -1585,7 +1587,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             )
             study_events.append(dcop_event)
 
-        self.logger.info(f'result_set {study_data_list}')
+        self.logger.info(f'result_set study_events {study_events}')
         return study_events
 
     async def _queue_inference_tasks(self, study_events, upload_data_api_url, rename_dicom_path,
@@ -1677,13 +1679,16 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                           'study_uid': study_events.study_uid}
                 execute = await session.execute(sql, params)
                 results = execute.all()
+                self.logger.info(f"[DEBUG] identify_completed_studies: study_uid={study_events.study_uid}, results count={len(results)}")
                 for result in results:
+                    self.logger.info(f"[DEBUG] series {result.series_uid}: ope_no={result.ope_no}")
                     if DCOPStatus.SERIES_CONVERSION_COMPLETE.value in result.ope_no:
                         done_count += 1
                     elif DCOPStatus.SERIES_CONVERSION_SKIP.value in result.ope_no:
                         done_count += 1
                     else:
                         undone += 1
+                self.logger.info(f"[DEBUG] identify_completed_studies: study_uid={study_events.study_uid}, done_count={done_count}, undone={undone}, len(results)={len(results)}, will_complete={done_count == len(results) and len(results) > 0}")
                 if done_count == len(results) and len(results) > 0:
                     completed_study_events.append(study_events)  # Append study event, not result
         return completed_study_events
