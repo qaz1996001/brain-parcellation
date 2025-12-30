@@ -210,7 +210,3 @@ if __name__ == '__main__':
     # 直接當作function的輸入
     file_path = pipeline_synthseg(ID, file_path_str, path_output, path_code, path_processModel,
                                   path_json, path_log, gpu_n)
-    if file_path is not None:
-        stdout, stderr = dicom_seg_multi_file(ID, InputsDicomDir,
-                                              file_path, path_output)
-        upload_dicom_seg(path_output, file_path, )
