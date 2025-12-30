@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 
 def utc_now() -> datetime:
     """返回當前 UTC 時間（時區感知）。"""
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class DCOPConfModel(base.DefaultBase):
