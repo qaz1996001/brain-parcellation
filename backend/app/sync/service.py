@@ -57,6 +57,8 @@ from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest, St
 from .urls import SYNC_PROT_OPE_NO, SYNC_PROT_STUDY_NIFTI_TOOL, SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID, \
     SYNC_PROT_STUDY_TRANSFER_COMPLETE
 
+
+
 def setup_dcop_event_logger() -> logging.Logger:
     """
     為 DCOPEventDicomService 設置日誌記錄器。
@@ -1667,9 +1669,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         completed_study_events = []
         # Query to get all series for this study
         async with self.session_manager.get_session() as session:
-            done_count = 0
-            undone = 0
             for study_events in study_events_list:
+                done_count = 0  # Reset counter for each study
+                undone = 0      # Reset counter for each study
                 sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                           'study_uid': study_events.study_uid}
@@ -1682,8 +1684,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         done_count += 1
                     else:
                         undone += 1
-                if done_count == len(results):
-                    completed_study_events.append(result)
+                if done_count == len(results) and len(results) > 0:
+                    completed_study_events.append(study_events)  # Append study event, not result
         return completed_study_events
 
 
