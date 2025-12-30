@@ -1,365 +1,130 @@
-# -*- coding: utf-8 -*-
-"""
-DICOM-SEG Generator
-
-This script creates multiple DICOM-SEG images from available mask data.
-Due to a bug in Cornerstone (a JavaScript library for medical imaging)
-that prevents reading mask IDs, each mask must be stored in a separate DICOM-SEG file.
-The example cases provided include CMB (Cerebral Microbleeds).
-
-This module handles:
-1. Loading DICOM series and mask data (in NIfTI format)
-2. Converting mask data to DICOM-SEG format
-3. Creating required JSON metadata for each mask
-4. Saving DICOM-SEG files and associated metadata
-
-@author: sean
-"""
 import json
-import os
 import pathlib
-from typing import Dict, List, Any, Union
-from typing_extensions import Self
-
+from typing import Dict, Any, Union, List
 import numpy as np
+import pandas as pd
 import pydicom
 from pydicom import FileDataset
 from pydicom.dicomdir import DicomDir
+from typing_extensions import Self
+
 from code_ai.pipeline import pipeline_parser
 from code_ai.pipeline.dicomseg import utils
-from code_ai.pipeline.dicomseg.schema.base import SeriesTypeEnum, ModelTypeEnum
-from code_ai.pipeline.dicomseg.schema.base import StudySeriesRequest
-from code_ai.pipeline.dicomseg.schema.cmb import CMBMaskRequest, CMBMaskSeriesRequest, CMBMaskInstanceRequest
-from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeamRequest, CMBStudyModelRequest, CMBStudyRequest
-from code_ai.pipeline.dicomseg.schema.cmb import CMBAITeam2Request,CMBMask2Request,CMBMaskModel2Request,CMBMaskSeries2Request
+from code_ai.pipeline.dicomseg.schema import CmbDetectionItem, CmbDetectionResponse
+from code_ai.pipeline.dicomseg.build.base import PredictionBaseBuilder
 
 
-from code_ai.pipeline.dicomseg.build.base import PlatformJSONBuilder, ReviewBasePlatformJSONBuilder
-from code_ai import load_dotenv
+class CmbDetectionBuilder(PredictionBaseBuilder[CmbDetectionItem, CmbDetectionResponse]):
+    """
+    CMB 檢測結果 Builder
+    """
 
-load_dotenv()
+    model_class = CmbDetectionResponse
 
-
-
-class CMBPlatformJSONBuilder(PlatformJSONBuilder[CMBAITeamRequest]):
-    model_class = CMBAITeamRequest
-    model_type  = ModelTypeEnum.CMB.value
-    series_type = SeriesTypeEnum.SWAN.value
-
-    def build_mask_instance(self, source_images: List[Union[FileDataset, DicomDir]],
-                            dcm_seg: Union[FileDataset, DicomDir], *args, **kwargs) -> Self:
-        main_seg_slice = kwargs['main_seg_slice']
-        mask_instance_dict = dict()
-        # Extract UIDs from the DICOM-SEG and source images
-        seg_sop_instance_uid = dcm_seg.get((0x008, 0x0018)).value
-        seg_series_instance_uid = dcm_seg.get((0x020, 0x000E)).value
-        dicom_sop_instance_uid = source_images[main_seg_slice].get((0x008, 0x0018)).value
-        # Extract mask name from DICOM-SEG Series Description
-        # e.g. (0008,103E) Series Description: synthseg_SWAN_original_CMB_from_T1BRAVO_AXI_original_CMB
-
-        # Get additional mask parameters from kwargs or use defaults
-        mask_index     = kwargs.get('mask_index', 1)
-        main_seg_slice = kwargs.get('main_seg_slice', "")
-        diameter     = kwargs.get('diameter', '0.0')
-        _type         = kwargs.get('type', '')
-        location     = kwargs.get('location', 'M')
-        prob_max     = kwargs.get('prob_max', '1.0')
-
-        # Create mask instance dictionary with all required metadata
-        mask_instance_dict.update({
-            'mask_index': mask_index,
-            'mask_name': "A{}".format(mask_index),
-            'diameter': diameter,
-            'type': _type,
-            'location': location,
-            'prob_max': prob_max,
-            'checked': "1",
-            'is_ai': "1",
-            'seg_sop_instance_uid': seg_sop_instance_uid,
-            'seg_series_instance_uid': seg_series_instance_uid,
-            'dicom_sop_instance_uid': dicom_sop_instance_uid,
-            'main_seg_slice': main_seg_slice,
-            'is_main_seg': "1"
-        })
-        return CMBMaskInstanceRequest.model_validate(mask_instance_dict)
-
-    # def build_mask_series(self, source_images: List[Union[FileDataset, DicomDir]],
-    #                       dcm_seg: Union[FileDataset, DicomDir], *args,
-    #                       **kwargs) -> Dict[str,Any]:
-    def build_mask_series(self,
-                          source_images: List[Union[FileDataset, DicomDir]],
-                          reslut_list: List[Dict[str, Any]],
-                          pred_json_list: List[Dict[str, Any]],
-                          # dcm_seg: Union[FileDataset, DicomDir],
-                          *args, **kwargs) -> Union[Dict[str,Any],Any]:
-
-        """
-            one cmb lesion is one mask series
-
-        """
-        series_instance_uid = source_images[0].get((0x0020, 0x000E)).value
-        mask_series_dict = {
-            'series_instance_uid': series_instance_uid,
-            'series_type': self.series_type,
-            'model_type' : self.model_type
-        }
-        mask_instance_list = []
-        # diameter -> pred_diameter = kwargs.get('diameter', '0.0')
-        # type     -> class_name
-        # location -> type_name
-        # sub_location = kwargs.get('sub_location', '2')
-        # prob_max -> CMB_prob
-        for index, reslut in enumerate(reslut_list):
-            filter_cmd_data = list(filter(lambda x: x['label#'] == reslut['mask_index'], pred_json_list))
-            if filter_cmd_data:
-                pass
-                filter_cmd: Dict[str, Any] = filter_cmd_data[0]
-            else:
-                continue
-            dcm_seg_path = reslut['dcm_seg_path']
-            with open(dcm_seg_path, 'rb') as f:
-                dcm_seg = pydicom.read_file(f)
-            kwargs.update({'diameter': filter_cmd['pred_diameter'],
-                           'type': filter_cmd['class_name'],
-                           'location': filter_cmd['type_name'],
-                           'prob_max': filter_cmd['CMB_prob'],
-                           'main_seg_slice' : reslut['main_seg_slice'],
-                           'mask_index' : reslut['mask_index']
-                           })
-            # Create a mask instance for this series
-            mask_instance_list.append(self.build_mask_instance(source_images,
-                                                               dcm_seg, *args, **kwargs))
-
-        # Add the instances to the series dictionary
-        mask_series_dict.update({'instances': mask_instance_list})
-        return CMBMaskSeriesRequest.model_validate(mask_series_dict)
-
-    def set_mask(self, source_images: List[Union[FileDataset, DicomDir]],
-                 result_list: List[Dict[str, Any]],
-                 pred_json_list: List[Dict[str, Any]], group_id: int) -> Self:
-
-        study_instance_uid = source_images[0].get((0x0020, 0x000D)).value
-        mask_dict = {
-            'study_instance_uid': study_instance_uid,
-            'group_id': group_id
-        }
-        mask_series = self.build_mask_series(source_images=source_images,
-                                             reslut_list=result_list,
-                                             pred_json_list=pred_json_list)
-        mask_dict.update({'series':[mask_series]})
-        self._mask_request = CMBMaskRequest.model_validate(mask_dict)
-        return self
-
-    def set_study(self, source_images: List[Union[FileDataset, DicomDir]],
-                  result_list: List[Dict[str, Any]],
-                  pred_json_list: List[Dict[str, Any]], group_id: int) -> Self:
-
-        study_dict   = self.build_study_basic_info(source_images=source_images,
-                                                   group_id=group_id)
-        study_series = self.build_study_series(source_images=source_images)
-        study_model  = self.build_study_model(pred_json_list=pred_json_list)
-        study_dict.update({'series':study_series,
-                           'model':study_model})
-        self._study_request = CMBStudyRequest.model_validate(study_dict)
-
-        return self
-
-
-
-    def build_study_series(self, source_images: List[Union[FileDataset, DicomDir]]
-                           , *args, **kwargs) -> Union[Dict[str,Any],Any]:
-        series_list = []
-        series_instance_uid_dict = {}
-        for index, dicom_ds in enumerate(source_images):
-            series_instance_uid = dicom_ds.get((0x0020, 0x000E)).value
-            if series_instance_uid_dict.get(series_instance_uid) is None:
-
-                # 取得影像解析度
-                resolution_x = dicom_ds.get((0x0028, 0x0010)).value
-                resolution_y = dicom_ds.get((0x0028, 0x0011)).value
-
-                series_instance_uid_dict.update({series_instance_uid: {
-                    'series_type': self.series_type,
-                    'resolution_x': resolution_x,
-                    'resolution_y': resolution_y
-                }})
-            else:
-                continue
-
-        for series_instance_uid, series_info in series_instance_uid_dict.items():
-            instance_dict = dict()
-
-            # Update instance dictionary
-            instance_dict.update(dict(
-                series_type=series_info['series_type'],
-                series_instance_uid=series_instance_uid,
-                resolution_x=series_info['resolution_x'],
-                resolution_y=series_info['resolution_y']
-            ))
-            series_list.append(StudySeriesRequest.model_validate(instance_dict))
-
-        # Validate and return the sorted request
-        return series_list
-
-    def build_study_model(self, pred_json_list: List[Dict[str, Any]]
-                          , *args, **kwargs) -> Union[Dict[str,Any],Any]:
-        study_model = dict(lession     = len(pred_json_list),
-                           series_type = self.series_type,
-                           model_type  = self.model_type,
-                           status = "1",
-                           report = "",)
-        return [CMBStudyModelRequest.model_validate(study_model)]
-
-
-
-class ReviewCMBPlatformJSONBuilder(ReviewBasePlatformJSONBuilder):
-    model_type  = ModelTypeEnum.CMB.value
-    MaskInstanceClass = CMBMaskInstanceRequest
-
-    def get_mask_instance(self, source_images: List[Union[FileDataset, DicomDir]],
-                          series_type: SeriesTypeEnum,
-                          dicom_seg_result:Dict[str,Any],
-                          pred_json :Dict[str,Any],
-                          *args, **kwargs) -> List["MaskInstanceClass"]:
-        result_data_list    = dicom_seg_result['data']
-        pred_json_data_list = pred_json['data']
-        mask_instance_list = []
-        for index, result in enumerate(result_data_list):
-            mask_instance_dict = dict()
-            filter_cmd_data = list(filter(lambda x: str(x['label#']) == str(result['mask_index']), pred_json_data_list))
-            if filter_cmd_data :
-                filter_cmd = filter_cmd_data[0]
-            else:
-                continue
-            dcm_seg_path = result['dcm_seg_path']
-            with open(dcm_seg_path, 'rb') as f:
-                dcm_seg = pydicom.read_file(f)
-            # Extract UIDs from the DICOM-SEG and source images
-            seg_sop_instance_uid = dcm_seg.get((0x008, 0x0018)).value
-            seg_series_instance_uid = dcm_seg.get((0x020, 0x000E)).value
-            dicom_sop_instance_uid = source_images[int(result['main_seg_slice'])].get((0x008, 0x0018)).value
-
-            mask_instance_dict.update({'diameter'       : filter_cmd['pred_diameter'],
-                                       'type'           : filter_cmd['class_name'],
-                                       'location'       : filter_cmd['type_name'],
-                                       'prob_max'       : filter_cmd['CMB_prob'],
-                                       'main_seg_slice' : result['main_seg_slice'],
-                                       'mask_index'     : result['mask_index'],
-                                       'mask_name': "A{}".format(result['mask_index']),
-                                       'seg_sop_instance_uid': seg_sop_instance_uid,
-                                       'seg_series_instance_uid': seg_series_instance_uid,
-                                       'dicom_sop_instance_uid': dicom_sop_instance_uid,
-                                       'is_main_seg': "1",
-                                       'checked': "1",
-                                       'is_ai': "1",
-                                       })
-            mask_instance_list.append(self.MaskInstanceClass.model_validate(mask_instance_dict))
-        return mask_instance_list
-
-
-    def get_study_model(self, series_type: SeriesTypeEnum, pred_data: Dict[str, Any],
-                        *args, **kwargs) -> "StudyModelClass":
-        pred_json_list = pred_data['data']
-        study_model = dict(lession=len(pred_json_list),
-                           series_type=series_type.value,
-                           model_type=self.model_type,
-                           status="1",
-                           report="", )
-        return self.StudyModelClass.model_validate(study_model)
-
-
-
-
-
-class NewReviewCMBPlatformJSONBuilder(ReviewCMBPlatformJSONBuilder):
-    # CMBMask2Request,CMBMaskModel2Request,CMBMaskSeries2Request
-    AITeamClass     = CMBAITeam2Request
-    MaskClass       = CMBMask2Request
-    MaskSeriesClass = CMBMaskSeries2Request
-    MaskModelClass  = CMBMaskModel2Request
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-    def get_mask_series(self,source_images:List[Union[FileDataset, DicomDir]],
-                             series_type: SeriesTypeEnum,
-                             dicom_seg_result,
-                             pred_json,
-                            *args, **kwargs) -> "MaskSeriesClass":
-        """
-            dicom_seg_result : {"series_type": {}, "data":{} }
-            dicom_seg_result : {"series_type": {}, "data":{} }
-        """
-        series_instance_uid = source_images[0].get((0x0020, 0x000E)).value
-        mask_series_dict = {
-            'series_instance_uid': series_instance_uid,
-            'series_type': series_type,
-        }
-        mask_instance = self.get_mask_instance(source_images = source_images,
-                                               series_type = series_type,
-                                               dicom_seg_result = dicom_seg_result,
-                                               pred_json = pred_json,
-                                               *args, **kwargs)
-        mask_series_dict.update({'instances': mask_instance})
-
-
-        return self.MaskSeriesClass.model_validate(mask_series_dict)
-
-
-    def get_mask_model(self, source_images: List[Union[FileDataset, DicomDir]], series_type: SeriesTypeEnum,
-                          dicom_seg_result: Dict[str, Any], pred_json: Dict[str, Any], *args, **kwargs) -> MaskModelClass:
-        mask_model_dict = {}
-        mask_series = self.get_mask_series(source_images=source_images,
-                                           series_type=series_type,
-                                           dicom_seg_result=dicom_seg_result,
-                                           pred_json=pred_json)
-        mask_model_dict.update({"series":[mask_series],
-                                "model_type":self.model_type
-                                })
-        return self.MaskModelClass.model_validate(mask_model_dict)
-
-
-    def build_mask(self,dicom_seg_result_list,pred_json_list,*args, **kwargs) -> Self:
-        mask_dict = {}
-        if all((self._series_dict is not None,self.group_id is not None)):
-            for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
-                if index == 0:
-                    study_instance_uid = series_source_images[0].get((0x0020, 0x000D)).value
-                    mask_dict.update( {
-                        'study_instance_uid': study_instance_uid,
-                        'group_id': self.group_id
-                    })
-                    break
+    @staticmethod
+    def use_create_dicom_seg_file(path_nii: pathlib.Path,
+                                  series_name: str,
+                                  output_folder: pathlib.Path,
+                                  image: Any,
+                                  first_dcm: FileDataset | DicomDir,
+                                  source_images: List[FileDataset | DicomDir], ):
+        # Load prediction data from NIfTI file
+        if series_name == "SWAN":
+            new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii)
+            dicom_seg_series_name = 'Pred_CMB'
         else:
-            raise ValueError('self._series_dict or self.group_id is None')
-        model_series_list = []
-        mask_model_dict = {}
-        for index, (series_name, series_source_images) in enumerate(self._series_dict.items()):
+            return []
 
-            mask_model_series:CMBMaskModel2Request = self.get_mask_model(source_images    = series_source_images,
-                                                                         dicom_seg_result = dicom_seg_result_list[index],
-                                                                         pred_json        = pred_json_list[index],
-                                                                         series_type      = series_name,
-                                                                         *args, **kwargs)
-            model_series_list.extend(mask_model_series.series)
-            if index == 0:
-                mask_model_dict.update({"model_type":mask_model_series.model_type})
+        pred_data_unique = np.unique(new_nifti_array)
+        if len(pred_data_unique) < 1:
+            return None
+        else:
+            pred_data_unique = pred_data_unique[1:]  # Exclude background value (0)
+        result_list = utils.create_dicom_seg_file(pred_data_unique,
+                                                  new_nifti_array,
+                                                  dicom_seg_series_name,
+                                                  output_folder,
+                                                  image,
+                                                  first_dcm,
+                                                  source_images)
+        return result_list
 
+    @staticmethod
+    def merge_pred_json_dicom_seg_result_list(pred_json_list:List[Dict[str, Any]],dicom_seg_result_list:List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        merge_pred_json = [
+            {
+                'series_name': pred['series_name'],
+                'data': [
+                    {**pred_item, **seg_item}
+                    for pred_item, seg_item in zip(pred['data'], seg['data'])
+                ]
+            }
+            for pred, seg in zip(pred_json_list, dicom_seg_result_list)
+        ]
+        return merge_pred_json
 
-        mask_model_dict.update({'series': model_series_list})
-        mask_dict.update({'model': [mask_model_dict]})
-        self._mask_request = self.MaskClass.model_validate(mask_dict)
+    def set_patient_info(self, source_images: List[Union[FileDataset, DicomDir]]) -> Self:
+        """從 DICOM 提取患者基本資訊"""
+        if not source_images:
+            raise ValueError("source_images cannot be empty")
+
+        dicom_ds = source_images[0]
+
+        # 提取患者和檢查資訊
+        patient_id = dicom_ds.get((0x0010, 0x0020)).value
+        study_instance_uid = dicom_ds.get((0x0020, 0x000D)).value
+        self._prediction_dict.update({
+            'patient_id': patient_id,
+            'input_study_instance_uid': [study_instance_uid],
+        })
+        input_series_instance_uid_list = [dicom_ds.get((0x0020, 0x000E)).value for dicom_ds in source_images]
+        self._prediction_dict.update({
+            'patient_id': patient_id,
+            'input_series_instance_uid': input_series_instance_uid_list,
+        })
         return self
 
 
-def main_review_cmd():
-    """
-    Main function to process command line arguments and execute the pipeline.
 
-    This function:
-    """
-    # Parse command line arguments
+    def build_detection(self, source_image: Union[FileDataset, DicomDir], prediction_result: Dict[str, Any], *args,
+                        **kwargs) -> CmbDetectionItem:
+        # 從 DICOM 提取必要資訊
+        series_instance_uid = source_image.get((0x0020, 0x000E)).value
+        sop_instance_uid = source_image.get((0x0008, 0x0018)).value
+        # pred_result {'label#': 1, 'class_name': 'CMB', 'review_class_name': None,
+        # 'type': 'C103', 'type_name': 'left basal ganglion', 'LPS_coordinates': None,
+        # 'pred_diameter': 2.1973499805, 'CAD_method': None,
+        # 'complete': None, 'Doctor': None, 'c-time': '2025/12/25 10:12', 'Reviewer': None, 'r-time': None, 'CMB_prob': 0.846863687}
+        # 構建 detection 字典
+        detection_dict = {
+            "annotated_series_instance_uid":self._prediction_dict.get('input_series_instance_uid')[0],
+            'series_instance_uid': series_instance_uid,
+            'sop_instance_uid': sop_instance_uid,
+            'label': f"A{prediction_result.get('mask_index', 'cmb')}",
+            'type': prediction_result['class_name'],
+            'location': prediction_result['type_name'],
+            'diameter': prediction_result['pred_diameter'],
+            'main_seg_slice': prediction_result['main_seg_slice'],
+            'probability': prediction_result['CMB_prob'],
+            'mask_index': prediction_result['label#'],
+            'sub_location': prediction_result.get('sub_location', ""),
+        }
+        cmb_detection_item = CmbDetectionItem.model_validate(detection_dict)
+        return cmb_detection_item
+
+
+
+def _create_directory(directory_path :pathlib.Path):
+    if directory_path.is_dir():
+        directory_path.mkdir(exist_ok=True, parents=True)
+    else:
+        directory_path.parent.mkdir(parents=True, exist_ok=True)
+    return directory_path.exists()
+
+
+
+
+def main(model_id: str = '48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6'):
     parser = pipeline_parser()
     args = parser.parse_args()
 
@@ -369,59 +134,85 @@ def main_review_cmd():
     path_nii = pathlib.Path(args.Inputs[0])
     path_dcmseg = pathlib.Path(args.Output_folder)
 
-    group_id = os.getenv("GROUP_ID_CMB",44)
-
-    # Create output directory
     output_series_folder = path_dcmseg.joinpath(f'{_id}')
-    if output_series_folder.is_dir():
-        output_series_folder.mkdir(exist_ok=True, parents=True)
-    else:
-        output_series_folder.parent.mkdir(parents=True, exist_ok=True)
+    _create_directory(output_series_folder)
 
-    series_name = path_nii.name.split('.')[0]
     # Load prediction data from NIfTI file
-    new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii)
     pred_json_path = path_nii.parent.joinpath(path_nii.name.replace('.nii.gz',
                                                                     '.json'))
-
-    sorted_dcms, image, first_dcm, source_images = utils.load_and_sort_dicom_files(str(path_dcms))
-    pred_data_unique = np.unique(new_nifti_array)
-    if len(pred_data_unique) < 1:
-        return None
-    else:
-        pred_data_unique = pred_data_unique[1:]  # Exclude background value (0)
-
-    # Create DICOM-SEG files for each unique region
-    result_list = utils.create_dicom_seg_file(pred_data_unique,
-                                              new_nifti_array,
-                                              series_name,
-                                              output_series_folder,
-                                              image,
-                                              first_dcm,
-                                              source_images)
-    # Create platform JSON
     with open(pred_json_path) as f:
         pred_json = json.load(f)
-    dicom_seg_result_list = [{"series_type":SeriesTypeEnum.SWAN,
-                              "data":result_list}]
-    pred_json_list =        [{"series_type": SeriesTypeEnum.SWAN,
+    # 初始化動脈瘤檢測 JSON 建構器
+    # platform_json_builder = AneurysmDetectionBuilder()
+    platform_json_builder = CmbDetectionBuilder()
+
+    # 定義序列名稱：SWAN
+    series_name_list = ['SWAN', 'T1BRAVO_AXI' ,'T1FLAIR_AXI']
+    path_dcms.exists()
+    # 建立每個序列的 DICOM 資料夾路徑列表
+    dcms_folder_path_list = list(filter(lambda x:x.exists(),
+                                        [path_dcms if path_dcms.name==x else path_dcms.joinpath(x)
+                                         for x in series_name_list]))
+
+    # 建立預測 NIfTI 檔案路徑列表
+    pred_nii_path_list = [{"series_name": x,"pred_nii_path": str(path_nii)}
+                          for x in series_name_list
+                          ]
+    #              載入並排序每個序列的 DICOM 檔案
+    #             - sorted_dcms: List of sorted DICOM file paths
+    #             - image: SimpleITK image object
+    #             - first_dcm: First DICOM dataset
+    #             - source_images: List of all DICOM datasets (without pixel data)
+    print('dcms_folder_path_list',dcms_folder_path_list)
+    dicom_data_list = [utils.load_and_sort_dicom_files(x) for x in dcms_folder_path_list]
+
+    # 提取每個序列的第一個 DICOM 檔案（索引 [2] 表示排序後的第一個檔案 first_dcm）
+    series_first_dcm_data_list = [x[2] for x in dicom_data_list]
+
+    # 為每個序列生成 DICOM-SEG 檔案和預測結果
+    pred_result_list = [{"series_name": x[0],
+                         "data": platform_json_builder.use_create_dicom_seg_file(
+                             path_nii,
+                             x[0],                     # sorted_dcms
+                             output_series_folder,
+                             *x[1][1:]  # 解包 DICOM 資料（跳過第一個元素）
+                         )}
+                        for x in zip(series_name_list, dicom_data_list)]
+
+    # 讀取所有生成的 DICOM-SEG 檔案
+    dcm_seg_path_list = [list(map(lambda xx: pydicom.read_file(xx['dcm_seg_path']), x['data']))
+                         for x in pred_result_list]
+    with open(pred_json_path) as f:
+        pred_json = json.load(f)
+
+    pred_json_list = [{"series_name": "SWAN",
                               "data": pred_json},]
-    # cmb_platform_json_builder = ReviewCMBPlatformJSONBuilder()
-    cmb_platform_json_builder = NewReviewCMBPlatformJSONBuilder()
-    cmb_platform_json = (cmb_platform_json_builder.set_series_type(SeriesTypeEnum.SWAN,source_images=source_images)
-                                                  .set_group_id(group_id)
-                                                  .build_sorted()
-                                                  .build_study(pred_json_list=pred_json_list)
-                                                  .build_mask(dicom_seg_result_list=dicom_seg_result_list,
-                                                              pred_json_list=pred_json_list)
-                                                  .build())
-    platform_json_path = output_series_folder.joinpath(path_nii.name.replace('.nii.gz',
-                                                                             '_platform_json.json'))
+
+
+    pred_json_merge = platform_json_builder.merge_pred_json_dicom_seg_result_list(pred_json_list=pred_json_list,
+                                                                                  dicom_seg_result_list=pred_result_list)
+    #
+    #
+    # # 使用建構器模式組裝最終的平台 JSON
+
+    platform_json = (platform_json_builder
+                              .set_patient_info(series_first_dcm_data_list)                     # 設定患者資訊
+                              .set_model_id(model_id)                                         # 設定模型 ID
+                              .set_detections(dcm_seg_path_list[0], pred_json_merge[0]['data'])  # 設定檢測結果
+                              .build()  # 建構最終 JSON
+                              )
+
+    print('platform_json',platform_json)
+
+    # 儲存平台 JSON 檔案
+    platform_json_path = output_series_folder.joinpath('rdx_cmb_pred_json.json')
     with open(platform_json_path, 'w') as f:
-        f.write(cmb_platform_json.model_dump_json())
-    print("Processing complete!")
-    return None
+        f.write(platform_json.model_dump_json())
+    #
+
+    print("Processing complete!",platform_json_path)
 
 
 if __name__ == '__main__':
-    main_review_cmd()
+    main()
+

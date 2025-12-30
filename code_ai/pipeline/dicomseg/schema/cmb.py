@@ -1,75 +1,62 @@
+import uuid
+from typing import List
+from uuid import UUID
 
-from typing import List,  Optional
-from pydantic import Field, BaseModel, ConfigDict
-from pydantic import field_validator
-
-
-from .base import MaskRequest,MaskSeriesRequest, MaskInstanceRequest, SeriesTypeEnum
-from .base import AITeamRequest, StudyRequest,SortedRequest,StudyModelRequest
-
-
-class CMBMaskInstanceRequest(MaskInstanceRequest):
-    sub_location: Optional[str] = Field(None, exclude=True)  # 標記為排除
-
-
-class CMBMaskSeriesRequest(MaskSeriesRequest):
-    instances: List[CMBMaskInstanceRequest]
-
-
-class CMBMaskRequest(MaskRequest):
-    series: List[CMBMaskSeriesRequest]
+from pydantic import field_serializer, Field, PositiveFloat, PositiveInt, confloat, model_serializer
+from .base import DetectionsBaseResponse, PredictionBaseResponse
 
 
 
-class CMBStudyModelRequest(StudyModelRequest):
-    series_type:List[str]
-
-    @field_validator('series_type', mode='before')
-    @classmethod
-    def extract_series_type(cls, value):
-        if value is None:
-            return ["1"]
-        if isinstance(value, list):
-            series_type_list = []
-            series_type_enum_list: List[SeriesTypeEnum] = SeriesTypeEnum.to_list()
-            for series_type_enum in series_type_enum_list:
-                if value == series_type_enum.name:
-                    series_type_list.append(series_type_enum.value)
-            return series_type_list
-        else:
-            return list(value)
+class CmbDetectionItem(DetectionsBaseResponse):
+    annotated_series_instance_uid : str = Field(...)
+    type                          : str = Field(...)
+    location                      : str = Field(...)
+    diameter                      : PositiveFloat = Field(...)
+    main_seg_slice                : PositiveInt   = Field(...)
+    probability                   : confloat(ge=0.0, le=1.0, allow_inf_nan=True) = Field(...)
+    mask_index                    : int           = Field(...)
 
 
-class CMBStudyRequest(StudyRequest):
-    model: List[StudyModelRequest]
+    _field_order = ['annotated_series_instance_uid',
+                    'series_instance_uid',
+                    'sop_instance_uid',
+                    'label',
+                    'type',
+                    'location',
+                    'diameter',
+                    'main_seg_slice',
+                    'probability',
+                    'mask_index',
+                    ]
 
 
-class CMBAITeamRequest(AITeamRequest):
-    study   : Optional[StudyRequest]   = Field(None)
-    sorted  : Optional[SortedRequest]  = Field(None)
-    mask    : Optional[CMBMaskRequest] = Field(None)
+    @field_serializer('diameter')
+    def serialize_diameter(self, value: float) -> float:
+        """序列化時保留 4 位小數"""
+        return round(value, 4)
+
+    @model_serializer(mode='wrap')
+    def ordered_dump(self, handler):
+        data = handler(self)
+        return {k: data[k] for k in self._field_order}
 
 
+class CmbDetectionResponse(PredictionBaseResponse[CmbDetectionItem]):
+    inference_id              :UUID = Field(default_factory=uuid.uuid4)
+    input_study_instance_uid  : List[str] = Field(...)
+    input_series_instance_uid : List[str] = Field(...)
+    study_instance_uid        : str = Field(None,exclude=True)
+    series_instance_uid       : str = Field(None,exclude=True)
 
-class CMBMaskSeries2Request(MaskSeriesRequest):
-    model_type   : Optional[str] = Field(None, exclude=True)
-    model_config = ConfigDict(from_attributes=True)
+    _field_order = ['inference_id',
+                    'inference_timestamp',
+                    'input_study_instance_uid',
+                    'input_series_instance_uid',
+                    'model_id',
+                    'patient_id',
+                    'detections',]
 
-
-
-class CMBMaskModel2Request(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    model_type : Optional[str] = Field(None)
-    series     : Optional[List[CMBMaskSeries2Request]] = Field(None)
-
-
-
-class CMBMask2Request(MaskRequest):
-    model_config = ConfigDict(from_attributes=True)
-    model  : Optional[List[CMBMaskModel2Request]] = Field(None)
-    # 排除 series
-    series : Optional[List[CMBMaskSeriesRequest]] = Field(None,exclude=True)
-
-
-class CMBAITeam2Request(AITeamRequest):
-    mask    : Optional[CMBMask2Request] = Field(None)
+    @model_serializer(mode='wrap')
+    def ordered_dump(self, handler):
+        data = handler(self)
+        return {k: data[k] for k in self._field_order}
