@@ -17,7 +17,6 @@ from backend.app.sync.schemas import DCOPStatus,DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from code_ai.task.params import BoosterParamsMyAI,BoosterParamsMyRABBITMQ
 from code_ai.utils.inference import build_inference_cmd
-from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 
 def _extract_path_from_params(func_params: Dict[str, any], param_name: str, env_var_name: str) -> str:
@@ -64,10 +63,10 @@ def _extract_path_from_params(func_params: Dict[str, any], param_name: str, env_
 
 
 @Booster(BoosterParamsMyAI(queue_name ='task_pipeline_inference_queue',
-                           user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
                            qps=1,
                            ))
 def task_pipeline_inference(func_params  : Dict[str,any]):
+    #
     from code_ai.task.task_dicom2nii import call_post_httpx
     # Use upload_data_api_url from task parameters (injected by dispatcher)
     upload_data_api_url = func_params.get('upload_data_api_url')
