@@ -1,28 +1,73 @@
+"""
+Unified inference task pipeline.
+
+This module provides a single entry point for both Study Level and Series Level inference.
+The dispatch is based on the presence of 'series_uids' in func_params.
+
+Design Philosophy (Linus Style):
+- Data structure drives behavior (series_uids presence determines level)
+- Single queue for natural GPU mutual exclusion (qps=1)
+- Minimal code change: original logic wrapped in _task_study_pipeline_inference
+- No external coordination needed (Redis lock, DB semaphore, etc.)
+
+Usage:
+    Study Level (existing behavior):
+        task_pipeline_inference.push({
+            'nifti_study_path': '/path/to/study',
+            'dicom_study_path': '/path/to/dicom',
+            'study_uid': '...',
+            ...
+        })
+
+    Series Level - Direct Mode (NIFTI already exists):
+        task_pipeline_inference.push({
+            'series_uids': ['series_a', 'series_b'],
+            'nifti_series_paths': ['/path/a.nii.gz', '/path/b.nii.gz'],
+            'model_id': 'aneurysm_v1',
+            'inference_id': 'uuid-xxx',
+            'study_uid': '...',
+            ...
+        })
+
+    Series Level - Conversion Mode (raw DICOM → NIFTI → inference):
+        task_pipeline_inference.push({
+            'series_uids': ['series_a', 'series_b'],
+            'raw_dicom_series_paths': ['/raw/series_a', '/raw/series_b'],
+            'needs_conversion': True,
+            'model_id': 'aneurysm_v1',
+            'path_rename_dicom': '/path/to/rename_dicom',  # optional, fallback to env
+            'path_rename_nifti': '/path/to/rename_nifti',  # optional, fallback to env
+            'study_uid': '...',
+            ...
+        })
+"""
+
 import json
 import os
 import pathlib
 import subprocess
 from typing import Dict, List
+from uuid import uuid4
 
 import httpx
-from funboost import Booster,fct
+from funboost import Booster, fct
 from funboost.core.serialization import Serialization
 import nb_log
-# 設置日誌記錄器
+
 logger = nb_log.LogManager('task_pipeline_inference_queue').get_logger_and_add_handlers(
     log_filename='task_pipeline_inference_queue.log'
 )
 
-from backend.app.sync.schemas import DCOPStatus,DCOPEventRequest
+from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
-from code_ai.task.params import BoosterParamsMyAI,BoosterParamsMyRABBITMQ
+from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
 from code_ai.utils.inference import build_inference_cmd
 
 
 def _extract_path_from_params(func_params: Dict[str, any], param_name: str, env_var_name: str) -> str:
     """Extract path from task parameters with fallback to environment variable.
 
-    This utility function implements the parameter injection pattern for task path configuration.
+    This utility function implements the parameter injection attern for task path configuration.
     It first checks func_params for the path, then falls back to environment variables if not found.
     This enables dual deployment where backends can pass paths as parameters to shared workers.
 
@@ -36,20 +81,13 @@ def _extract_path_from_params(func_params: Dict[str, any], param_name: str, env_
 
     Raises:
         ValueError: If path not found in parameters or environment
-
-    Examples:
-        >>> path = _extract_path_from_params(func_params, 'path_process', 'PATH_PROCESS')
-        >>> # First tries func_params['path_process'], then os.getenv('PATH_PROCESS')
     """
-    # Try to get path from task parameters (injected by dispatcher)
     path_value = func_params.get(param_name)
 
     if path_value is None:
-        # Fallback to environment variable for backward compatibility
         logger.warning(
             f"Path parameter '{param_name}' not found in task parameters, "
-            f"falling back to environment variable '{env_var_name}'. "
-            f"Consider updating dispatcher to inject path parameters."
+            f"falling back to environment variable '{env_var_name}'."
         )
         path_value = os.getenv(env_var_name)
 
@@ -62,45 +100,82 @@ def _extract_path_from_params(func_params: Dict[str, any], param_name: str, env_
     return path_value
 
 
-@Booster(BoosterParamsMyAI(queue_name ='task_pipeline_inference_queue',
-                           qps=1,
-                           ))
-def task_pipeline_inference(func_params  : Dict[str,any]):
-    #
+# =============================================================================
+# 統一入口 (Unified Entry Point)
+# =============================================================================
+
+@Booster(BoosterParamsMyAI(
+    queue_name='task_pipeline_inference_queue',
+    qps=1,
+))
+def task_pipeline_inference(func_params: Dict[str, any]):
+    """
+    統一推論入口：根據 func_params 結構判斷 Study/Series Level。
+
+    Linus: "Data structure is the documentation"
+    - 有 series_uids → Series Level（新功能）
+    - 沒有 series_uids → Study Level（原有邏輯）
+
+    單一 Queue + qps=1 = 天然 GPU 互斥，無需額外協調機制。
+    """
+    if 'series_uids' in func_params:
+        logger.info(f"[Series Level] Processing {len(func_params['series_uids'])} series")
+        return _task_series_pipeline_inference(func_params)
+    else:
+        study_id = func_params.get('study_id', 'unknown')
+        logger.info(f"[Study Level] Processing study: {study_id}")
+        return _task_study_pipeline_inference(func_params)
+
+
+# =============================================================================
+# Study Level（原有邏輯，完全保留）
+# =============================================================================
+
+def _task_study_pipeline_inference(func_params: Dict[str, any]):
+    """
+    Study Level 推論 - 處理整個 study 的所有 series。
+
+    這是原有的 task_pipeline_inference 邏輯，完全不變。
+    """
     from code_ai.task.task_dicom2nii import call_post_httpx
-    # Use upload_data_api_url from task parameters (injected by dispatcher)
+
     upload_data_api_url = func_params.get('upload_data_api_url')
     if upload_data_api_url is None:
-        # Fallback to environment variable for backward compatibility
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         if upload_data_api_url is None:
-            raise ValueError("upload_data_api_url must be provided in task parameters or UPLOAD_DATA_API_URL environment variable must be set")
+            raise ValueError(
+                "upload_data_api_url must be provided in task parameters or "
+                "UPLOAD_DATA_API_URL environment variable must be set"
+            )
 
-    # Extract path configuration from task parameters with environment fallback
-    # This enables dual deployment: Production and Testing backends can pass different paths
-    # to the same GPU worker, making this function pure (not dependent on worker's .env)
-    path_process   = _extract_path_from_params(func_params, 'path_process', 'PATH_PROCESS')
+    path_process = _extract_path_from_params(func_params, 'path_process', 'PATH_PROCESS')
     path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
-    path_json      = _extract_path_from_params(func_params, 'path_json', 'PATH_JSON')
-    path_log       = _extract_path_from_params(func_params, 'path_log', 'PATH_LOG')
-    path_root      = _extract_path_from_params(func_params, 'path_root', 'PATH_ROOT')
-    # 建置資料夾
-    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+    path_json = _extract_path_from_params(func_params, 'path_json', 'PATH_JSON')
+    path_log = _extract_path_from_params(func_params, 'path_log', 'PATH_LOG')
+    path_root = _extract_path_from_params(func_params, 'path_root', 'PATH_ROOT')
+
+    os.makedirs(path_json, exist_ok=True)
+    os.makedirs(path_log, exist_ok=True)
+    os.makedirs(path_cmd_tools, exist_ok=True)
 
     nifti_study_path = func_params['nifti_study_path']
     dicom_study_path = func_params['dicom_study_path']
 
-    inference_item_cmd = build_inference_cmd(pathlib.Path(nifti_study_path),
-                                             pathlib.Path(dicom_study_path),
-                                             path_root=path_root)
+    inference_item_cmd = build_inference_cmd(
+        pathlib.Path(nifti_study_path),
+        pathlib.Path(dicom_study_path),
+        path_root=path_root
+    )
+
     if inference_item_cmd.cmd_items:
-        cmd_output_path = os.path.join(path_cmd_tools, f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json')
+        cmd_output_path = os.path.join(
+            path_cmd_tools,
+            f'{inference_item_cmd.cmd_items[0].study_id}_cmd.json'
+        )
     else:
         temp_id = os.path.basename(dicom_study_path)
         cmd_output_path = os.path.join(path_cmd_tools, f'{temp_id}_cmd.json')
+
     with open(cmd_output_path, 'w') as f:
         f.write(json.dumps(inference_item_cmd.model_dump()['cmd_items']))
 
@@ -109,57 +184,686 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
     api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
 
     if study_uid and study_id:
-        dcop_event = DCOPEventRequest(study_uid=study_uid, series_uid=None, study_id=study_id,
-                                      ope_no=DCOPStatus.STUDY_INFERENCE_RUNNING.value,
-                                      tool_id='INFERENCE_TOOL',
-                                      params_data={'inference_item_cmd': inference_item_cmd.cmd_items,
-                                                   'func_params': func_params,
-                                                   'task': fct.function_result_status.get_status_dict()
-                                                   })
-        call_post_httpx.push({'url':api_url,
-                              'data': dcop_event.model_dump_json(),
-                              })
-    else:
-        pass
+        dcop_event = DCOPEventRequest(
+            study_uid=study_uid,
+            series_uid=None,
+            study_id=study_id,
+            ope_no=DCOPStatus.STUDY_INFERENCE_RUNNING.value,
+            tool_id='INFERENCE_TOOL',
+            params_data={
+                'inference_item_cmd': inference_item_cmd.cmd_items,
+                'func_params': func_params,
+                'task': fct.function_result_status.get_status_dict()
+            }
+        )
+        call_post_httpx.push({
+            'url': api_url,
+            'data': dcop_event.model_dump_json(),
+        })
 
     result_list = []
     for inference_item in inference_item_cmd.cmd_items:
-        process = subprocess.Popen(args=inference_item.cmd_str, shell=True,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        process = subprocess.Popen(
+            args=inference_item.cmd_str,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
         stdout, stderr = process.communicate()
-        result_list.append((inference_item.cmd_str,stdout.decode(), stderr.decode()))
-        # logger.info("{}".format(stdout.decode()))
-        # logger.warn("{}".format(stderr.decode()))
+        result_list.append((inference_item.cmd_str, stdout.decode(), stderr.decode()))
+
     result = Serialization.to_json_str(result_list)
+
     if study_uid and study_id:
-        dcop_event = DCOPEventRequest(study_uid=study_uid, series_uid=None, study_id=study_id,
-                                      ope_no=DCOPStatus.STUDY_INFERENCE_COMPLETE.value,
-                                      tool_id='INFERENCE_TOOL',
-                                      params_data={'inference_item_cmd': inference_item_cmd.cmd_items,
-                                                   'func_params': func_params,
-                                                   'task': fct.function_result_status.get_status_dict()
-                                                   },
-                                      result_data = {'result':result,})
-        call_post_httpx.push({'url': api_url,
-                              'data': dcop_event.model_dump_json(),
-                              })
+        dcop_event = DCOPEventRequest(
+            study_uid=study_uid,
+            series_uid=None,
+            study_id=study_id,
+            ope_no=DCOPStatus.STUDY_INFERENCE_COMPLETE.value,
+            tool_id='INFERENCE_TOOL',
+            params_data={
+                'inference_item_cmd': inference_item_cmd.cmd_items,
+                'func_params': func_params,
+                'task': fct.function_result_status.get_status_dict()
+            },
+            result_data={'result': result}
+        )
+        call_post_httpx.push({
+            'url': api_url,
+            'data': dcop_event.model_dump_json(),
+        })
+
     return result
 
 
-@Booster(BoosterParamsMyRABBITMQ(queue_name      ='task_subprocess_queue',
-                                 concurrent_num  = 3,
-                                 qps=1,
-                           ))
-def task_subprocess_inference(func_params  : Dict[str,any]):
-    # Extract path_process from task parameters with environment fallback
-    # This enables dual deployment where backends can specify execution paths
+# =============================================================================
+# Series Level（新增邏輯）
+# =============================================================================
+
+def _validate_series_params(func_params: Dict[str, any]) -> None:
+    """
+    驗證 Series Level 參數。
+
+    支持兩種模式：
+    1. 直接模式: nifti_series_paths 已存在
+    2. 轉換模式: needs_conversion=True + raw_dicom_series_paths
+
+    Linus: "Fail fast and fail loud. Don't try to be clever."
+    """
+    # 基本必要字段
+    base_required = ['series_uids', 'model_id']
+    missing_base = [f for f in base_required if f not in func_params]
+    if missing_base:
+        raise ValueError(
+            f"Series Level inference missing required fields: {missing_base}. "
+            f"Required: {base_required}"
+        )
+
+    series_uids = func_params['series_uids']
+    if not isinstance(series_uids, list):
+        raise ValueError(f"series_uids must be a list, got {type(series_uids)}")
+
+    needs_conversion = func_params.get('needs_conversion', False)
+
+    if needs_conversion:
+        # 轉換模式: 需要 raw_dicom_series_paths
+        if 'raw_dicom_series_paths' not in func_params:
+            raise ValueError(
+                "When needs_conversion=True, raw_dicom_series_paths is required"
+            )
+        raw_paths = func_params['raw_dicom_series_paths']
+        if not isinstance(raw_paths, list):
+            raise ValueError(
+                f"raw_dicom_series_paths must be a list, got {type(raw_paths)}"
+            )
+        if len(series_uids) != len(raw_paths):
+            raise ValueError(
+                f"series_uids ({len(series_uids)} items) and "
+                f"raw_dicom_series_paths ({len(raw_paths)} items) must have same length"
+            )
+        logger.info(
+            f"Validated Series Level params (conversion mode): "
+            f"{len(series_uids)} series, model_id={func_params['model_id']}"
+        )
+    else:
+        # 直接模式: 需要 nifti_series_paths
+        if 'nifti_series_paths' not in func_params:
+            raise ValueError(
+                "nifti_series_paths is required when needs_conversion is False or not set"
+            )
+        nifti_paths = func_params['nifti_series_paths']
+        if not isinstance(nifti_paths, list):
+            raise ValueError(
+                f"nifti_series_paths must be a list, got {type(nifti_paths)}"
+            )
+        if len(series_uids) != len(nifti_paths):
+            raise ValueError(
+                f"series_uids ({len(series_uids)} items) and "
+                f"nifti_series_paths ({len(nifti_paths)} items) must have same length"
+            )
+        logger.info(
+            f"Validated Series Level params (direct mode): "
+            f"{len(series_uids)} series, model_id={func_params['model_id']}"
+        )
+
+
+def _convert_single_series_to_nifti(
+    raw_dicom_path: str,
+    output_dicom_base: str,
+    output_nifti_base: str,
+    series_uid: str,
+    study_id: str
+) -> tuple:
+    """
+    單個 series 的 DICOM 轉換: raw_dicom → rename_dicom → nifti。
+
+    這是同步執行的轉換函數，直接調用底層轉換邏輯，
+    而非使用 funboost 的異步 push（避免額外的 queue 調度開銷）。
+
+    Args:
+        raw_dicom_path: 原始 DICOM 目錄路徑
+        output_dicom_base: rename_dicom 基礎目錄
+        output_nifti_base: nifti 輸出基礎目錄
+        series_uid: Series UID
+        study_id: Study ID
+
+    Returns:
+        tuple: (rename_dicom_path, nifti_path) 或 (None, None) 如果失敗
+    """
+    import re
+    from code_ai.dicom2nii.convert import (
+        ModalityProcessingStrategy,
+        MRAcquisitionTypeProcessingStrategy,
+    )
+    from code_ai.task.task_dicom2nii import (
+        rename_dicom_file,
+        copy_dicom_file,
+        ConvertManager,
+    )
+
+    raw_dicom_dir = pathlib.Path(raw_dicom_path)
+    output_dicom_base_path = pathlib.Path(output_dicom_base)
+    output_nifti_base_path = pathlib.Path(output_nifti_base)
+
+    if not raw_dicom_dir.exists():
+        logger.error(f"Raw DICOM directory not found: {raw_dicom_path}")
+        return None, None
+
+    # Step 1: raw_dicom → rename_dicom
+    # 收集所有 DICOM 文件
+    dicom_files = list(raw_dicom_dir.rglob('*.dcm'))
+    if not dicom_files:
+        dicom_files = [f for f in raw_dicom_dir.rglob('*') if f.is_file()]
+
+    if not dicom_files:
+        logger.error(f"No DICOM files found in: {raw_dicom_path}")
+        return None, None
+
+    # 處理每個 DICOM 文件
+    rename_dicom_path = None
+    for dicom_file in dicom_files:
+        try:
+            rename_result = rename_dicom_file(
+                dicom_file,
+                ConvertManager.processing_strategy_list,
+                ConvertManager.modality_processing_strategy,
+                ConvertManager.mr_acquisition_type_processing_strategy
+            )
+            copy_result = copy_dicom_file(
+                rename_result,
+                dicom_file,
+                output_dicom_base_path
+            )
+            if copy_result:
+                # 從結果中提取 rename_dicom 路徑
+                result_dict = json.loads(copy_result)
+                rename_dicom_path = pathlib.Path(result_dict['rename_dicom_path']).parent
+        except Exception as e:
+            logger.warning(f"Failed to process DICOM file {dicom_file}: {e}")
+            continue
+
+    if rename_dicom_path is None:
+        logger.error(f"Failed to rename DICOM files for series: {series_uid}")
+        return None, None
+
+    logger.info(f"DICOM renamed: {raw_dicom_path} → {rename_dicom_path}")
+
+    # Step 2: rename_dicom → nifti
+    # 計算輸出 NIFTI 路徑
+    study_folder = rename_dicom_path.parent
+    series_name = rename_dicom_path.name
+    nifti_study_path = output_nifti_base_path / study_folder.name
+    nifti_series_path = nifti_study_path / series_name
+    nifti_file_path = pathlib.Path(f"{nifti_series_path}.nii.gz")
+
+    # 建立輸出目錄
+    nifti_series_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 調用 dcm2niix
+    cmd_str = f'dcm2niix -z y -f {nifti_series_path.name} -o {nifti_series_path.parent} {rename_dicom_path}'
+    logger.info(f"Running dcm2niix: {cmd_str}")
+
+    try:
+        process = subprocess.Popen(
+            args=cmd_str,
+            cwd='/',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        stdout, stderr = process.communicate(timeout=300)  # 5 分鐘超時
+
+        if process.returncode != 0:
+            logger.error(f"dcm2niix failed: {stderr.decode()}")
+            return str(rename_dicom_path), None
+
+        # 解析 dcm2niix 輸出，找到實際生成的文件
+        pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
+        match_result = pattern.search(stdout.decode())
+
+        if match_result:
+            actual_output = pathlib.Path(f"{match_result.groups()[0]}.nii.gz")
+            if actual_output.exists() and actual_output != nifti_file_path:
+                try:
+                    actual_output.rename(nifti_file_path)
+                except FileExistsError:
+                    pass
+
+        # 確認輸出文件存在
+        if nifti_file_path.exists():
+            logger.info(f"NIFTI created: {nifti_file_path}")
+            return str(rename_dicom_path), str(nifti_file_path)
+        else:
+            # 嘗試找到任何生成的 .nii.gz 文件
+            nifti_files = list(nifti_series_path.parent.glob(f"{series_name}*.nii.gz"))
+            if nifti_files:
+                logger.info(f"NIFTI created: {nifti_files[0]}")
+                return str(rename_dicom_path), str(nifti_files[0])
+
+        logger.error(f"NIFTI file not created for series: {series_uid}")
+        return str(rename_dicom_path), None
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"dcm2niix timeout for series: {series_uid}")
+        process.kill()
+        return str(rename_dicom_path), None
+    except Exception as e:
+        logger.error(f"dcm2niix error for series {series_uid}: {e}")
+        return str(rename_dicom_path), None
+
+
+def _batch_convert_series_to_nifti(
+    raw_dicom_paths: List[str],
+    series_uids: List[str],
+    output_dicom_base: str,
+    output_nifti_base: str,
+    study_id: str,
+    upload_data_api_url: str = None
+) -> tuple:
+    """
+    批量轉換多個 series: raw_dicom → rename_dicom → nifti。
+
+    Args:
+        raw_dicom_paths: 原始 DICOM 路徑列表
+        series_uids: Series UID 列表
+        output_dicom_base: rename_dicom 基礎目錄
+        output_nifti_base: nifti 輸出基礎目錄
+        study_id: Study ID
+        upload_data_api_url: API URL（用於發送轉換事件）
+
+    Returns:
+        tuple: (dicom_series_paths, nifti_paths) 兩個列表
+    """
+    from code_ai.task.task_dicom2nii import call_post_httpx
+    from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
+    from backend.app.sync import urls as sync_urls
+
+    dicom_series_paths = []
+    nifti_paths = []
+
+    for i, (raw_path, series_uid) in enumerate(zip(raw_dicom_paths, series_uids)):
+        logger.info(f"Converting series {i+1}/{len(series_uids)}: {series_uid}")
+
+        dicom_path, nifti_path = _convert_single_series_to_nifti(
+            raw_dicom_path=raw_path,
+            output_dicom_base=output_dicom_base,
+            output_nifti_base=output_nifti_base,
+            series_uid=series_uid,
+            study_id=study_id
+        )
+
+        dicom_series_paths.append(dicom_path)
+        nifti_paths.append(nifti_path)
+
+        # 發送轉換完成事件（可選）
+        if upload_data_api_url and dicom_path:
+            try:
+                status = (
+                    DCOPStatus.SERIES_CONVERSION_COMPLETE.value
+                    if nifti_path
+                    else DCOPStatus.SERIES_CONVERSION_SKIP.value
+                )
+                dcop_event = DCOPEventRequest(
+                    study_uid=None,  # Series Level 可能沒有 study_uid
+                    series_uid=series_uid,
+                    study_id=study_id,
+                    ope_no=status,
+                    tool_id='NIFTI_TOOL',
+                    result_data={
+                        'raw_dicom_path': raw_path,
+                        'rename_dicom_path': dicom_path,
+                        'nifti_path': nifti_path
+                    }
+                )
+                api_url = f"{upload_data_api_url}{sync_urls.SYNC_PROT_OPE_NO}"
+                call_post_httpx.push({
+                    'url': api_url,
+                    'data': dcop_event.model_dump_json()
+                })
+            except Exception as e:
+                logger.warning(f"Failed to send conversion event: {e}")
+
+    return dicom_series_paths, nifti_paths
+
+
+def _build_series_inference_cmd(
+    nifti_path: str,
+    model_id: str,
+    output_dir: str,
+    dicom_dir: str = None
+) -> str:
+    """
+    建立 series 推論命令。
+
+    Args:
+        nifti_path: NIFTI 檔案路徑
+        model_id: 模型識別碼
+        output_dir: 輸出目錄
+        dicom_dir: DICOM 目錄（用於 DICOM-SEG 生成）
+
+    Returns:
+        str: Shell 命令字串
+
+    Note:
+        這是簡化版本。實際實作應根據 model_id 選擇對應的推論腳本。
+    """
+    # TODO: 根據 model_id 選擇實際的推論命令
+    # 這裡假設模型腳本位於 /workspace/models/{model_id}/
+    cmd = (
+        f"python /workspace/models/{model_id}/infer.py "
+        f"--input {nifti_path} "
+        f"--output {output_dir} "
+        f"--format json"
+    )
+
+    if dicom_dir:
+        cmd += f" --dicom_dir {dicom_dir}"
+
+    return cmd
+
+
+def _task_series_pipeline_inference(func_params: Dict[str, any]):
+    """
+    Series Level 推論 - 處理指定的 series。
+
+    與 Study Level 的區別：
+    - 處理特定的 series，而非整個 study
+    - 使用 model_id 指定模型，而非自動選擇
+    - 使用 SERIES_INFERENCE_* 狀態碼
+    - 使用 SERIES_INFERENCE_TOOL 作為 tool_id
+
+    支持兩種模式：
+    1. 直接模式 (needs_conversion=False，預設):
+       - 必要參數: series_uids, nifti_series_paths, model_id
+       - 假設 NIFTI 檔案已存在
+
+    2. 轉換模式 (needs_conversion=True):
+       - 必要參數: series_uids, raw_dicom_series_paths, model_id
+       - 可選參數: path_rename_dicom, path_rename_nifti (或從環境變數讀取)
+       - 自動執行: raw_dicom → rename_dicom → nifti → 推論
+
+    Args:
+        func_params: 任務參數字典，包含：
+            - series_uids: List[str] - Series UID 列表
+            - model_id: str - 模型識別碼
+            - needs_conversion: bool - 是否需要 DICOM 轉換 (預設 False)
+
+            直接模式:
+            - nifti_series_paths: List[str] - NIFTI 檔案路徑列表
+
+            轉換模式:
+            - raw_dicom_series_paths: List[str] - 原始 DICOM 目錄路徑列表
+            - path_rename_dicom: str - rename_dicom 輸出目錄
+            - path_rename_nifti: str - NIFTI 輸出目錄
+
+    Returns:
+        str: 推論結果 JSON 字串
+    """
+    from code_ai.task.task_dicom2nii import call_post_httpx
+
+    # Step 1: 驗證參數
+    _validate_series_params(func_params)
+
+    # Step 2: 提取配置
+    upload_data_api_url = func_params.get('upload_data_api_url')
+    if upload_data_api_url is None:
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        if upload_data_api_url is None:
+            raise ValueError(
+                "upload_data_api_url must be provided in task parameters or "
+                "UPLOAD_DATA_API_URL environment variable must be set"
+            )
+
+    path_process = _extract_path_from_params(func_params, 'path_process', 'PATH_PROCESS')
+    path_json = _extract_path_from_params(func_params, 'path_json', 'PATH_JSON')
+    path_log = _extract_path_from_params(func_params, 'path_log', 'PATH_LOG')
+
+    os.makedirs(path_json, exist_ok=True)
+    os.makedirs(path_log, exist_ok=True)
+
+    # Step 2.5: 條件式轉換 (raw_dicom → rename_dicom → nifti)
+    needs_conversion = func_params.get('needs_conversion', False)
+    series_uids = func_params['series_uids']
+
+    if needs_conversion:
+        # 轉換模式: 執行 DICOM 轉換
+        logger.info(f"Conversion mode enabled for {len(series_uids)} series")
+
+        # 提取轉換所需的路徑參數
+        raw_dicom_paths = func_params['raw_dicom_series_paths']
+        path_rename_dicom = _extract_path_from_params(
+            func_params, 'path_rename_dicom', 'PATH_RENAME_DICOM'
+        )
+        path_rename_nifti = _extract_path_from_params(
+            func_params, 'path_rename_nifti', 'PATH_RENAME_NIFTI'
+        )
+        study_id = func_params.get('study_id', 'unknown_study')
+
+        # 執行批量轉換
+        dicom_series_paths, nifti_paths = _batch_convert_series_to_nifti(
+            raw_dicom_paths=raw_dicom_paths,
+            series_uids=series_uids,
+            output_dicom_base=path_rename_dicom,
+            output_nifti_base=path_rename_nifti,
+            study_id=study_id,
+            upload_data_api_url=upload_data_api_url
+        )
+
+        # 檢查轉換結果
+        failed_conversions = [
+            (uid, path) for uid, path in zip(series_uids, nifti_paths)
+            if path is None
+        ]
+        if failed_conversions:
+            logger.warning(
+                f"Some series failed to convert: "
+                f"{[uid for uid, _ in failed_conversions]}"
+            )
+    else:
+        # 直接模式: 使用已存在的 NIFTI 路徑
+        nifti_paths = func_params['nifti_series_paths']
+        dicom_series_paths = func_params.get('dicom_series_paths', [None] * len(series_uids))
+
+    # Step 3: 提取其他 series 參數
+    model_id = func_params['model_id']
+    inference_id = func_params.get('inference_id', str(uuid4()))
+    study_uid = func_params.get('study_uid')
+    study_id = func_params.get('study_id')
+    # 注意: dicom_series_paths 和 nifti_paths 已在 Step 2.5 中設置
+
+    api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
+
+    # Step 4: 發送 SERIES_INFERENCE_RUNNING 事件
+    if study_uid and study_id:
+        dcop_event = DCOPEventRequest(
+            study_uid=study_uid,
+            series_uid=series_uids[0] if len(series_uids) == 1 else None,
+            study_id=study_id,
+            ope_no=DCOPStatus.SERIES_INFERENCE_RUNNING.value,
+            tool_id='SERIES_INFERENCE_TOOL',
+            params_data={
+                'inference_id': inference_id,
+                'series_count': len(series_uids),
+                'series_uids': series_uids,
+                'model_id': model_id,
+                'func_params': func_params,
+                'task': fct.function_result_status.get_status_dict()
+            }
+        )
+        try:
+            call_post_httpx.push({
+                'url': api_url,
+                'data': dcop_event.model_dump_json(),
+            })
+            logger.info(f"Posted SERIES_INFERENCE_RUNNING for inference_id={inference_id}")
+        except Exception as e:
+            logger.error(f"Failed to post RUNNING event: {e}")
+
+    # Step 5: 執行推論
+    result_list = []
+    all_success = True
+    error_message = None
+
+    try:
+        for i, (series_uid, nifti_path) in enumerate(zip(series_uids, nifti_paths)):
+            logger.info(f"Processing series {i+1}/{len(series_uids)}: {series_uid}")
+
+            # 檢查 NIFTI 檔案存在
+            if nifti_path is None or not os.path.exists(nifti_path):
+                error_msg = f"NIFTI file not found or conversion failed: {nifti_path}"
+                logger.error(error_msg)
+                result_list.append({
+                    'series_uid': series_uid,
+                    'status': 'failed',
+                    'error': error_msg
+                })
+                all_success = False
+                continue
+
+            # 建立輸出目錄
+            output_dir = os.path.join(path_json, f"{series_uid}_{model_id}")
+            os.makedirs(output_dir, exist_ok=True)
+
+            # 取得 DICOM 路徑（如果有）
+            dicom_dir = dicom_series_paths[i] if i < len(dicom_series_paths) else None
+
+            # 建立推論命令
+            cmd_str = _build_series_inference_cmd(
+                nifti_path=nifti_path,
+                model_id=model_id,
+                output_dir=output_dir,
+                dicom_dir=dicom_dir
+            )
+            logger.info(f"Executing: {cmd_str}")
+
+            # 執行推論
+            try:
+                process = subprocess.Popen(
+                    args=cmd_str,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=path_process
+                )
+                stdout, stderr = process.communicate(timeout=600)  # 10 分鐘超時
+
+                if process.returncode != 0:
+                    error_msg = f"Inference failed with code {process.returncode}: {stderr.decode()}"
+                    logger.error(error_msg)
+                    result_list.append({
+                        'series_uid': series_uid,
+                        'status': 'failed',
+                        'error': error_msg,
+                        'stderr': stderr.decode()
+                    })
+                    all_success = False
+                else:
+                    # 解析結果
+                    prediction_file = os.path.join(output_dir, 'prediction.json')
+                    if os.path.exists(prediction_file):
+                        with open(prediction_file, 'r') as f:
+                            prediction = json.load(f)
+                    else:
+                        prediction = {'raw_output': stdout.decode()}
+
+                    result_list.append({
+                        'series_uid': series_uid,
+                        'status': 'success',
+                        'prediction': prediction,
+                        'output_dir': output_dir
+                    })
+                    logger.info(f"Series {series_uid} inference completed successfully")
+
+            except subprocess.TimeoutExpired:
+                error_msg = f"Inference timeout (>10 min) for series {series_uid}"
+                logger.error(error_msg)
+                process.kill()
+                result_list.append({
+                    'series_uid': series_uid,
+                    'status': 'failed',
+                    'error': error_msg
+                })
+                all_success = False
+
+            except Exception as e:
+                error_msg = f"Inference error for series {series_uid}: {str(e)}"
+                logger.error(error_msg)
+                result_list.append({
+                    'series_uid': series_uid,
+                    'status': 'failed',
+                    'error': error_msg
+                })
+                all_success = False
+
+    except Exception as e:
+        error_message = f"Fatal error during series inference: {str(e)}"
+        logger.error(error_message)
+        all_success = False
+
+    # Step 6: 發送 SERIES_INFERENCE_COMPLETE/FAILED 事件
+    result_json = Serialization.to_json_str(result_list)
+
+    if study_uid and study_id:
+        completion_status = (
+            DCOPStatus.SERIES_INFERENCE_COMPLETE.value
+            if all_success
+            else DCOPStatus.SERIES_INFERENCE_FAILED.value
+        )
+
+        dcop_event = DCOPEventRequest(
+            study_uid=study_uid,
+            series_uid=series_uids[0] if len(series_uids) == 1 else None,
+            study_id=study_id,
+            ope_no=completion_status,
+            tool_id='SERIES_INFERENCE_TOOL',
+            params_data={
+                'inference_id': inference_id,
+                'series_count': len(series_uids),
+                'series_uids': series_uids,
+                'model_id': model_id,
+                'task': fct.function_result_status.get_status_dict()
+            },
+            result_data={
+                'result': result_json,
+                'all_success': all_success,
+                'error': error_message
+            }
+        )
+
+        try:
+            call_post_httpx.push({
+                'url': api_url,
+                'data': dcop_event.model_dump_json(),
+            })
+            logger.info(f"Posted {completion_status} for inference_id={inference_id}")
+        except Exception as e:
+            logger.error(f"Failed to post COMPLETE event: {e}")
+
+    return result_json
+
+
+# =============================================================================
+# Subprocess Task（保持不變）
+# =============================================================================
+
+@Booster(BoosterParamsMyRABBITMQ(
+    queue_name='task_subprocess_queue',
+    concurrent_num=3,
+    qps=1,
+))
+def task_subprocess_inference(func_params: Dict[str, any]):
+    """Subprocess 推論任務（保持不變）"""
     path_process = _extract_path_from_params(func_params, 'path_process', 'PATH_PROCESS')
     path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
-    os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
+    os.makedirs(path_cmd_tools, exist_ok=True)
+
     cmd_str = func_params['cmd_str']
-    process = subprocess.Popen(args=cmd_str, shell=True,
-                               # cwd='{}'.format(pathlib.Path(__file__).parent.parent.absolute()),
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    process = subprocess.Popen(
+        args=cmd_str,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
     stdout, stderr = process.communicate()
     logger.info(stdout.decode())
     logger.warn(stderr.decode())
