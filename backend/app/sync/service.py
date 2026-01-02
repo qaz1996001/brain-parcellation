@@ -36,6 +36,7 @@ import os
 import pathlib
 import traceback
 from typing import List, Optional, Tuple, Dict, Any
+from collections import defaultdict
 import re
 import httpx
 import pandas as pd
@@ -1489,10 +1490,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             rename_nifti_path
         )
         self.logger.info(f"[DEBUG] create_study_complete_events returned {len(study_events)} events: {[e.study_uid for e in study_events]}")
-        # Process events from the provided data list
-        completed_study_events = await self.identify_completed_studies(study_events)
+        # Process events from the provided data list (使用批量查詢優化版本)
+        completed_study_events = await self.identify_completed_studies_batch(study_events)
         # Process completed studies and queue them for inference
-        self.logger.info(f"[DEBUG] identify_completed_studies returned {len(completed_study_events)} completed: {[e.study_uid for e in completed_study_events]}")
+        self.logger.info(f"[DEBUG] identify_completed_studies_batch returned {len(completed_study_events)} completed: {[e.study_uid for e in completed_study_events]}")
         if completed_study_events:
             study_events_filter = []
             for completed_study in completed_study_events:
@@ -1533,7 +1534,6 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                            'where sos.study_uid=:study_uid '
                            'and sos.study_id = debb.study_id '
                            'and debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[]) ')
-                # sql = text('SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid')
                 params = {'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
                           'study_uid': study_uid}
             execute = await session.execute(sql, params)
@@ -1699,6 +1699,100 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     completed_study_events.append(study_events)  # Append study event, not result
         return completed_study_events
 
+    async def identify_completed_studies_batch(
+        self,
+        study_events_list: List[DCOPEventRequest]
+    ) -> List[DCOPEventRequest]:
+        """
+        批量識別已完成轉檔的 Study（優化版）。
+
+        此方法使用單次批量查詢替代循環查詢，大幅減少數據庫連接占用時間，
+        解決 Background Task 並發導致的 QueuePool 連接耗盡問題。
+
+        優化效果
+        --------
+        - 數據庫查詢: N 次 → 1 次
+        - 連接占用時間: 顯著減少
+        - 網絡往返: N 次 → 1 次
+
+        Parameters
+        ----------
+        study_events_list : List[DCOPEventRequest]
+            待檢查的 Study 事件列表。
+
+        Returns
+        -------
+        List[DCOPEventRequest]
+            所有 Series 都已完成轉檔（COMPLETE 或 SKIP）的 Study 事件列表。
+
+        Algorithm
+        ---------
+        1. 收集所有 study_uid，建立映射表
+        2. 一次查詢獲取所有 Study 的 Series 狀態
+        3. Python 端按 study_uid 分組聚合
+        4. 篩選 done_count == series_count 的 Study
+
+        Examples
+        --------
+        >>> events = [DCOPEventRequest(study_uid='abc'), DCOPEventRequest(study_uid='def')]
+        >>> completed = await service.identify_completed_studies_batch(events)
+        >>> # 返回所有 Series 都已完成的 Study
+        """
+        if not study_events_list:
+            return []
+
+        # 1. 收集所有 study_uid，建立映射表
+        study_uids = [e.study_uid for e in study_events_list]
+        study_map = {e.study_uid: e for e in study_events_list}
+
+        # 2. 一次查詢獲取所有 Study 的 Series 狀態
+        async with self.session_manager.get_session() as session:
+            sql = text('''
+                SELECT study_uid, series_uid, ope_no
+                FROM public.get_stydy_series_ope_no_status(:status)
+                WHERE study_uid = ANY(:study_uids)
+            ''')
+            params = {
+                'status': DCOPStatus.STUDY_CONVERSION_COMPLETE.value,
+                'study_uids': study_uids
+            }
+            execute = await session.execute(sql, params)
+            results = execute.all()
+
+        # 3. Python 端按 study_uid 分組聚合
+        study_series: Dict[str, Dict[str, int]] = defaultdict(
+            lambda: {'series_count': 0, 'done_count': 0}
+        )
+
+        complete_val = DCOPStatus.SERIES_CONVERSION_COMPLETE.value
+        skip_val = DCOPStatus.SERIES_CONVERSION_SKIP.value
+
+        for row in results:
+            # 跳過 study 級別記錄（沒有 series_uid）
+            if not row.series_uid:
+                continue
+
+            study_series[row.study_uid]['series_count'] += 1
+            if complete_val in row.ope_no or skip_val in row.ope_no:
+                study_series[row.study_uid]['done_count'] += 1
+
+        # 4. 篩選已完成的 Study
+        completed_study_events = [
+            study_map[uid]
+            for uid, stats in study_series.items()
+            if stats['series_count'] > 0
+            and stats['series_count'] == stats['done_count']
+        ]
+
+        # 輸出簡潔的彙總日誌
+        self.logger.info(
+            f"[identify_completed_studies_batch] "
+            f"checked={len(study_uids)}, "
+            f"with_series={len(study_series)}, "
+            f"completed={len(completed_study_events)}"
+        )
+
+        return completed_study_events
 
     async def get_stydy_series_ope_no_status(
         self,
@@ -1902,9 +1996,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             rename_nifti_path
         )
         
-        # 識別已完成的 Study
-        completed_study_events = await self.identify_completed_studies(study_events)
-        
+        # 識別已完成的 Study（使用批量查詢優化版本）
+        completed_study_events = await self.identify_completed_studies_batch(study_events)
+
         return {
             'studies_pending_completion': completed_studies,
             'completed_study_events': [
