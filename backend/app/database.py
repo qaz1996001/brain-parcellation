@@ -63,6 +63,7 @@ from advanced_alchemy.extensions.fastapi import (
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
 )
+from advanced_alchemy.config.engine import EngineConfig
 
 # SQLAlchemy 非同步配置
 # 使用 PostgreSQL + asyncpg 驅動進行非同步資料庫操作
@@ -73,7 +74,15 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
     # PostgreSQL 連接字串
     # 格式: postgresql+asyncpg://username:password@host:port/database
     connection_string="postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom",
-    
+
+    # 連接池配置：解決 QueuePool 連接耗盡問題
+    engine_config=EngineConfig(
+        pool_size=20,        # 基本連接數（默認 5）
+        max_overflow=30,     # 額外連接數（默認 10）
+        pool_timeout=60,     # 等待連接超時（秒）
+        pool_pre_ping=True,  # 連接健康檢查
+    ),
+
     # 會話配置：提交後物件不過期
     # 這確保提交後仍可訪問物件屬性，適合非同步場景
     session_config=AsyncSessionConfig(expire_on_commit=False),
