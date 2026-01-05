@@ -205,7 +205,7 @@ def main(model_id: str = '48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6'):
     print('platform_json',platform_json)
 
     # 儲存平台 JSON 檔案
-    platform_json_path = output_series_folder.joinpath('rdx_cmb_pred_json.json')
+    platform_json_path = output_series_folder.joinpath('Pred_CMB_rdx_cmb_pred_json.json')
     with open(platform_json_path, 'w') as f:
         f.write(platform_json.model_dump_json())
     #
