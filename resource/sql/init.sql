@@ -266,3 +266,12 @@ $$;
 
 alter function get_stydy_ope_no_status(varchar) owner to postgres_n;
 
+-- SERIES_INFERENCE_TOOL configuration
+INSERT INTO dcop_conf_bt (tool_id, ope_no, ope_name, status_code, active, create_time, update_time)
+VALUES
+    ('SERIES_INFERENCE_TOOL', '300.055', 'Series inference ready', 'SERIES_INFERENCE_READY', 1, NOW(), NOW()),
+    ('SERIES_INFERENCE_TOOL', '300.105', 'Series inference queued', 'SERIES_INFERENCE_QUEUED', 1, NOW(), NOW()),
+    ('SERIES_INFERENCE_TOOL', '300.155', 'Series inference running', 'SERIES_INFERENCE_RUNNING', 1, NOW(), NOW()),
+    ('SERIES_INFERENCE_TOOL', '300.295', 'Series inference complete', 'SERIES_INFERENCE_COMPLETE', 1, NOW(), NOW())
+ON CONFLICT (tool_id, ope_no) DO NOTHING;
+
