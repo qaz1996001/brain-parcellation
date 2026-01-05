@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from advanced_alchemy.extensions.fastapi import base
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,8 +66,8 @@ class DCOPEventModel(base.DefaultBase):
         study_uid: str,
         status: str,
         tool_id: str = "DICOM_TOOL",
-        series_uid: str = None,
-        session: Session | AsyncSession = None,
+        series_uid: Optional[str] = None,
+        session: Optional[Session | AsyncSession] = None,
     ):
         """
         快速創建事件的類方法
@@ -126,12 +126,12 @@ class DCOPEventModel(base.DefaultBase):
         cls,
         tool_id: str,
         study_uid: str,
-        series_uid: str,
+        series_uid: Optional[str],
         study_id: str,
         ope_no: str,
-        result_data: Dict[str, str],
-        params_data: Dict[str, str],
-        session: Session | AsyncSession = None,
+        result_data: Dict[str, Any],
+        params_data: Dict[str, Any],
+        session: Optional[Session | AsyncSession] = None,
     ):
         """
         快速創建事件的類方法

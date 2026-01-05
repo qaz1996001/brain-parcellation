@@ -204,6 +204,10 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         task_paths = get_task_execution_paths()
         upload_data_api_url = get_upload_data_api_url()
 
+        # Extract study_id for type safety
+        study_id = f"inference_{request.study_uid[:8]}"
+        series_uid_for_event = accepted_series[0] if len(accepted_series) == 1 else None
+
         # Build task parameters (Linus: data structure drives behavior)
         func_params = {
             # Series-specific (NEW - presence indicates series-level)
@@ -212,7 +216,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             "inference_id": str(inference_id),
             # Study context
             "study_uid": request.study_uid,
-            "study_id": f"inference_{request.study_uid[:8]}",  # Simplified
+            "study_id": study_id,
             # Configuration (dual deployment support)
             "path_process": task_paths["path_process"],
             "path_json": task_paths["path_json"],
@@ -228,8 +232,8 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             ready_event = await DCOPEventModel.create_event_ope_no(
                 tool_id="SERIES_INFERENCE_TOOL",
                 study_uid=request.study_uid,
-                series_uid=accepted_series[0] if len(accepted_series) == 1 else None,
-                study_id=func_params["study_id"],
+                series_uid=series_uid_for_event,
+                study_id=study_id,
                 ope_no=DCOPStatus.SERIES_INFERENCE_READY.value,
                 result_data={},  # Empty for READY event
                 params_data={
@@ -263,10 +267,8 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                 queued_event = await DCOPEventModel.create_event_ope_no(
                     tool_id="SERIES_INFERENCE_TOOL",
                     study_uid=request.study_uid,
-                    series_uid=accepted_series[0]
-                    if len(accepted_series) == 1
-                    else None,
-                    study_id=func_params["study_id"],
+                    series_uid=series_uid_for_event,
+                    study_id=study_id,
                     ope_no=DCOPStatus.SERIES_INFERENCE_QUEUED.value,
                     result_data={},  # Empty for QUEUED event
                     params_data={"inference_id": str(inference_id)},

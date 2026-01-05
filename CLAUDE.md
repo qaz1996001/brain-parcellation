@@ -244,6 +244,41 @@ logger = logging.getLogger(__name__)
 logger.info(f"Processing study {study_id}")
 ```
 
+## Code Quality Checks (MANDATORY)
+
+**Before submitting code for review**, you MUST run these checks and fix ALL errors:
+
+### Backend Inference Module
+```bash
+# Type checking (ty - strict type checker)
+uvx ty check backend/app/inference/
+
+# Linting with auto-fix (ruff)
+uvx ruff check backend/app/inference/ --fix
+
+# Formatting (ruff)
+uvx ruff format backend/app/inference/
+```
+
+### Full code_ai Module
+```bash
+# For changes outside inference module
+
+uvx ty check code_ai/<module>/
+uvx ruff check code_ai/<module>/ --fix
+uvx ruff format code_ai/<module>/
+```
+
+**Requirements**:
+- ✅ `ty check` MUST pass with 0 errors
+- ✅ `ruff check` MUST pass (auto-fix applied)
+- ✅ `ruff format` MUST complete without changes
+
+**Common Type Errors**:
+- Import paths: Use `backend.app.` prefix (not `app.`)
+- Optional parameters: Handle `None` cases explicitly with `or ""` or type narrowing
+- Dict types: Use `Dict[str, Any]` for nested structures, not `Dict[str, str]`
+
 ## Important Constraints
 
 **GPU Resources**:
