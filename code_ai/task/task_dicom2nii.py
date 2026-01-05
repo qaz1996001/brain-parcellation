@@ -31,7 +31,6 @@ from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
 from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
 from code_ai.task.params import BoosterParamsMyRABBITMQ
-from code_ai.utils.database import save_result_status_to_sqlalchemy
 from backend.app.sync import urls as sync_urls
 from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
 
@@ -41,6 +40,7 @@ def get_output_study(dicom_ds):
         return None
     study_folder_name = get_study_folder_name(dicom_ds)
     if not study_folder_name:
+
         return None
     return study_folder_name
 
@@ -147,7 +147,6 @@ def call_post_httpx(func_params: Dict[str, any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
 def call_dcm2niix(func_params: Dict[str, any]):
     task_params = intput_params.CallDcm2niixParams.model_validate(func_params,
@@ -281,7 +280,6 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_instances_queue',
                                  qps=100,
                                  log_level=logging.WARNING,
-                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy
                                  ))
 def process_instances(func_params: Dict[str, any]):
     task_params = intput_params.ProcessInstancesParams.model_validate(func_params,
@@ -368,7 +366,6 @@ def get_orthanc_series_uid(study_uid: str,
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10,))
 def process_dir(func_params: Dict[str, any]):
     task_params = intput_params.Dicom2NiiParams.model_validate(func_params,
@@ -431,7 +428,6 @@ def process_dir(func_params: Dict[str, any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
-                                 user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
                                  qps=10,))
 def dicom_to_nii(func_params: Dict[str, any]):
 
