@@ -74,20 +74,23 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
     async def validate_series_ready(
         self, study_uid: str, series_uids: List[str]
-    ) -> Tuple[List[str], List[Dict[str, str]]]:
+    ) -> Tuple[List[str], List[Dict[str, str]], List[str]]:
         """Validate which series are ready for inference.
 
         Checks DCOP events to see if series have SERIES_CONVERSION_COMPLETE status.
+        Also extracts nifti file paths from the conversion complete events.
 
         Args:
             study_uid: Study instance UID
             series_uids: List of series instance UIDs to validate
 
         Returns:
-            Tuple of (accepted_series, rejected_series_with_reasons)
+            Tuple of (accepted_series, rejected_series_with_reasons, nifti_paths)
+            - nifti_paths: List of nifti file paths in same order as accepted_series
         """
         accepted = []
         rejected = []
+        nifti_paths = []
 
         async with self.session_manager.get_session() as session:
             for series_uid in series_uids:
@@ -111,7 +114,12 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
                 if event:
                     accepted.append(series_uid)
-                    logger.info(f"Series {series_uid} ready for inference")
+                    # Extract nifti path from event data
+                    nifti_path = self._extract_nifti_path(event)
+                    nifti_paths.append(nifti_path)
+                    logger.info(
+                        f"Series {series_uid} ready for inference, nifti: {nifti_path}"
+                    )
                 else:
                     rejected.append(
                         {
@@ -128,7 +136,44 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             f"out of {len(series_uids)} total"
         )
 
-        return accepted, rejected
+        return accepted, rejected, nifti_paths
+
+    def _extract_nifti_path(self, event: DCOPEventModel) -> str:
+        """Extract nifti file path from SERIES_CONVERSION_COMPLETE event.
+
+        Path is constructed from:
+        - params_data['output_nifti_path']: base nifti directory
+        - params_data['output_dicom_path']: contains study_id in path
+        - result_data['result']: series description (filename without extension)
+
+        Args:
+            event: DCOPEventModel with conversion complete data
+
+        Returns:
+            str: Full path to the nifti file
+        """
+        import os
+
+        params = event.params_data or {}
+        result = event.result_data or {}
+
+        # Get base nifti path
+        output_nifti_base = params.get("output_nifti_path", "")
+
+        # Extract study_id from output_dicom_path
+        # e.g., /path/rename_dicom/10516407_20231215_MR_21210200091/T1BRAVO_AXI
+        output_dicom_path = params.get("output_dicom_path", "")
+        path_parts = output_dicom_path.split(os.sep)
+        # Study ID is second to last part (before series description)
+        study_id = path_parts[-2] if len(path_parts) >= 2 else "unknown"
+
+        # Get series description from result
+        series_desc = result.get("result", "unknown")
+
+        # Construct full nifti path
+        nifti_path = os.path.join(output_nifti_base, study_id, f"{series_desc}.nii.gz")
+
+        return nifti_path
 
     async def queue_series_inference(
         self, request: SeriesInferenceRequest
@@ -141,8 +186,12 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         Returns:
             InferenceResponse with inference_id and validation results
         """
-        # Step 1: Validate series readiness
-        accepted_series, rejected_series = await self.validate_series_ready(
+        # Step 1: Validate series readiness and get nifti paths
+        (
+            accepted_series,
+            rejected_series,
+            nifti_paths,
+        ) = await self.validate_series_ready(
             study_uid=request.study_uid, series_uids=request.series_uids
         )
 
@@ -212,6 +261,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         func_params = {
             # Series-specific (NEW - presence indicates series-level)
             "series_uids": accepted_series,
+            "nifti_series_paths": nifti_paths,  # Paths extracted from DCOP events
             "model_id": model_id,
             "inference_id": str(inference_id),
             # Study context
@@ -222,9 +272,6 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             "path_json": task_paths["path_json"],
             "path_log": task_paths["path_log"],
             "upload_data_api_url": upload_data_api_url,
-            # NOTE: nifti_series_paths will be resolved by task based on series_uids
-            # This follows the design where validation happens in service layer
-            # but path resolution happens in task layer (where filesystem is accessible)
         }
 
         # Step 6: Create SERIES_INFERENCE_READY event
