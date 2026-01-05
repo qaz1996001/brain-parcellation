@@ -11,17 +11,14 @@ Based on inference_params_design.md - data-driven design principles.
 
 import logging
 import hashlib
-import json
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Dict, Tuple
 from uuid import UUID, uuid4
-from datetime import datetime
 
 from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
 from advanced_alchemy.extensions.fastapi import repository
 
 from backend.app.service import BaseRepositoryService
-from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
+from backend.app.sync.schemas import DCOPStatus
 from backend.app.sync.model import DCOPEventModel
 from backend.app.config.api_urls import get_upload_data_api_url
 from backend.app.config.task_paths import get_task_execution_paths
@@ -43,15 +40,13 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         """Repository for DCOP events."""
+
         model_type = DCOPEventModel
 
     repository_type = Repo
 
     def _generate_cache_key(
-        self,
-        study_uid: str,
-        series_uids: List[str],
-        model_id: str
+        self, study_uid: str, series_uids: List[str], model_id: str
     ) -> str:
         """Generate cache key from study_uid + sorted series_uids + model_id.
 
@@ -72,13 +67,13 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         # Hash to fixed-length key
         cache_key = hashlib.sha256(key_data.encode()).hexdigest()
 
-        logger.debug(f"Generated cache key {cache_key[:16]}... for {len(series_uids)} series")
+        logger.debug(
+            f"Generated cache key {cache_key[:16]}... for {len(series_uids)} series"
+        )
         return cache_key
 
     async def validate_series_ready(
-        self,
-        study_uid: str,
-        series_uids: List[str]
+        self, study_uid: str, series_uids: List[str]
     ) -> Tuple[List[str], List[Dict[str, str]]]:
         """Validate which series are ready for inference.
 
@@ -97,13 +92,19 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         async with self.session_manager.get_session() as session:
             for series_uid in series_uids:
                 # Query for SERIES_CONVERSION_COMPLETE event
-                stmt = select(DCOPEventModel).where(
-                    and_(
-                        DCOPEventModel.study_uid == study_uid,
-                        DCOPEventModel.series_uid == series_uid,
-                        DCOPEventModel.ope_no == DCOPStatus.SERIES_CONVERSION_COMPLETE.value
+                stmt = (
+                    select(DCOPEventModel)
+                    .where(
+                        and_(
+                            DCOPEventModel.study_uid == study_uid,
+                            DCOPEventModel.series_uid == series_uid,
+                            DCOPEventModel.ope_no
+                            == DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
+                        )
                     )
-                ).order_by(DCOPEventModel.create_time.desc()).limit(1)
+                    .order_by(DCOPEventModel.create_time.desc())
+                    .limit(1)
+                )
 
                 result = await session.execute(stmt)
                 event = result.scalar_one_or_none()
@@ -112,11 +113,15 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                     accepted.append(series_uid)
                     logger.info(f"Series {series_uid} ready for inference")
                 else:
-                    rejected.append({
-                        "series_uid": series_uid,
-                        "reason": "Series conversion not complete"
-                    })
-                    logger.warning(f"Series {series_uid} not ready: conversion not complete")
+                    rejected.append(
+                        {
+                            "series_uid": series_uid,
+                            "reason": "Series conversion not complete",
+                        }
+                    )
+                    logger.warning(
+                        f"Series {series_uid} not ready: conversion not complete"
+                    )
 
         logger.info(
             f"Validation complete: {len(accepted)} accepted, {len(rejected)} rejected "
@@ -126,8 +131,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         return accepted, rejected
 
     async def queue_series_inference(
-        self,
-        request: SeriesInferenceRequest
+        self, request: SeriesInferenceRequest
     ) -> InferenceResponse:
         """Queue series-level inference task.
 
@@ -139,12 +143,15 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         """
         # Step 1: Validate series readiness
         accepted_series, rejected_series = await self.validate_series_ready(
-            study_uid=request.study_uid,
-            series_uids=request.series_uids
+            study_uid=request.study_uid, series_uids=request.series_uids
         )
 
         # Step 2: Determine model_id (resolve from name+version if needed)
-        model_id = str(request.model_id) if request.model_id else f"{request.model_name}:{request.model_version}"
+        model_id = (
+            str(request.model_id)
+            if request.model_id
+            else f"{request.model_name}:{request.model_version}"
+        )
 
         # Step 3: Check cache (if all series accepted)
         cached_inference_id = None
@@ -152,13 +159,15 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             cache_key = self._generate_cache_key(
                 study_uid=request.study_uid,
                 series_uids=accepted_series,
-                model_id=model_id
+                model_id=model_id,
             )
             # TODO: Implement Redis cache check
             # cached_inference_id = await self._check_cache(cache_key)
 
         if cached_inference_id:
-            logger.info(f"Cache hit for {cache_key[:16]}..., returning cached inference")
+            logger.info(
+                f"Cache hit for {cache_key[:16]}..., returning cached inference"
+            )
             return InferenceResponse(
                 study_uid=request.study_uid,
                 inference_id=cached_inference_id,
@@ -166,11 +175,10 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                 model_name=request.model_name,
                 model_version=request.model_version,
                 series_validation=SeriesValidationResult(
-                    accepted=accepted_series,
-                    rejected=rejected_series
+                    accepted=accepted_series, rejected=rejected_series
                 ),
                 cache_status="cached",
-                status="queued"
+                status="queued",
             )
 
         # Step 4: If no accepted series, return rejected status
@@ -183,11 +191,10 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                 model_name=request.model_name,
                 model_version=request.model_version,
                 series_validation=SeriesValidationResult(
-                    accepted=accepted_series,
-                    rejected=rejected_series
+                    accepted=accepted_series, rejected=rejected_series
                 ),
                 cache_status="new",
-                status="rejected"
+                status="rejected",
             )
 
         # Step 5: Generate inference_id and create READY event
@@ -200,20 +207,17 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         # Build task parameters (Linus: data structure drives behavior)
         func_params = {
             # Series-specific (NEW - presence indicates series-level)
-            'series_uids': accepted_series,
-            'model_id': model_id,
-            'inference_id': str(inference_id),
-
+            "series_uids": accepted_series,
+            "model_id": model_id,
+            "inference_id": str(inference_id),
             # Study context
-            'study_uid': request.study_uid,
-            'study_id': f"inference_{request.study_uid[:8]}",  # Simplified
-
+            "study_uid": request.study_uid,
+            "study_id": f"inference_{request.study_uid[:8]}",  # Simplified
             # Configuration (dual deployment support)
-            'path_process': task_paths['path_process'],
-            'path_json': task_paths['path_json'],
-            'path_log': task_paths['path_log'],
-            'upload_data_api_url': upload_data_api_url,
-
+            "path_process": task_paths["path_process"],
+            "path_json": task_paths["path_json"],
+            "path_log": task_paths["path_log"],
+            "upload_data_api_url": upload_data_api_url,
             # NOTE: nifti_series_paths will be resolved by task based on series_uids
             # This follows the design where validation happens in service layer
             # but path resolution happens in task layer (where filesystem is accessible)
@@ -222,24 +226,27 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         # Step 6: Create SERIES_INFERENCE_READY event
         async with self.session_manager.get_session() as session:
             ready_event = await DCOPEventModel.create_event_ope_no(
-                tool_id='SERIES_INFERENCE_TOOL',
+                tool_id="SERIES_INFERENCE_TOOL",
                 study_uid=request.study_uid,
                 series_uid=accepted_series[0] if len(accepted_series) == 1 else None,
-                study_id=func_params['study_id'],
+                study_id=func_params["study_id"],
                 ope_no=DCOPStatus.SERIES_INFERENCE_READY.value,
+                result_data={},  # Empty for READY event
                 params_data={
-                    'inference_id': str(inference_id),
-                    'series_count': len(accepted_series),
-                    'series_uids': accepted_series,
-                    'model_id': model_id,
-                    'func_params': func_params
+                    "inference_id": str(inference_id),
+                    "series_count": len(accepted_series),
+                    "series_uids": accepted_series,
+                    "model_id": model_id,
+                    "func_params": func_params,
                 },
-                session=session
+                session=session,
             )
             session.add(ready_event)
             await session.commit()
 
-        logger.info(f"Created SERIES_INFERENCE_READY event for inference {inference_id}")
+        logger.info(
+            f"Created SERIES_INFERENCE_READY event for inference {inference_id}"
+        )
 
         # Step 7: Push to unified task_pipeline_inference queue
         # Linus: Data structure drives behavior - 'series_uids' in func_params determines Series Level
@@ -247,18 +254,23 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
         try:
             task_pipeline_inference.push(func_params)
-            logger.info(f"Pushed inference {inference_id} to task_pipeline_inference_queue (Series Level)")
+            logger.info(
+                f"Pushed inference {inference_id} to task_pipeline_inference_queue (Series Level)"
+            )
 
             # Create SERIES_INFERENCE_QUEUED event
             async with self.session_manager.get_session() as session:
                 queued_event = await DCOPEventModel.create_event_ope_no(
-                    tool_id='SERIES_INFERENCE_TOOL',
+                    tool_id="SERIES_INFERENCE_TOOL",
                     study_uid=request.study_uid,
-                    series_uid=accepted_series[0] if len(accepted_series) == 1 else None,
-                    study_id=func_params['study_id'],
+                    series_uid=accepted_series[0]
+                    if len(accepted_series) == 1
+                    else None,
+                    study_id=func_params["study_id"],
                     ope_no=DCOPStatus.SERIES_INFERENCE_QUEUED.value,
-                    params_data={'inference_id': str(inference_id)},
-                    session=session
+                    result_data={},  # Empty for QUEUED event
+                    params_data={"inference_id": str(inference_id)},
+                    session=session,
                 )
                 session.add(queued_event)
                 await session.commit()
@@ -284,20 +296,18 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             model_name=request.model_name,
             model_version=request.model_version,
             series_validation=SeriesValidationResult(
-                accepted=accepted_series,
-                rejected=rejected_series
+                accepted=accepted_series, rejected=rejected_series
             ),
             cache_status="new",
             status=status,
             queue_status=QueueStatus(
                 position=0,  # TODO: Implement queue position tracking
-                estimated_wait_seconds=0
-            )
+                estimated_wait_seconds=0,
+            ),
         )
 
     async def process_batch_inference(
-        self,
-        batch_request: BatchInferenceRequest
+        self, batch_request: BatchInferenceRequest
     ) -> BatchInferenceResponse:
         """Process batch of series inference requests.
 
@@ -310,35 +320,41 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         batch_id = uuid4()
         results = []
 
-        logger.info(f"Processing batch {batch_id} with {len(batch_request.requests)} requests")
+        logger.info(
+            f"Processing batch {batch_id} with {len(batch_request.requests)} requests"
+        )
 
         for req in batch_request.requests:
             try:
                 result = await self.queue_series_inference(req)
                 results.append(result)
             except Exception as e:
-                logger.error(f"Failed to process request for study {req.study_uid}: {e}")
+                logger.error(
+                    f"Failed to process request for study {req.study_uid}: {e}"
+                )
                 # Create error response
-                results.append(InferenceResponse(
-                    study_uid=req.study_uid,
-                    inference_id=None,
-                    model_id=req.model_id,
-                    model_name=req.model_name,
-                    model_version=req.model_version,
-                    series_validation=SeriesValidationResult(
-                        accepted=[],
-                        rejected=[{"series_uid": uid, "reason": str(e)} for uid in req.series_uids]
-                    ),
-                    cache_status="new",
-                    status="rejected"
-                ))
+                results.append(
+                    InferenceResponse(
+                        study_uid=req.study_uid,
+                        inference_id=None,
+                        model_id=req.model_id,
+                        model_name=req.model_name,
+                        model_version=req.model_version,
+                        series_validation=SeriesValidationResult(
+                            accepted=[],
+                            rejected=[
+                                {"series_uid": uid, "reason": str(e)}
+                                for uid in req.series_uids
+                            ],
+                        ),
+                        cache_status="new",
+                        status="rejected",
+                    )
+                )
 
         logger.info(f"Batch {batch_id} complete: {len(results)} results")
 
-        return BatchInferenceResponse(
-            batch_id=batch_id,
-            results=results
-        )
+        return BatchInferenceResponse(batch_id=batch_id, results=results)
 
 
 # Linus: "Keep it simple"
