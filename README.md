@@ -114,24 +114,68 @@ EOF
 
 ### 
 
-#### 第一步：測試目錄
+#### 第一步：建立
 ```
 mkdir test
 cd test
-cp ../brain-parcellation ./
+cp -r ../brain-parcellation ./
 git reset --hard
+git fetch
+git checkout rad_ai_infer_test
+git pull
+```
+##### 1.2 變更  .env
+``` 
+
+PATH_ROOT=/mnt/e/pipeline/test/sean
+
+PATH_RAW_DICOM=/mnt/e/pipeline/test/raw_dicom
 
 
+REDIS_HOST=127.0.0.1
+REDIS_USERNAME=
+REDIS_PASSWORD=
+REDIS_PORT=10079
+REDIS_DB=2
+REDIS_DB_FILTER_AND_RPC_RESULT=3
+REDIS_DB_FASTAPI_CACHE=7
+
+
+UPLOAD_DATA_HOST=127.0.0.1
+UPLOAD_DATA_DICOM_SEG_PORT=8042
+UPLOAD_DATA_DICOM_SEG_URL="http://${UPLOAD_DATA_HOST}:${UPLOAD_DATA_DICOM_SEG_PORT}"
+
+UPLOAD_DATA_JSON_PORT=7999
+UPLOAD_DATA_API_URL="http://${UPLOAD_DATA_HOST}:${UPLOAD_DATA_JSON_PORT}/api/v1"
+
+# AI_APP  #################################
+AI_APP_PORT=7999
+AI_APP_TITLE="SHH AI API TEST environments"
+AI_APP_DESCRIPTION="API FOR SHH AI TEST environments"
+AI_APP_VERSION="1.1.0"
+AI_APP_CONNECTION_STRING="postgresql+asyncpg://postgres_n:postgres_p@127.0.0.1:15433/dicom_testing"
 ```
 
-#### 第一步：關閉連接
+#### 第二步：關閉連接
 ```bash
 docker exec -it db_server psql -U postgres_n -d postgres -c "
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
 WHERE pg_stat_activity.datname = 'dicom' AND pid <> pg_backend_pid();"
 ```
-#### 第二步：建立新資料庫（分開執行）
+#### 第三步：建立新資料庫（分開執行）
 ```bash
 docker exec -it db_server psql -U postgres_n -d postgres -c "CREATE DATABASE dicom_testing WITH TEMPLATE dicom OWNER postgres_n;"
+
 ```
+#### 第四步：驗證DB內容
+
+#### 第五步：清空測試DB
+
+```bash
+docker exec -it db_server psql -U postgres_n -d postgres -c "truncate table dcop_event_bt;"
+docker exec -it db_server psql -U postgres_n -d postgres -c "truncate table dcop_event_bth;"
+```
+
+/openspec:apply 繼續  add-environment-support  請分析 backend、code_ai有用到環境變數的程式碼，與對應的程式調用流程。我需要將程式碼都改成pure function，減少side effect，非必要不要有side effect。
+我想要讓每一個調用鍊都有以下的 log 方式，log 設定需要有通用含數，每一個調用鍊有自己的log檔案

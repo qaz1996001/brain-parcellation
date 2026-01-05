@@ -52,6 +52,10 @@ if __name__ == '__main__':
                      booster_dirs=['code_ai/task'], max_depth=1, py_file_re_str=None).auto_discovery()
     # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
     fire.Fire(BoosterFire, )
+    from funboost.funboost_web_manager.app import start_funboost_web_manager
+    start_funboost_web_manager()
+    BoostersManager.multi_process_consume_all_queues(1)
+
 
 '''
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  push test_find_queue1 --x=1 --y=2

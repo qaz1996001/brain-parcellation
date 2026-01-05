@@ -73,9 +73,9 @@ class BrokerConnConfig(DataClassBase):
     #     "sasl_mechanism": "SCRAM-SHA-256",
     #     "security_protocol": "SASL_PLAINTEXT",
     # }
-
-    # SQLACHEMY_ENGINE_URL = f'sqlite:////sqlachemy_queues/queues.db'
-    SQLACHEMY_ENGINE_URL = f'sqlite:///{os.getenv("LOCAL_DB","database.sqlite3")}'
+    AI_APP_CONNECTION_STRING = os.getenv("AI_APP_CONNECTION_STRING")
+    if AI_APP_CONNECTION_STRING:
+        SQLACHEMY_ENGINE_URL     = AI_APP_CONNECTION_STRING
 
 
     # 如果broker_kind 使用 peewee 中间件模式会使用mysql配置

@@ -251,6 +251,39 @@ logger.info(f"Processing study {study_id}")
 - Dual deployment architecture maximizes GPU utilization
 - TensorFlow models require CUDA 11.x compatibility
 
+**GPU Mutual Exclusion Pattern** (CRITICAL for new GPU tasks):
+- All GPU inference tasks MUST use `task_pipeline_inference` as the unified entry point
+- Single queue with `qps=1` provides natural GPU mutual exclusion
+- NO external coordination needed (no Redis locks, no DB semaphores)
+- Data structure determines behavior: `'series_uids' in func_params` → Series Level, otherwise → Study Level
+
+```python
+# CORRECT: Use unified entry point for GPU tasks
+from code_ai.task.task_pipeline import task_pipeline_inference
+
+# Study Level (original behavior)
+task_pipeline_inference.push({
+    'study_uid': '...',
+    'nifti_study_path': '/path/to/study',
+    # NO 'series_uids' key
+})
+
+# Series Level (new behavior)
+task_pipeline_inference.push({
+    'series_uids': ['series_a', 'series_b'],  # Key presence determines level
+    'study_uid': '...',
+    'model_id': 'aneurysm_v1',
+})
+
+# WRONG: Do NOT create separate GPU queues
+# This would cause GPU conflicts!
+```
+
+**Why qps=1?**
+- funboost's `qps=1` ensures only one task executes at a time
+- First-in-first-out scheduling, fair for both Study and Series Level
+- Simple, reliable, fewer failure points than distributed locks
+
 **DICOM Standards**:
 - DICOM-SEG output must conform to medical imaging standards
 - Metadata schemas in `code_ai/pipeline/dicomseg/schema/`
@@ -280,9 +313,11 @@ logger.info(f"Processing study {study_id}")
 **Adding New AI Pipeline**:
 1. Create pipeline script in `code_ai/pipeline/pipeline_<name>_tensorflow.py`
 2. Add DICOM-SEG schema in `code_ai/pipeline/dicomseg/schema/<name>.py`
-3. Add task wrapper if needed (usually reuse `task_pipeline_inference`)
-4. Update service layer to dispatch new task type
+3. **IMPORTANT**: Reuse `task_pipeline_inference` for GPU tasks (see GPU Mutual Exclusion Pattern above)
+4. Update service layer to dispatch via `task_pipeline_inference.push()`
 5. Document in `docs/API_REFERENCE.md`
+
+> **Warning**: Do NOT create separate GPU task queues. All GPU inference MUST go through `task_pipeline_inference` to ensure proper GPU mutual exclusion via `qps=1`.
 
 ## External Dependencies
 
