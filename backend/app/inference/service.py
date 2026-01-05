@@ -209,9 +209,9 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             'study_id': f"inference_{request.study_uid[:8]}",  # Simplified
 
             # Configuration (dual deployment support)
-            'path_process': task_paths['PATH_PROCESS'],
-            'path_json': task_paths['PATH_JSON'],
-            'path_log': task_paths['PATH_LOG'],
+            'path_process': task_paths['path_process'],
+            'path_json': task_paths['path_json'],
+            'path_log': task_paths['path_log'],
             'upload_data_api_url': upload_data_api_url,
 
             # NOTE: nifti_series_paths will be resolved by task based on series_uids
