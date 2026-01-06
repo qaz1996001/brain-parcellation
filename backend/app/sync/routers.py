@@ -1,6 +1,6 @@
 # app/sync/routers.py
 import logging
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Optional, Union
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query
@@ -13,6 +13,7 @@ from sqlalchemy import Select
 from sqlalchemy.engine.row import Row
 
 from backend.app.sync import urls
+from .deps import provide_sync_service_class
 from .service import DCOPEventDicomService
 from .model import DCOPEventModel
 from .schemas import (
@@ -26,6 +27,11 @@ from .schemas import (
 )
 
 from ..database import alchemy
+
+# Dynamic service class selection via feature flags
+# When USE_NEW_SYNC_SERVICE=true, uses DCOPEventDicomServiceV2 with config injection
+# When USE_NEW_SYNC_SERVICE=false (default), uses legacy DCOPEventDicomService
+_SyncServiceClass = provide_sync_service_class()
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +59,7 @@ async def get_study_uuid() -> Response:
 async def post_study_uuid(
     request: PostStudyRequest,
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
@@ -78,7 +84,7 @@ async def post_study_uuid(
 )
 async def get_ope_no(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     filters: Annotated[
         list[filters.FilterTypes],
@@ -112,7 +118,7 @@ async def get_ope_no(
 async def post_ope_no(
     data: List[DCOPEventRequest],
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
@@ -130,7 +136,7 @@ async def post_ope_no(
 async def post_check_study_series_transfer_complete(
     background_tasks: BackgroundTasks,
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     dcop_event_list: Optional[List[DCOPEventRequest]] = Body(default=None),
 ) -> Response:
@@ -155,7 +161,7 @@ async def post_check_study_series_transfer_complete(
 async def post_study_series_nifti_tool(
     data_list: List[DCOPEventNIFTITOOLRequest],
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     background_tasks: BackgroundTasks,
 ) -> Response:
@@ -172,7 +178,7 @@ async def post_study_series_nifti_tool(
 )
 async def post_check_study_series_conversion_complete(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     background_tasks: BackgroundTasks,
     dcop_event_list: Optional[List[DCOPEventRequest]] = Body(default=None),
@@ -197,7 +203,7 @@ async def post_check_study_series_conversion_complete(
 )
 async def post_check_study_series_conversion_complete_by_study_id(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     background_tasks: BackgroundTasks,
     study_id_list: Optional[List[str]] = Body(default=None),
@@ -241,7 +247,7 @@ async def post_check_study_series_conversion_complete_by_study_id(
 )
 async def get_events_complex(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     filters_list: Annotated[
         list[filters.FilterTypes],
@@ -380,7 +386,7 @@ async def delete_events_complex(
 )
 async def get_study_series_ope_no_status(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     limit: int = Query(20, ge=1),
     offset: int = Query(0, ge=0),
@@ -401,7 +407,7 @@ async def get_study_series_ope_no_status(
 )
 async def get_stydy_ope_no_status(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     study_uid: Optional[OrthancID] = Query(None),
     ope_no: OpeNo = Query(...),
@@ -424,7 +430,7 @@ async def get_stydy_ope_no_status(
 )
 async def get_check_study_series_conversion_complete(
     dcop_event_service: Annotated[
-        DCOPEventDicomService, Depends(alchemy.provide_service(DCOPEventDicomService))
+        DCOPEventDicomService, Depends(alchemy.provide_service(_SyncServiceClass))
     ],
     study_uid: Optional[str] = Query(None),
 ):

@@ -91,16 +91,25 @@ class DCOPEventDicomServiceV2(BaseRepositoryService[DCOPEventModel]):
     )
     can_inference_pattern = re.compile(pattern_str)
 
-    def __init__(self, config: BackendConfig, **kwargs: Any) -> None:
+    def __init__(self, config: Optional[BackendConfig] = None, **kwargs: Any) -> None:
         """
-        Initialize service with injected configuration.
+        Initialize service with injected or auto-loaded configuration.
 
         Args:
-            config: Immutable BackendConfig instance containing all settings
+            config: Optional BackendConfig instance. If None, loads from environment.
             **kwargs: Additional arguments passed to parent class
+
+        Design Pattern: Dual-mode support for backward compatibility
+        - Explicit config: service = DCOPEventDicomServiceV2(config=my_config)
+        - Auto-load: service = DCOPEventDicomServiceV2()  # loads from env
         """
         super().__init__(**kwargs)
-        self._config = config
+        if config is None:
+            from backend.app.config.loader import load_backend_config_from_env
+
+            self._config = load_backend_config_from_env(fail_safe=True)
+        else:
+            self._config = config
 
     @property
     def config(self) -> BackendConfig:

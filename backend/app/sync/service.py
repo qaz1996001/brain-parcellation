@@ -1,42 +1,39 @@
 import json
 import logging
 import pathlib
-import traceback
-from typing import List, Optional, Tuple, Dict, Any
 import re
+from typing import Any, Dict, List, Optional, Tuple
+
 import httpx
 import pandas as pd
 import pydicom
 from advanced_alchemy.extensions.fastapi import repository
 from advanced_alchemy.service import OffsetPagination
-from funboost import AsyncResult
-from pyorthanc import Study, Orthanc
-
-# from fastapi import
-from sqlalchemy import text, select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_cache import FastAPICache
-
-from code_ai.task.schema.intput_params import Dicom2NiiParams
-from backend.app.service import BaseRepositoryService
+from funboost import AsyncResult
+from pyorthanc import Orthanc, Study
+from sqlalchemy import Row, and_, select, text
 
 from backend.app.config.api_urls import get_upload_data_api_url
-from backend.app.config.task_paths import get_task_execution_paths
 from backend.app.config.models import BackendConfig
+from backend.app.config.task_paths import get_task_execution_paths
+from backend.app.service import BaseRepositoryService
+from code_ai.task.schema.intput_params import Dicom2NiiParams
+
 from .model import DCOPEventModel
 from .schemas import (
-    DCOPStatus,
-    DCOPEventRequest,
     DCOPEventNIFTITOOLRequest,
-    StydySeriesOpeNoStatus,
+    DCOPEventRequest,
+    DCOPStatus,
     OpeNo,
     OrthancID,
+    StydySeriesOpeNoStatus,
     validate_orthanc_id,
 )
 from .urls import (
     SYNC_PROT_OPE_NO,
-    SYNC_PROT_STUDY_NIFTI_TOOL,
     SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,
+    SYNC_PROT_STUDY_NIFTI_TOOL,
     SYNC_PROT_STUDY_TRANSFER_COMPLETE,
 )
 
@@ -55,10 +52,202 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     - Auto-load: service = DCOPEventDicomService()  # loads from env
     """
 
+    # Status-to-URL mapping (Linus principle: good data structure)
+    # Replace procedural match-case with declarative mapping
+    STATUS_URL_MAP: Dict[str, str] = {
+        DCOPStatus.STUDY_TRANSFER_COMPLETE.value: SYNC_PROT_STUDY_TRANSFER_COMPLETE,
+        DCOPStatus.STUDY_CONVERSION_COMPLETE.value: SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,
+        DCOPStatus.SERIES_TRANSFER_COMPLETE.value: SYNC_PROT_STUDY_TRANSFER_COMPLETE,
+        DCOPStatus.SERIES_CONVERSION_COMPLETE.value: SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,
+    }
+
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
-        """Author repository."""
+        """DCOP Event Repository with custom query methods.
+
+        Encapsulates all database query logic following Repository pattern.
+        Provides semantic methods for data access instead of raw SQL in service layer.
+        """
 
         model_type = DCOPEventModel
+
+        async def get_studies_ready_for_transfer(self) -> List[Row]:
+            """Retrieve studies ready for transfer completion marking.
+
+            Encapsulates the stored procedure call for getting all studies status.
+
+            Returns:
+                List of Row objects containing study status information.
+            """
+            result = await self.session.execute(
+                text("SELECT * FROM public.get_all_studies_status()")
+            )
+            return result.all()
+
+        async def get_series_by_status(
+            self, status: str, study_uid: Optional[str] = None
+        ) -> List[Row]:
+            """Query series with a specific status, optionally filtered by study_uid.
+
+            Unifies 4 duplicate SQL query patterns into a single Repository method.
+
+            Args:
+                status: The DCOP status value to filter by.
+                study_uid: Optional study UID to further filter results.
+
+            Returns:
+                List of Row objects with typed access to result columns.
+            """
+            if study_uid is None:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status)"
+                )
+                params = {"status": status}
+            else:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
+                    "WHERE study_uid = :study_uid"
+                )
+                params = {"status": status, "study_uid": study_uid}
+
+            result = await self.session.execute(sql, params)
+            return result.all()
+
+        async def get_studies_pending_completion(
+            self, status: str, study_uid: Optional[str] = None
+        ) -> List[Row]:
+            """Query studies pending completion with complex subquery logic.
+
+            Encapsulates the complex join query for finding studies that are
+            ready for the next processing phase.
+
+            Args:
+                status: The DCOP status value to check against.
+                study_uid: Optional study UID to filter results.
+
+            Returns:
+                List of Row objects containing pending study information.
+            """
+            if study_uid is None:
+                sql = text(
+                    "SELECT sos.study_uid, sos.series_uid, sos.study_id, "
+                    "sos.ope_no, sos.result_data, sos.params_data "
+                    "FROM public.get_stydy_series_ope_no_status(:status) as sos, "
+                    "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no "
+                    "FROM dcop_event_bt deb GROUP BY study_id) as debb "
+                    "WHERE sos.study_id = debb.study_id "
+                    "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])"
+                )
+                params = {"status": status}
+            else:
+                sql = text(
+                    "SELECT sos.study_uid, sos.series_uid, sos.study_id, "
+                    "sos.ope_no, sos.result_data, sos.params_data "
+                    "FROM public.get_stydy_series_ope_no_status(:status) as sos, "
+                    "(SELECT deb.study_id, max(deb.ope_no::numeric) as ope_no "
+                    "FROM dcop_event_bt deb WHERE deb.study_uid = :study_uid "
+                    "GROUP BY study_id) as debb "
+                    "WHERE sos.study_uid = :study_uid "
+                    "AND sos.study_id = debb.study_id "
+                    "AND debb.ope_no::NUMERIC <= ANY (sos.ope_no::NUMERIC[])"
+                )
+                params = {"status": status, "study_uid": study_uid}
+
+            result = await self.session.execute(sql, params)
+            return result.all()
+
+        async def get_series_by_status_paginated(
+            self, status: str, study_uid: Optional[str], limit: int, offset: int
+        ) -> Tuple[List[Row], int]:
+            """Query series with pagination support (single query pattern).
+
+            Replaces dual-query pagination (separate count + data queries).
+
+            Args:
+                status: The DCOP status value to filter by.
+                study_uid: Optional study UID to filter results.
+                limit: Maximum number of results.
+                offset: Number of results to skip.
+
+            Returns:
+                Tuple of (results, total_count).
+            """
+            if study_uid is None:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
+                    "LIMIT :limit OFFSET :offset"
+                )
+                count_sql = text(
+                    "SELECT COUNT(*) FROM public.get_stydy_series_ope_no_status(:status)"
+                )
+                params = {"status": status, "limit": limit, "offset": offset}
+                count_params = {"status": status}
+            else:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
+                    "WHERE study_uid = :study_uid LIMIT :limit OFFSET :offset"
+                )
+                count_sql = text(
+                    "SELECT COUNT(*) FROM public.get_stydy_series_ope_no_status(:status) "
+                    "WHERE study_uid = :study_uid"
+                )
+                params = {
+                    "status": status,
+                    "study_uid": study_uid,
+                    "limit": limit,
+                    "offset": offset,
+                }
+                count_params = {"status": status, "study_uid": study_uid}
+
+            count_result = await self.session.execute(count_sql, count_params)
+            total_count = count_result.scalar_one()
+            result = await self.session.execute(sql, params)
+            return result.all(), total_count
+
+        async def get_studies_by_status_paginated(
+            self, status: str, study_uid: Optional[str], limit: int, offset: int
+        ) -> Tuple[List[Row], int]:
+            """Query studies with pagination support (single query pattern).
+
+            Args:
+                status: The DCOP status value to filter by.
+                study_uid: Optional study UID to filter results.
+                limit: Maximum number of results.
+                offset: Number of results to skip.
+
+            Returns:
+                Tuple of (results, total_count).
+            """
+            if study_uid is None:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_ope_no_status(:status) "
+                    "LIMIT :limit OFFSET :offset"
+                )
+                count_sql = text(
+                    "SELECT COUNT(*) FROM public.get_stydy_ope_no_status(:status)"
+                )
+                params = {"status": status, "limit": limit, "offset": offset}
+                count_params = {"status": status}
+            else:
+                sql = text(
+                    "SELECT * FROM public.get_stydy_ope_no_status(:status) "
+                    "WHERE study_uid = :study_uid LIMIT :limit OFFSET :offset"
+                )
+                count_sql = text(
+                    "SELECT COUNT(*) FROM public.get_stydy_ope_no_status(:status) "
+                    "WHERE study_uid = :study_uid"
+                )
+                params = {
+                    "status": status,
+                    "study_uid": study_uid,
+                    "limit": limit,
+                    "offset": offset,
+                }
+                count_params = {"status": status, "study_uid": study_uid}
+
+            count_result = await self.session.execute(count_sql, count_params)
+            total_count = count_result.scalar_one()
+            result = await self.session.execute(sql, params)
+            return result.all(), total_count
 
     repository_type = Repo
     pattern_str = "({}),({}),({}),({}),({}|{})".format(
@@ -93,20 +282,15 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return self._config
 
     async def get_check_url_by_ope_no(self, ope_no: str) -> Optional[str]:
-        """Get check URL based on operation number using injected config."""
-        upload_data_api_url = self.config.api.upload_data_url
-        match ope_no:
-            case DCOPStatus.STUDY_TRANSFER_COMPLETE.value:
-                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
-            case DCOPStatus.STUDY_CONVERSION_COMPLETE.value:
-                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
-            case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_TRANSFER_COMPLETE}"
-            case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
-            case _:
-                url = None
-        return url
+        """Get check URL based on operation number using STATUS_URL_MAP lookup.
+
+        Uses declarative data structure instead of procedural match-case.
+        Returns None for unmapped statuses.
+        """
+        endpoint = self.STATUS_URL_MAP.get(ope_no)
+        if endpoint is None:
+            return None
+        return f"{self.config.api.upload_data_url}{endpoint}"
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]):
         """Post operation number task using injected config."""
@@ -128,14 +312,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 await session.commit()
                 await session.refresh(new_data_obj)
 
-                # new_data_obj = await self.create(data=new_data, auto_commit=True, auto_refresh=True)
-                match new_data_obj.ope_no:
-                    case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
-                        url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
-                    case _:
-                        url = None
+                # Use STATUS_URL_MAP lookup instead of match-case
+                url = await self.get_check_url_by_ope_no(new_data_obj.ope_no)
                 if url is not None and url not in check_url_set:
                     check_url_set.add(url)
         async with httpx.AsyncClient(timeout=180) as client:
@@ -177,8 +355,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 dcop_event_list,
                 dcop_event_dump_list,
             ) = await self._get_studies_ready_for_transfer()
-            for dcop_event_dump in dcop_event_dump_list:
-                dcop_event_dump["params_data"]
+            # Note: dcop_event_dump_list is already properly populated by _get_studies_ready_for_transfer
         else:
             dcop_event_list = [
                 DCOPEventRequest.model_validate(event, strict=False) for event in data
@@ -314,7 +491,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
         for event in events:
             study_id = event.study_id
-            output_dicom_path = pathlib.Path(os.path.join(dicom_path, study_id))
+            output_dicom_path = pathlib.Path(dicom_path).joinpath(study_id)
             output_nifti_path = pathlib.Path(nifti_path)
 
             # Prepare conversion parameters
@@ -384,9 +561,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         session.add(study_transfer_complete_data)
                         await session.commit()
                         await session.refresh(study_transfer_complete_data)
-                        await self.nifti_tool_get_series_info(
-                            dcop_event.study_uid, session
-                        )
+                        await self.nifti_tool_get_series_info(dcop_event.study_uid)
                 case DCOPStatus.SERIES_CONVERTING.value:
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
@@ -396,89 +571,78 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         async with httpx.AsyncClient(timeout=180) as client:
             await client.post(url=url)
 
-    async def nifti_tool_get_series_info(self, study_uid: str, session: AsyncSession):
-        """Get series info for NIFTI tool using injected config."""
+    async def nifti_tool_get_series_info(self, study_uid: str):
+        """Get series info for NIFTI tool using injected config.
+
+        Uses self.session_manager.get_session() for session management
+        instead of receiving session as parameter (spec requirement 2.3.1).
+        """
         from code_ai.task.task_dicom2nii import dicom_2_nii_series
         from code_ai.task.schema.intput_params import Dicom2NiiSeriesParams
 
         path_rename_nifti = self.config.paths.path_rename_nifti
-        # engine: AsyncEngine = session.bind
-        # async with engine.connect() as conn:
-        sql = text(
-            "SELECT * FROM public.get_stydy_series_ope_no_status(:status) where study_uid=:study_uid"
-        )
-        results = await session.execute(
-            sql, {"status": DCOPStatus.STUDY_CONVERTING.value, "study_uid": study_uid}
-        )
 
-        dcop_event_list = results.all()
-        task_params_list = []
-        dcop_model_list = []
-        for dcop_event in dcop_event_list:
-            result_data = dcop_event.result_data[0]
-            output_dicom_path = result_data["rename_dicom_path"]
-            output_nifti_path = pathlib.Path(path_rename_nifti)
-            task_params = Dicom2NiiSeriesParams(
-                sub_dir=None,
-                study_uid=dcop_event.study_uid,
-                series_uid=dcop_event.series_uid,
-                output_dicom_path=output_dicom_path,
-                output_nifti_path=output_nifti_path,
+        async with self.session_manager.get_session() as session:
+            # Use Repository method for consistent query pattern
+            sql = text(
+                "SELECT * FROM public.get_stydy_series_ope_no_status(:status) "
+                "WHERE study_uid = :study_uid"
             )
-            new_data_obj = await DCOPEventModel.create_event_ope_no(
-                tool_id="NIFTI_TOOL",
-                study_uid=dcop_event.study_uid,
-                series_uid=dcop_event.series_uid,
-                study_id=dcop_event.study_id,
-                ope_no=DCOPStatus.SERIES_CONVERTING.value,
-                result_data=dcop_event.result_data,
-                params_data=task_params.get_str_dict(),
-                session=session,
+            results = await session.execute(
+                sql,
+                {"status": DCOPStatus.STUDY_CONVERTING.value, "study_uid": study_uid},
             )
-            dcop_model_list.append(new_data_obj)
-            task_params_list.append(task_params)
 
-        try:
-            if dcop_event_list:  # Check if dcop_event_list is not empty/falsy
-                # Attempt to create many records and auto-commit
-                # If create_many raises an exception, the 'except' block will catch it,
-                # and the push operations will not be executed.
-                # data_obj = await self.create_many(dcop_model_list, auto_commit=True)
-                logger.info(
-                    f"session.add_all {dcop_model_list}",
+            dcop_event_list = results.all()
+            task_params_list = []
+            dcop_model_list = []
+
+            for dcop_event in dcop_event_list:
+                result_data = dcop_event.result_data[0]
+                output_dicom_path = result_data["rename_dicom_path"]
+                output_nifti_path = pathlib.Path(path_rename_nifti)
+                task_params = Dicom2NiiSeriesParams(
+                    sub_dir=None,
+                    study_uid=dcop_event.study_uid,
+                    series_uid=dcop_event.series_uid,
+                    output_dicom_path=output_dicom_path,
+                    output_nifti_path=output_nifti_path,
                 )
-                session.add_all(dcop_model_list)
-                await session.commit()
-                for dcop_model in dcop_model_list:
-                    await session.refresh(dcop_model)
+                new_data_obj = await DCOPEventModel.create_event_ope_no(
+                    tool_id="NIFTI_TOOL",
+                    study_uid=dcop_event.study_uid,
+                    series_uid=dcop_event.series_uid,
+                    study_id=dcop_event.study_id,
+                    ope_no=DCOPStatus.SERIES_CONVERTING.value,
+                    result_data=dcop_event.result_data,
+                    params_data=task_params.get_str_dict(),
+                    session=session,
+                )
+                dcop_model_list.append(new_data_obj)
+                task_params_list.append(task_params)
 
-                # If we reach here, create_many completed successfully and committed.
-                # Now, proceed with pushing tasks.
-                for task_params in task_params_list:
-                    task_dict = task_params.get_str_dict()
-                    base_api_url = get_upload_data_api_url()
-                    task_dict["upload_data_api_url"] = base_api_url
-                    # NOTE: dicom_2_nii_series does NOT need path_process/path_json/path_log
-                    # These are only needed by task_pipeline_inference
-                    # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
-                    dicom_2_nii_series.push(task_dict)
-            else:
+            try:
+                if dcop_event_list:
+                    logger.info(f"session.add_all {dcop_model_list}")
+                    session.add_all(dcop_model_list)
+                    await session.commit()
+                    for dcop_model in dcop_model_list:
+                        await session.refresh(dcop_model)
+
+                    # Push tasks after successful commit
+                    for task_params in task_params_list:
+                        task_dict = task_params.get_str_dict()
+                        base_api_url = get_upload_data_api_url()
+                        task_dict["upload_data_api_url"] = base_api_url
+                        dicom_2_nii_series.push(task_dict)
+                else:
+                    logger.info(
+                        "dcop_event_list is empty, no records to create or push."
+                    )
+            except Exception as e:
                 await session.rollback()
-                # If dcop_event_list is empty, there's nothing to create or push.
-                # A rollback here is likely unnecessary if nothing was attempted.
-                # You might just want to pass or log.
-                logger.info("dcop_event_list is empty, no records to create or push.")
-                # await self.repository.session.rollback() # Potentially redundant if nothing happened
-        except Exception as e:  # Catch specific exceptions for better debugging
-            # An error occurred during create_many or subsequent push operations.
-            # Rollback ensures no partial changes are left if auto_commit somehow failed or
-            # if you had other uncommitted operations before this try block.
-            await session.rollback()
-            logger.info(f"An error occurred: {e}. Database transaction rolled back.")
-            # Re-raise the exception if you want it to propagate further up the call stack
-            raise
-        finally:
-            pass
+                logger.exception(f"Error in nifti_tool_get_series_info: {e}")
+                raise
 
     def get_orthanc_study_uid_series_uid(self, instance_path_str: str):
         """Get Orthanc study and series UID using injected config."""
@@ -563,7 +727,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     output_dicom_path=rename_dicom_path,
                     output_nifti_path=rename_nifti_path,
                 )
-                flage = True
+                flag = True
                 for series_uid in series_uid_list:
                     new_data_list = []
                     async with self.session_manager.get_session() as session:
@@ -592,18 +756,18 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                             await session.commit()
                             logger.info(f"dicom_tool_get_series_info {new_data_list}")
                         except Exception:
-                            flage = False
+                            flag = False
                             await session.rollback()
-                            logger.error(traceback.print_exc())
-                logger.info(f"dicom_tool_get_series_info flage {flage}")
-                if flage:
+                            logger.exception("Error in dicom_tool_get_series_info")
+                logger.info(f"dicom_tool_get_series_info flag {flag}")
+                if flag:
                     task_dict = task_params.get_str_dict()
                     base_api_url = get_upload_data_api_url()
                     task_dict["upload_data_api_url"] = base_api_url
                     # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
                     # These path parameters are only required by task_pipeline_inference
                     # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)
-                    logger.info(f"dicom_tool_get_series_info dicom_to_nii start")
+                    logger.info("dicom_tool_get_series_info dicom_to_nii start")
                     result = dicom_to_nii.push(task_dict)
                     logger.info(f"dicom_tool_get_series_info dicom_to_nii {result}")
         return None
