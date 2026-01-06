@@ -11,7 +11,10 @@ Based on inference_params_design.md - data-driven design principles.
 
 import logging
 import hashlib
-from typing import List, Dict, Tuple
+import json
+import datetime
+from typing import List, Dict, Tuple, Any, Optional
+
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, and_
@@ -22,6 +25,7 @@ from backend.app.sync.schemas import DCOPStatus
 from backend.app.sync.model import DCOPEventModel
 from backend.app.config.api_urls import get_upload_data_api_url
 from backend.app.config.task_paths import get_task_execution_paths
+from backend.app.config.loader import load_backend_config_from_env
 
 from .schemas import (
     SeriesInferenceRequest,
@@ -30,7 +34,11 @@ from .schemas import (
     BatchInferenceResponse,
     SeriesValidationResult,
     QueueStatus,
+    CacheEntry,
+    CacheListResponse,
+    CacheDeleteResponse,
 )
+from .deps import get_redis_client, CACHE_KEY_PREFIX, DEFAULT_CACHE_TTL
 
 logger = logging.getLogger(__name__)
 
@@ -74,69 +82,161 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
     async def validate_series_ready(
         self, study_uid: str, series_uids: List[str]
-    ) -> Tuple[List[str], List[Dict[str, str]], List[str]]:
+    ) -> Tuple[List[str], List[str], List[Dict[str, str]], List[str], List[str]]:
         """Validate which series are ready for inference.
 
-        Checks DCOP events to see if series have SERIES_CONVERSION_COMPLETE status.
-        Also extracts nifti file paths from the conversion complete events.
+        Checks DCOP events to determine series status:
+        1. SERIES_CONVERSION_COMPLETE → direct mode (NIfTI ready) - but verify file exists!
+        2. SERIES_TRANSFER_COMPLETE → conversion mode (needs DICOM conversion)
+        3. No events → rejected
+
+        Linus: "Data structure drives behavior"
+        Linus: "Don't trust the database blindly - verify reality"
 
         Args:
             study_uid: Study instance UID
             series_uids: List of series instance UIDs to validate
 
         Returns:
-            Tuple of (accepted_series, rejected_series_with_reasons, nifti_paths)
-            - nifti_paths: List of nifti file paths in same order as accepted_series
+            Tuple of:
+            - accepted_direct: Series with conversion complete (direct mode)
+            - accepted_convert: Series needing conversion (conversion mode)
+            - rejected: Series not ready with reasons
+            - nifti_paths: NIfTI paths for direct mode series
+            - raw_dicom_paths: Raw DICOM paths for conversion mode series
         """
-        accepted = []
-        rejected = []
-        nifti_paths = []
+        import os
+
+        accepted_direct: List[str] = []
+        accepted_convert: List[str] = []
+        rejected: List[Dict[str, str]] = []
+        nifti_paths: List[str] = []
+        raw_dicom_paths: List[str] = []
 
         async with self.session_manager.get_session() as session:
             for series_uid in series_uids:
-                # Query for SERIES_CONVERSION_COMPLETE event
-                stmt = (
-                    select(DCOPEventModel)
-                    .where(
-                        and_(
-                            DCOPEventModel.study_uid == study_uid,
-                            DCOPEventModel.series_uid == series_uid,
-                            DCOPEventModel.ope_no
-                            == DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
-                        )
-                    )
-                    .order_by(DCOPEventModel.create_time.desc())
-                    .limit(1)
+                # First, try to find SERIES_CONVERSION_COMPLETE event
+                conversion_event = await self._find_event_by_status(
+                    session,
+                    study_uid,
+                    series_uid,
+                    DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
                 )
 
-                result = await session.execute(stmt)
-                event = result.scalar_one_or_none()
+                if conversion_event:
+                    # Extract NIfTI path and VERIFY it exists
+                    nifti_path = self._extract_nifti_path(conversion_event)
 
-                if event:
-                    accepted.append(series_uid)
-                    # Extract nifti path from event data
-                    nifti_path = self._extract_nifti_path(event)
-                    nifti_paths.append(nifti_path)
+                    if nifti_path and os.path.exists(nifti_path):
+                        # Direct mode: NIfTI exists and file is verified
+                        accepted_direct.append(series_uid)
+                        nifti_paths.append(nifti_path)
+                        logger.info(
+                            f"Series {series_uid} ready (direct mode), nifti: {nifti_path}"
+                        )
+                        continue
+                    else:
+                        # CONVERSION_COMPLETE event exists but file is missing!
+                        # Fall through to check TRANSFER_COMPLETE for re-conversion
+                        logger.warning(
+                            f"Series {series_uid} has CONVERSION_COMPLETE but "
+                            f"NIfTI file missing: {nifti_path}, trying conversion mode"
+                        )
+
+                # No valid conversion, try SERIES_TRANSFER_COMPLETE
+                transfer_event = await self._find_event_by_status(
+                    session,
+                    study_uid,
+                    series_uid,
+                    DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+                )
+
+                if transfer_event:
+                    # Conversion mode: needs DICOM → NIfTI conversion
+                    raw_path = self._extract_raw_dicom_path(transfer_event)
+
+                    if raw_path and os.path.exists(raw_path):
+                        accepted_convert.append(series_uid)
+                        raw_dicom_paths.append(raw_path)
+                        logger.info(
+                            f"Series {series_uid} ready (conversion mode), raw: {raw_path}"
+                        )
+                        continue
+                    else:
+                        # TRANSFER_COMPLETE but raw_dicom missing
+                        rejected.append(
+                            {
+                                "series_uid": series_uid,
+                                "reason": f"Raw DICOM path missing or not accessible: {raw_path}",
+                            }
+                        )
+                        logger.warning(
+                            f"Series {series_uid} has TRANSFER_COMPLETE but "
+                            f"raw DICOM missing: {raw_path}"
+                        )
+                        continue
+
+                # Neither event found - try to infer raw_dicom path from config
+                # Ken Thompson: "When in doubt, use brute force."
+                inferred_path = self._infer_raw_dicom_path(study_uid, series_uid)
+
+                if inferred_path:
+                    # Found raw_dicom via inference from config
+                    accepted_convert.append(series_uid)
+                    raw_dicom_paths.append(inferred_path)
                     logger.info(
-                        f"Series {series_uid} ready for inference, nifti: {nifti_path}"
+                        f"Series {series_uid} ready (inferred conversion mode), "
+                        f"raw: {inferred_path}"
                     )
-                else:
-                    rejected.append(
-                        {
-                            "series_uid": series_uid,
-                            "reason": "Series conversion not complete",
-                        }
-                    )
-                    logger.warning(
-                        f"Series {series_uid} not ready: conversion not complete"
-                    )
+                    continue
+
+                # All methods exhausted, reject
+                rejected.append(
+                    {
+                        "series_uid": series_uid,
+                        "reason": "No transfer/conversion events and could not infer raw_dicom path",
+                    }
+                )
+                logger.warning(
+                    f"Series {series_uid} not ready: no events and inference failed"
+                )
 
         logger.info(
-            f"Validation complete: {len(accepted)} accepted, {len(rejected)} rejected "
+            f"Validation complete: {len(accepted_direct)} direct, "
+            f"{len(accepted_convert)} convert, {len(rejected)} rejected "
             f"out of {len(series_uids)} total"
         )
 
-        return accepted, rejected, nifti_paths
+        return accepted_direct, accepted_convert, rejected, nifti_paths, raw_dicom_paths
+
+    async def _find_event_by_status(
+        self, session, study_uid: str, series_uid: str, ope_no: str
+    ):
+        """Find the most recent DCOP event by status.
+
+        Args:
+            session: Database session
+            study_uid: Study instance UID
+            series_uid: Series instance UID
+            ope_no: Operation number (status code)
+
+        Returns:
+            DCOPEventModel or None
+        """
+        stmt = (
+            select(DCOPEventModel)
+            .where(
+                and_(
+                    DCOPEventModel.study_uid == study_uid,
+                    DCOPEventModel.series_uid == series_uid,
+                    DCOPEventModel.ope_no == ope_no,
+                )
+            )
+            .order_by(DCOPEventModel.create_time.desc())
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
 
     def _extract_nifti_path(self, event: DCOPEventModel) -> str:
         """Extract nifti file path from SERIES_CONVERSION_COMPLETE event.
@@ -175,10 +275,199 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
         return nifti_path
 
+    def _extract_raw_dicom_path(self, event: DCOPEventModel) -> str:
+        """Extract raw DICOM path from SERIES_TRANSFER_COMPLETE event.
+
+        The actual result_data format from task_dicom2nii.py is:
+        {
+            'raw_dicom_path': str(os.path.dirname(raw_dicom_path)),
+            'rename_dicom_path': str(os.path.dirname(rename_dicom_path)),
+        }
+
+        IMPORTANT: The stored path may be study-level. We need to ensure
+        the returned path is series-level: {base_path}/{series_uid}
+
+        Args:
+            event: DCOPEventModel with transfer complete data
+
+        Returns:
+            str: Path to the raw DICOM series directory
+        """
+        import os
+
+        result = event.result_data or {}
+        params = event.params_data or {}
+
+        # Primary source: result_data from task_dicom2nii.py
+        raw_path = result.get("raw_dicom_path", "")
+
+        # Fallback: check params_data for alternative field names
+        if not raw_path:
+            raw_path = (
+                params.get("raw_dicom_path")
+                or params.get("input_dicom_path")
+                or params.get("dicom_path")
+                or ""
+            )
+
+        if not raw_path:
+            logger.warning(
+                f"Could not extract raw_dicom_path from event {event.VsPrimaryKey}, "
+                f"result_data keys: {list(result.keys())}, params_data keys: {list(params.keys())}"
+            )
+            return ""
+
+        # Ensure path is series-level by appending series_uid if needed
+        # Path structure should be: {PATH_RAW_DICOM}/{study_uid}/{series_uid}
+        series_uid = event.series_uid
+        if series_uid and not raw_path.endswith(series_uid):
+            # The stored path is study-level, append series_uid
+            series_level_path = os.path.join(raw_path, str(series_uid))
+            if os.path.exists(series_level_path) and os.path.isdir(series_level_path):
+                logger.debug(
+                    f"Converted study-level path to series-level: {raw_path} → {series_level_path}"
+                )
+                return series_level_path
+            else:
+                # Series subfolder doesn't exist, return original path
+                logger.debug(
+                    f"Series subfolder not found: {series_level_path}, using original: {raw_path}"
+                )
+
+        return raw_path
+
+    def _infer_raw_dicom_path(self, study_uid: str, series_uid: str) -> str:
+        """Infer raw DICOM path from configuration.
+
+        Ken Thompson: "When in doubt, use brute force."
+
+        When no TRANSFER_COMPLETE event exists, we can infer the raw_dicom
+        path from the configured PATH_RAW_DICOM base directory.
+
+        Path structure: {PATH_RAW_DICOM}/{study_uid}/{series_uid}
+
+        Args:
+            study_uid: Study instance UID (Orthanc ID format)
+            series_uid: Series instance UID (Orthanc ID format)
+
+        Returns:
+            str: Inferred path to the raw DICOM series directory, or empty string if
+                 the path doesn't exist
+        """
+        import os
+
+        try:
+            config = load_backend_config_from_env(fail_safe=True)
+            raw_dicom_base = str(config.paths.path_raw_dicom)
+
+            # Infer path: {PATH_RAW_DICOM}/{study_uid}/{series_uid}
+            inferred_path = os.path.join(raw_dicom_base, study_uid, series_uid)
+
+            if os.path.exists(inferred_path) and os.path.isdir(inferred_path):
+                logger.info(f"Inferred raw_dicom_path from config: {inferred_path}")
+                return inferred_path
+            else:
+                logger.debug(f"Inferred path does not exist: {inferred_path}")
+                return ""
+        except Exception as e:
+            logger.warning(f"Failed to infer raw_dicom_path: {e}")
+            return ""
+
+    def _infer_study_id_from_paths(self, paths: List[str]) -> str:
+        """Infer study_id from NIfTI or DICOM paths.
+
+        Study ID format: {patient_id}_{study_date}_{modality}_{accession_number}
+        Example: 10516407_20231215_MR_21210200091
+
+        Path structure: {base}/{study_id}/{series_description}.nii.gz
+
+        Args:
+            paths: List of file paths (NIfTI or DICOM directories)
+
+        Returns:
+            str: Inferred study_id, or empty string if cannot infer
+        """
+        import os
+        import re
+
+        # Pattern for study_id: patientId_date_modality_accessionNumber
+        study_id_pattern = re.compile(r"^\d+_\d{8}_[A-Z]+_\d+$")
+
+        for path in paths:
+            if not path:
+                continue
+
+            # For NIfTI files: /path/to/10516407_20231215_MR_21210200091/SWAN.nii.gz
+            # For DICOM dirs: /path/to/10516407_20231215_MR_21210200091/SWAN
+            parts = path.rstrip(os.sep).split(os.sep)
+
+            # Check parent folder (second to last part)
+            for i in range(len(parts) - 1, -1, -1):
+                part = parts[i]
+                if study_id_pattern.match(part):
+                    logger.debug(f"Inferred study_id '{part}' from path: {path}")
+                    return part
+
+        logger.warning(f"Could not infer study_id from paths: {paths[:3]}...")
+        return ""
+
+    async def _find_study_id_from_events(
+        self, study_uid: str, series_uids: List[str]
+    ) -> str:
+        """Find study_id from DCOP events for the given series.
+
+        Args:
+            study_uid: Study instance UID
+            series_uids: List of series UIDs to check
+
+        Returns:
+            str: study_id from events, or empty string if not found
+        """
+        async with self.session_manager.get_session() as session:
+            for series_uid in series_uids:
+                # Try SERIES_CONVERSION_COMPLETE first
+                event = await self._find_event_by_status(
+                    session,
+                    study_uid,
+                    series_uid,
+                    DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
+                )
+
+                if event and event.params_data:
+                    # Extract from output_dicom_path
+                    output_dicom_path = event.params_data.get("output_dicom_path", "")
+                    if output_dicom_path:
+                        study_id = self._infer_study_id_from_paths([output_dicom_path])
+                        if study_id:
+                            return study_id
+
+                # Try SERIES_TRANSFER_COMPLETE
+                event = await self._find_event_by_status(
+                    session,
+                    study_uid,
+                    series_uid,
+                    DCOPStatus.SERIES_TRANSFER_COMPLETE.value,
+                )
+
+                if event and event.result_data:
+                    raw_path = event.result_data.get("raw_dicom_path", "")
+                    if raw_path:
+                        study_id = self._infer_study_id_from_paths([raw_path])
+                        if study_id:
+                            return study_id
+
+        return ""
+
     async def queue_series_inference(
-        self, request: SeriesInferenceRequest
+        self, request: SeriesInferenceRequest, batch_id: UUID | None = None
     ) -> InferenceResponse:
         """Queue series-level inference task.
+
+        Supports two modes:
+        1. Direct mode: Series already converted, uses NIfTI paths
+        2. Conversion mode: needs_conversion=True, triggers DICOM conversion flow
+
+        Linus: "Data structure drives behavior"
 
         Args:
             request: Series inference request
@@ -186,14 +475,29 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         Returns:
             InferenceResponse with inference_id and validation results
         """
-        # Step 1: Validate series readiness and get nifti paths
-        (
-            accepted_series,
-            rejected_series,
-            nifti_paths,
-        ) = await self.validate_series_ready(
-            study_uid=request.study_uid, series_uids=request.series_uids
-        )
+        # Step 1: Handle explicit conversion mode (user-provided paths)
+        if request.needs_conversion and request.raw_dicom_series_paths:
+            # User explicitly requested conversion with paths
+            accepted_direct: List[str] = []
+            accepted_convert = request.series_uids
+            rejected_series: List[Dict[str, str]] = []
+            nifti_paths: List[str] = []
+            raw_dicom_paths = request.raw_dicom_series_paths
+            logger.info(f"Explicit conversion mode: {len(accepted_convert)} series")
+        else:
+            # Auto-detect mode: query DCOP events
+            (
+                accepted_direct,
+                accepted_convert,
+                rejected_series,
+                nifti_paths,
+                raw_dicom_paths,
+            ) = await self.validate_series_ready(
+                study_uid=request.study_uid, series_uids=request.series_uids
+            )
+
+        # Combine accepted series for response
+        accepted_series = accepted_direct + accepted_convert
 
         # Step 2: Determine model_id (resolve from name+version if needed)
         model_id = (
@@ -202,9 +506,9 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             else f"{request.model_name}:{request.model_version}"
         )
 
-        # Step 3: Check cache (if all series accepted)
+        # Step 3: Check cache (if all series accepted and direct mode only)
         cached_inference_id = None
-        if len(accepted_series) == len(request.series_uids):
+        if len(accepted_series) == len(request.series_uids) and not accepted_convert:
             cache_key = self._generate_cache_key(
                 study_uid=request.study_uid,
                 series_uids=accepted_series,
@@ -253,15 +557,48 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         task_paths = get_task_execution_paths()
         upload_data_api_url = get_upload_data_api_url()
 
-        # Extract study_id for type safety
-        study_id = f"inference_{request.study_uid[:8]}"
+        # Resolve study_id with priority:
+        # 1. Request provides explicit study_id
+        # 2. Infer from nifti_paths (direct mode)
+        # 3. Infer from raw_dicom_paths (conversion mode)
+        # 4. Query DCOP events
+        # 5. Fallback to placeholder (not recommended)
+        study_id: str = ""
+
+        if request.study_id:
+            study_id = request.study_id
+            logger.debug(f"Using study_id from request: {study_id}")
+        elif nifti_paths:
+            study_id = self._infer_study_id_from_paths(nifti_paths)
+            if study_id:
+                logger.debug(f"Inferred study_id from nifti_paths: {study_id}")
+        elif raw_dicom_paths:
+            study_id = self._infer_study_id_from_paths(raw_dicom_paths)
+            if study_id:
+                logger.debug(f"Inferred study_id from raw_dicom_paths: {study_id}")
+
+        if not study_id:
+            # Fallback: query DCOP events
+            study_id = await self._find_study_id_from_events(
+                request.study_uid, request.series_uids
+            )
+            if study_id:
+                logger.debug(f"Found study_id from DCOP events: {study_id}")
+
+        if not study_id:
+            # Last resort fallback (should rarely happen)
+            study_id = f"unknown_{request.study_uid[:8]}"
+            logger.warning(
+                f"Could not determine study_id, using fallback: {study_id}. "
+                f"Consider providing study_id in request."
+            )
+
         series_uid_for_event = accepted_series[0] if len(accepted_series) == 1 else None
 
         # Build task parameters (Linus: data structure drives behavior)
-        func_params = {
-            # Series-specific (NEW - presence indicates series-level)
+        func_params: Dict[str, Any] = {
+            # Series-specific (presence indicates series-level)
             "series_uids": accepted_series,
-            "nifti_series_paths": nifti_paths,  # Paths extracted from DCOP events
             "model_id": model_id,
             "inference_id": str(inference_id),
             # Study context
@@ -274,6 +611,32 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             "upload_data_api_url": upload_data_api_url,
         }
 
+        # Determine mode based on what series we have
+        # Linus: "Data structure drives behavior"
+        if accepted_convert:
+            # Conversion mode: needs DICOM → NIfTI conversion
+            func_params["needs_conversion"] = True
+            func_params["raw_dicom_series_paths"] = raw_dicom_paths
+
+            # Add conversion paths if available
+            if "path_rename_dicom" in task_paths:
+                func_params["path_rename_dicom"] = task_paths["path_rename_dicom"]
+            if "path_rename_nifti" in task_paths:
+                func_params["path_rename_nifti"] = task_paths["path_rename_nifti"]
+
+            # If we have mixed mode (some direct, some convert), include NIfTI paths too
+            if accepted_direct:
+                func_params["nifti_series_paths"] = nifti_paths
+                logger.info(
+                    f"Mixed mode: {len(accepted_direct)} direct, {len(accepted_convert)} convert"
+                )
+            else:
+                logger.info(f"Conversion mode: {len(accepted_convert)} series")
+        else:
+            # Direct mode: NIfTI already exists
+            func_params["nifti_series_paths"] = nifti_paths
+            logger.info(f"Direct mode: {len(accepted_direct)} series")
+
         # Step 6: Create SERIES_INFERENCE_READY event
         async with self.session_manager.get_session() as session:
             ready_event = await DCOPEventModel.create_event_ope_no(
@@ -285,6 +648,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                 result_data={},  # Empty for READY event
                 params_data={
                     "inference_id": str(inference_id),
+                    "batch_id": str(batch_id) if batch_id else None,
                     "series_count": len(accepted_series),
                     "series_uids": accepted_series,
                     "model_id": model_id,
@@ -375,7 +739,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
         for req in batch_request.requests:
             try:
-                result = await self.queue_series_inference(req)
+                result = await self.queue_series_inference(req, batch_id=batch_id)
                 results.append(result)
             except Exception as e:
                 logger.error(

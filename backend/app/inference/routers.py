@@ -12,13 +12,11 @@ import logging
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.app.database import alchemy
 from .service import DCOPEventInferenceService
 from .schemas import (
-    SeriesInferenceRequest,
     BatchInferenceRequest,
     InferenceResponse,
     BatchInferenceResponse,
@@ -92,7 +90,7 @@ async def queue_series_inference(
     request: BatchInferenceRequest,
     inference_service: Annotated[
         DCOPEventInferenceService,
-        Depends(alchemy.provide_service(DCOPEventInferenceService))
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
     ],
 ) -> InferenceResponse | BatchInferenceResponse:
     """Queue series-level inference task.
@@ -112,7 +110,9 @@ async def queue_series_inference(
         # Type discrimination happens automatically via Pydantic union type
 
         if isinstance(request, BatchInferenceRequest):
-            logger.info(f"Processing batch inference request with {len(request.requests)} studies")
+            logger.info(
+                f"Processing batch inference request with {len(request.requests)} studies"
+            )
             result = await inference_service.process_batch_inference(request)
         else:
             logger.info(
@@ -125,15 +125,12 @@ async def queue_series_inference(
 
     except ValueError as e:
         logger.error(f"Validation error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to queue inference: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to queue inference: {str(e)}"
+            detail=f"Failed to queue inference: {str(e)}",
         )
 
 
@@ -173,7 +170,7 @@ async def get_inference_status(
     inference_id: UUID,
     inference_service: Annotated[
         DCOPEventInferenceService,
-        Depends(alchemy.provide_service(DCOPEventInferenceService))
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
     ],
 ) -> InferenceStatusResponse:
     """Query inference status by ID.
@@ -198,7 +195,7 @@ async def get_inference_status(
         # Placeholder implementation
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail="Status query not yet implemented"
+            detail="Status query not yet implemented",
         )
 
     except HTTPException:
@@ -207,7 +204,7 @@ async def get_inference_status(
         logger.error(f"Failed to query inference status: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to query status: {str(e)}"
+            detail=f"Failed to query status: {str(e)}",
         )
 
 
@@ -243,7 +240,7 @@ async def inference_complete_callback(
     callback: InferenceCallbackRequest,
     inference_service: Annotated[
         DCOPEventInferenceService,
-        Depends(alchemy.provide_service(DCOPEventInferenceService))
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
     ],
 ) -> dict:
     """Handle inference completion callback from GPU worker.
@@ -273,14 +270,14 @@ async def inference_complete_callback(
         return {
             "status": "acknowledged",
             "inference_id": str(callback.inferenceId),
-            "message": "Callback received (not yet fully implemented)"
+            "message": "Callback received (not yet fully implemented)",
         }
 
     except Exception as e:
         logger.error(f"Failed to process callback: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process callback: {str(e)}"
+            detail=f"Failed to process callback: {str(e)}",
         )
 
 
@@ -298,7 +295,7 @@ async def inference_complete_callback(
 async def list_cache(
     inference_service: Annotated[
         DCOPEventInferenceService,
-        Depends(alchemy.provide_service(DCOPEventInferenceService))
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
     ],
 ) -> CacheListResponse:
     """List all cache entries.
@@ -320,16 +317,13 @@ async def list_cache(
         # Return cache metadata
 
         # Placeholder
-        return CacheListResponse(
-            entries=[],
-            total=0
-        )
+        return CacheListResponse(entries=[], total=0)
 
     except Exception as e:
         logger.error(f"Failed to list cache: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list cache: {str(e)}"
+            detail=f"Failed to list cache: {str(e)}",
         )
 
 
@@ -348,7 +342,7 @@ async def list_cache(
 async def clear_cache(
     inference_service: Annotated[
         DCOPEventInferenceService,
-        Depends(alchemy.provide_service(DCOPEventInferenceService))
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
     ],
 ) -> CacheDeleteResponse:
     """Clear all cache entries.
@@ -369,16 +363,13 @@ async def clear_cache(
         # Delete all cache keys from Redis
 
         # Placeholder
-        return CacheDeleteResponse(
-            deleted_count=0,
-            cache_keys=[]
-        )
+        return CacheDeleteResponse(deleted_count=0, cache_keys=[])
 
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear cache: {str(e)}"
+            detail=f"Failed to clear cache: {str(e)}",
         )
 
 
