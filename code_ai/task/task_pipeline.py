@@ -61,6 +61,7 @@ from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
 from code_ai.utils.inference import build_inference_cmd
+from code_ai.utils.inference.schema import InferenceCmd, InferenceCmdItem
 
 
 def _extract_path_from_params(
@@ -343,11 +344,11 @@ def _convert_single_series_to_nifti(
     Returns:
         tuple: (rename_dicom_path, nifti_path) 或 (None, None) 如果失敗
     """
-    import re
     from code_ai.task.task_dicom2nii import (
         rename_dicom_file,
         copy_dicom_file,
         ConvertManager,
+        _execute_dcm2niix,
     )
 
     raw_dicom_dir = pathlib.Path(raw_dicom_path)
@@ -397,7 +398,7 @@ def _convert_single_series_to_nifti(
 
     logger.info(f"DICOM renamed: {raw_dicom_path} → {rename_dicom_path}")
 
-    # Step 2: rename_dicom → nifti
+    # Step 2: rename_dicom → nifti (使用純函數，避免重複造輪子)
     # 計算輸出 NIFTI 路徑
     study_folder = rename_dicom_path.parent
     series_name = rename_dicom_path.name
@@ -405,60 +406,29 @@ def _convert_single_series_to_nifti(
     nifti_series_path = nifti_study_path / series_name
     nifti_file_path = pathlib.Path(f"{nifti_series_path}.nii.gz")
 
-    # 建立輸出目錄
-    nifti_series_path.parent.mkdir(parents=True, exist_ok=True)
+    # 調用 _execute_dcm2niix 純函數（重用 task_dicom2nii.py 的邏輯）
+    logger.info(f"Running dcm2niix for: {rename_dicom_path} → {nifti_file_path}")
 
-    # 調用 dcm2niix
-    cmd_str = f"dcm2niix -z y -f {nifti_series_path.name} -o {nifti_series_path.parent} {rename_dicom_path}"
-    logger.info(f"Running dcm2niix: {cmd_str}")
+    result = _execute_dcm2niix(
+        series_path=rename_dicom_path,
+        output_series_path=nifti_series_path,
+        output_series_file_path=nifti_file_path,
+        timeout=300,
+    )
 
-    try:
-        process = subprocess.Popen(
-            args=cmd_str,
-            cwd="/",
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        stdout, stderr = process.communicate(timeout=300)  # 5 分鐘超時
+    # 檢查結果
+    if nifti_file_path.exists():
+        logger.info(f"NIFTI created: {nifti_file_path}")
+        return str(rename_dicom_path), str(nifti_file_path)
+    else:
+        # 嘗試找到任何生成的 .nii.gz 文件（dcm2niix 可能使用不同的檔名）
+        nifti_files = list(nifti_series_path.parent.glob(f"{series_name}*.nii.gz"))
+        if nifti_files:
+            logger.info(f"NIFTI created: {nifti_files[0]}")
+            return str(rename_dicom_path), str(nifti_files[0])
 
-        if process.returncode != 0:
-            logger.error(f"dcm2niix failed: {stderr.decode()}")
-            return str(rename_dicom_path), None
-
-        # 解析 dcm2niix 輸出，找到實際生成的文件
-        pattern = re.compile(r"DICOM as (.*)\s[(]", flags=re.MULTILINE)
-        match_result = pattern.search(stdout.decode())
-
-        if match_result:
-            actual_output = pathlib.Path(f"{match_result.groups()[0]}.nii.gz")
-            if actual_output.exists() and actual_output != nifti_file_path:
-                try:
-                    actual_output.rename(nifti_file_path)
-                except FileExistsError:
-                    pass
-
-        # 確認輸出文件存在
-        if nifti_file_path.exists():
-            logger.info(f"NIFTI created: {nifti_file_path}")
-            return str(rename_dicom_path), str(nifti_file_path)
-        else:
-            # 嘗試找到任何生成的 .nii.gz 文件
-            nifti_files = list(nifti_series_path.parent.glob(f"{series_name}*.nii.gz"))
-            if nifti_files:
-                logger.info(f"NIFTI created: {nifti_files[0]}")
-                return str(rename_dicom_path), str(nifti_files[0])
-
-        logger.error(f"NIFTI file not created for series: {series_uid}")
-        return str(rename_dicom_path), None
-
-    except subprocess.TimeoutExpired:
-        logger.error(f"dcm2niix timeout for series: {series_uid}")
-        process.kill()
-        return str(rename_dicom_path), None
-    except Exception as e:
-        logger.error(f"dcm2niix error for series {series_uid}: {e}")
-        return str(rename_dicom_path), None
+    logger.error(f"NIFTI file not created for series: {series_uid}, result: {result}")
+    return str(rename_dicom_path), None
 
 
 def _batch_convert_series_to_nifti(
@@ -611,11 +581,12 @@ def _build_series_inference_cmd(
     dicom_dir: Optional[str] = None,
     study_id: Optional[str] = None,
     path_root: Optional[str] = None,
-) -> str:
+) -> InferenceCmd:
     """
     建立 series 推論命令。
 
     使用 code_ai/pipeline/__init__.py 中的 pipelines 配置來生成正確的推論命令。
+    重用 check_study_mapping_inference 的邏輯確保 nifti_paths 順序與 config.yaml 一致。
 
     支援多輸入模型（如 CMB 需要 SWAN + T1BRAVO）。
 
@@ -628,14 +599,16 @@ def _build_series_inference_cmd(
         path_root: PATH_ROOT 配置（可選，用於雙部署架構）
 
     Returns:
-        str: Shell 命令字串
+        InferenceCmd: 包含 InferenceCmdItem 的命令對象（與 Study Level 一致）
 
     Raises:
         ValueError: 如果 model_id 無法映射到已知模型
         KeyError: 如果模型未在 pipelines 中配置
     """
+    import pathlib
+
     from code_ai.pipeline import pipelines
-    from code_ai.utils.inference import Task
+    from code_ai.utils.inference import Task, check_study_mapping_inference
 
     # Normalize input to list
     if isinstance(nifti_paths, str):
@@ -657,11 +630,13 @@ def _build_series_inference_cmd(
 
     pipeline_config = pipelines[inference_enum]
 
-    # Step 3: 推斷 study_id（如果未提供）
+    # Step 3: 推斷 study_path 和 study_id
+    first_path = nifti_paths[0]
+    study_path = pathlib.Path(first_path).parent
+
     resolved_study_id: str
     if study_id is None:
-        # 從第一個 nifti_path 推斷，例如：/path/to/10516407_20231215_MR_21210200091/SWAN.nii.gz
-        first_path = nifti_paths[0]
+        # 從路徑推斷，例如：/path/to/10516407_20231215_MR_21210200091/SWAN.nii.gz
         path_parts = first_path.split(os.sep)
         inferred_id: Optional[str] = None
         for part in reversed(path_parts):
@@ -672,16 +647,43 @@ def _build_series_inference_cmd(
     else:
         resolved_study_id = study_id
 
-    # Step 4: 創建 Task 對象
+    # Step 4: 重用 check_study_mapping_inference 獲取正確順序的 nifti_paths
+    # 這確保 CMB 等多輸入模型的參數順序與 config.yaml 定義一致
+    sorted_nifti_paths = nifti_paths  # 預設使用原順序
+    if pipeline_config.batch_inputs and len(nifti_paths) > 1:
+        try:
+            mapping_result = check_study_mapping_inference(study_path)
+            if mapping_result:
+                study_mapping = mapping_result.get(study_path.name, {})
+                model_paths = study_mapping.get(inference_enum.value, [])
+                if model_paths and len(model_paths) == len(nifti_paths):
+                    # 使用 check_study_mapping_inference 返回的順序
+                    sorted_nifti_paths = model_paths
+                    logger.info(
+                        f"Using sorted nifti_paths from check_study_mapping_inference: "
+                        f"{[os.path.basename(p) for p in sorted_nifti_paths]}"
+                    )
+        except Exception as e:
+            logger.warning(
+                f"Failed to get sorted paths from check_study_mapping_inference: {e}, "
+                f"using original order"
+            )
+
+    # Step 5: 創建 Task 對象
     # Task 需要 input_path_list 和 output_path
-    # 對於多輸入模型（batch_inputs=True），傳入所有路徑
+    # 對於多輸入模型（batch_inputs=True），傳入排序後的路徑
+    #
+    # 重要：Output_folder 應該是 study_path.parent（與用戶範例一致）
+    # 範例：--Inputs .../study_id/SWAN.nii.gz --Output_folder .../
+    # 而不是 path_json 等其他路徑
+    correct_output_path = str(study_path.parent)
     task = Task(
-        intput_path_list=nifti_paths,  # Note: alias is "intput_path_list"
-        output_path=output_dir,
+        intput_path_list=sorted_nifti_paths,  # Note: alias is "intput_path_list"
+        output_path=correct_output_path,
         output_path_list=[],  # 輸出檔案列表將由 pipeline 自動生成
     )
 
-    # Step 5: 使用 PipelineConfig.generate_cmd 生成命令
+    # Step 6: 使用 PipelineConfig.generate_cmd 生成命令
     cmd_str = pipeline_config.generate_cmd(
         study_id=resolved_study_id,
         task=task,
@@ -689,7 +691,18 @@ def _build_series_inference_cmd(
         path_root=path_root,
     )
 
-    return cmd_str
+    # Step 7: 創建 InferenceCmdItem（與 Study Level 的 build_inference_cmd 一致）
+    inference_item = InferenceCmdItem(
+        study_id=resolved_study_id,
+        name=inference_enum,
+        cmd_str=cmd_str,
+        input_list=sorted_nifti_paths,
+        output_list=task.output_path_list,
+        input_dicom_dir=dicom_dir or "",
+    )
+
+    # Step 8: 返回 InferenceCmd（與 Study Level 格式一致）
+    return InferenceCmd(cmd_items=[inference_item])
 
 
 def _task_series_pipeline_inference(func_params: Dict[str, Any]):
@@ -841,6 +854,7 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     result_list = []
     all_success = True
     error_message = None
+    all_inference_cmd_items = []  # 收集所有 InferenceCmdItem（與 Study Level 一致）
 
     # 檢查是否為批量輸入模型（如 CMB 需要 SWAN + T1BRAVO）
     is_batch_model = _is_batch_inputs_model(model_id)
@@ -886,8 +900,8 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                 # 取得第一個 DICOM 路徑（用於 DICOM-SEG）
                 dicom_dir = dicom_series_paths[0] if dicom_series_paths else None
 
-                # 建立推論命令（傳入所有 NIFTI 路徑）
-                cmd_str = _build_series_inference_cmd(
+                # 建立推論命令（傳入所有 NIFTI 路徑，返回 InferenceCmd）
+                inference_cmd = _build_series_inference_cmd(
                     nifti_paths=valid_nifti_paths,
                     model_id=model_id,
                     output_dir=output_dir,
@@ -895,6 +909,10 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                     study_id=study_id,
                     path_root=path_root,
                 )
+                # 收集 InferenceCmdItem（與 Study Level 一致）
+                all_inference_cmd_items.extend(inference_cmd.cmd_items)
+                # 提取 cmd_str 用於 subprocess 執行
+                cmd_str = inference_cmd.cmd_items[0].cmd_str
                 logger.info(f"Executing batch inference: {cmd_str}")
 
                 # 執行推論
@@ -1009,8 +1027,8 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                     dicom_series_paths[i] if i < len(dicom_series_paths) else None
                 )
 
-                # 建立推論命令（傳入單一路徑的列表）
-                cmd_str = _build_series_inference_cmd(
+                # 建立推論命令（傳入單一路徑的列表，返回 InferenceCmd）
+                inference_cmd = _build_series_inference_cmd(
                     nifti_paths=[nifti_path],
                     model_id=model_id,
                     output_dir=output_dir,
@@ -1018,6 +1036,10 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                     study_id=study_id,
                     path_root=path_root,
                 )
+                # 收集 InferenceCmdItem（與 Study Level 一致）
+                all_inference_cmd_items.extend(inference_cmd.cmd_items)
+                # 提取 cmd_str 用於 subprocess 執行
+                cmd_str = inference_cmd.cmd_items[0].cmd_str
                 logger.info(f"Executing: {cmd_str}")
 
                 # 執行推論
@@ -1111,6 +1133,8 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
             ope_no=completion_status,
             tool_id="SERIES_INFERENCE_TOOL",
             params_data={
+                "inference_item_cmd": all_inference_cmd_items,  # 與 Study Level 一致
+                "func_params": func_params,  # 與 Study Level 一致
                 "inference_id": inference_id,
                 "series_count": len(series_uids),
                 "series_uids": series_uids,
