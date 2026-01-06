@@ -248,16 +248,16 @@ logger.info(f"Processing study {study_id}")
 
 **Before submitting code for review**, you MUST run these checks and fix ALL errors:
 
-### Backend Inference Module
+### Backend ALL Module
 ```bash
 # Type checking (ty - strict type checker)
-uvx ty check backend/app/inference/
+uvx ty check backend/app/<module>/
 
 # Linting with auto-fix (ruff)
-uvx ruff check backend/app/inference/ --fix
+uvx ruff check backend/app/<module>/ --fix
 
 # Formatting (ruff)
-uvx ruff format backend/app/inference/
+uvx ruff format backend/app/<module>/
 ```
 
 ### Full code_ai Module
@@ -331,6 +331,41 @@ task_pipeline_inference.push({
 **Backward Compatibility**:
 - Environment fallback pattern maintains compatibility during migration
 - Task functions check parameters first, then fall back to environment variables
+
+## Common Pitfalls (MUST READ)
+
+**Path Level Confusion (Study vs Series)**:
+- Path structure: `{BASE}/{study_uid}/{series_uid}` for series-level operations
+- **NEVER assume DB data format is correct** - historical data may store study-level paths
+- When extracting paths from DB events, ALWAYS verify and append series_uid if needed:
+```python
+# WRONG: Trust DB blindly
+raw_path = event.result_data.get("raw_dicom_path")
+return raw_path  # May be study-level!
+
+# CORRECT: Verify and fix
+raw_path = event.result_data.get("raw_dicom_path")
+series_uid = event.series_uid
+if series_uid and not raw_path.endswith(series_uid):
+    series_level = os.path.join(raw_path, series_uid)
+    if os.path.exists(series_level):
+        return series_level
+return raw_path
+```
+
+**Multiple Entry Points**:
+- When fixing path issues, check ALL functions that produce the same output type
+- Example: `validate_series_ready` has TWO path sources:
+  1. `_extract_raw_dicom_path(event)` - from TRANSFER_COMPLETE event
+  2. `_infer_raw_dicom_path(study_uid, series_uid)` - from config
+- **Check logs to confirm which path is actually used before fixing**
+
+**JSON Return Format**:
+- `copy_dicom_file` returns JSON tuple: `["input", "output"]`, NOT dict
+- Always verify function return format before parsing
+
+**Serena Memory Available**:
+- See `series-level-path-debugging-lessons.md` for detailed debugging checklist
 
 ## Development Workflow
 
