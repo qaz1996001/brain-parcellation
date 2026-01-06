@@ -33,3 +33,4 @@ prefix = "/study"
 # 查詢研究事件列表
 # 支援多條件搜索、過濾、排序和分頁
 STUDY_GET_LIST = f"{prefix}/list"
+STUDY_RE_BUILD_JSON = f"{prefix}/list"

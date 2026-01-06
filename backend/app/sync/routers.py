@@ -86,6 +86,7 @@ from advanced_alchemy.extensions.fastapi import (
 )
 from sqlalchemy import Select
 from sqlalchemy.engine.row import Row
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.app.sync import urls
 from .service import DCOPEventDicomService
@@ -344,8 +345,8 @@ async def get_ope_no(
     urls.SYNC_PROT_OPE_NO,
     status_code=200,
     summary="批次寫入事件紀錄",
-    description="接收事件列表，寫入資料庫，排程後續處理",
-    response_description="已排程任務的確認消息",
+    description="同步寫入事件到資料庫，確保 200 OK = 資料已持久化",
+    response_description="確認消息（資料已寫入）",
 )
 async def post_ope_no(
     data: List[DCOPEventRequest],
@@ -355,14 +356,19 @@ async def post_ope_no(
     background_tasks: BackgroundTasks,
 ) -> Response:
     """
-    批次寫入事件紀錄並排程後續檢查。
-    
+    同步寫入事件紀錄，確保資料可靠性。
+
     此端點接收來自外部系統（如 Orthanc、NIFTI_TOOL 等）的事件列表，
-    立即排程後台任務處理：
-    1. 寫入事件到資料庫
-    2. 檢查狀態轉遷條件
-    3. 觸發下一階段流程（例如轉檔檢查）
-    
+    **同步**寫入資料庫後才返回。這確保：
+    - 200 OK = 資料已持久化（保證）
+    - 500/503 = 資料未保存（明確失敗）
+    - 無靜默失敗，無隱藏的邊緣情況
+
+    Design Rationale (Linus Torvalds)
+    ---------------------------------
+    - "Good code has no special cases" → 消除背景任務的隱藏失敗模式
+    - "The dumbest but clearest way possible" → 先寫入，再回應
+
     Parameters
     ----------
     data : list[DCOPEventRequest]
@@ -370,48 +376,61 @@ async def post_ope_no(
     dcop_event_service : DCOPEventDicomService
         由依賴注入提供的服務實例。
     background_tasks : BackgroundTasks
-        FastAPI 後台任務管理器。
-    
+        FastAPI 後台任務管理器（用於檢查點觸發）。
+
     Returns
     -------
     Response
-        簡單的確認消息。
-    
+        確認消息。收到此回應表示資料已成功寫入資料庫。
+
+    Raises
+    ------
+    HTTPException(503)
+        資料庫連線池耗盡或資料庫不可用。
+    HTTPException(500)
+        其他未預期的錯誤。
+
     Examples
     --------
     批次寫入 Series 傳輸完成事件：
-    
+
     >>> events = [
     ...     {
     ...         "study_uid": "abc-123",
     ...         "series_uid": "def-456",
     ...         "ope_no": "100.095",
     ...         "tool_id": "DICOM_TOOL"
-    ...     },
-    ...     {
-    ...         "study_uid": "abc-123",
-    ...         "series_uid": "ghi-789",
-    ...         "ope_no": "100.095",
-    ...         "tool_id": "DICOM_TOOL"
     ...     }
     ... ]
     >>> await post_ope_no(events, service, tasks)
-    
+    # 收到 200 OK 時，資料已確定在資料庫中
+
     Notes
     -----
-    此端點適用於外部系統批次上報事件的場景。
-    不阻塞等待後台任務完成，立即返回。
-    
     Flow:
         1. 接收事件列表（通過 Pydantic 驗證）
-        2. 排程後台任務
-        3. 立即返回確認
-        4. 後台任務異步處理：寫入、檢查、轉遷
+        2. **同步**寫入資料庫（確保資料持久化）
+        3. 排程背景任務觸發檢查點（幂等，可重試）
+        4. 返回確認
+
+    相比舊版的 fire-and-forget 模式，此版本犧牲少量延遲
+    換取資料可靠性：一個慢但正確的系統優於一個快但有缺陷的系統。
     """
-    # 排程後台任務進行事件寫入和狀態檢查
-    background_tasks.add_task(dcop_event_service.post_ope_no_task, data)
-    
-    return Response("post_ope_no")
+    try:
+        # Step 1: 同步寫入資料庫（確保資料持久化）
+        await dcop_event_service.write_events_sync(data)
+
+        # Step 2: 排程背景任務觸發檢查點（幂等，失敗可重試）
+        background_tasks.add_task(dcop_event_service.trigger_checkpoints_async, data)
+
+        return Response("post_ope_no")
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database write failed: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    except Exception as e:
+        logger.error(f"Unexpected error in post_ope_no: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post(

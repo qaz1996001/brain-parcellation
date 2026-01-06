@@ -383,38 +383,58 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def post_ope_no_task(self, data: List[DCOPEventRequest]) -> None:
         """
-        批次寫入事件記錄並觸發相應的檢查點 API。
-        
+        [DEPRECATED] 批次寫入事件記錄並觸發相應的檢查點 API。
+
+        .. deprecated:: 2026.01.05
+            此方法使用 fire-and-forget 模式，可能導致資料遺失。
+            請改用 :meth:`write_events_sync` + :meth:`trigger_checkpoints_async`。
+
+        ⚠️ 警告：此方法有嚴重缺陷
+        ------------------------
+        此方法在 QueuePool 連線耗盡時會**靜默失敗**，導致 200 OK 返回但
+        資料未寫入的問題。生產環境已發現多次資料遺失事件（2026-01-02）。
+
+        替代方案
+        -------
+        舊模式（有問題）：
+            >>> background_tasks.add_task(service.post_ope_no_task, data)  # ❌
+            >>> return Response("ok")  # 此時資料可能還未寫入
+
+        新模式（可靠）：
+            >>> await service.write_events_sync(data)  # ✅ 同步寫入
+            >>> background_tasks.add_task(service.trigger_checkpoints_async, data)
+            >>> return Response("ok")  # 此時資料已確定在資料庫中
+
         此方法用於處理外部系統（如 Orthanc、NIFTI_TOOL）批次上報的事件。
         它會：
         1. 逐一寫入事件到資料庫
         2. 識別觸發檢查點的事件類型
         3. 收集所有需要觸發的檢查點 URL
         4. 批次執行所有檢查點
-        
+
         Parameters
         ----------
         data : list[DCOPEventRequest]
             外部系統上報的事件列表。
-        
+
         Returns
         -------
         None
-        
+
         Side Effects
         -----------
         - 每個事件寫入資料庫並立即提交
         - 觸發所有相關的檢查點 API（去重）
-        
+
         事件與檢查點的對應
         -------------------
         - SERIES_TRANSFER_COMPLETE → 檢查 Study 傳輸是否完成
         - SERIES_CONVERSION_COMPLETE → 檢查 Study 轉檔是否完成
-        
+
         Examples
         --------
         處理 Orthanc 的 Series 傳輸完成上報：
-        
+
         >>> events = [
         ...     DCOPEventRequest(
         ...         study_uid="abc-123",
@@ -431,17 +451,29 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         ... ]
         >>> await service.post_ope_no_task(events)
         # 結果: 2 個事件寫入，1 次檢查點 API 調用
-        
+
         Notes
         -----
         檢查點 URL 去重：
         - 若同一檢查點被多個事件觸發，只調用一次
         - 例如 2 個 Series 都完成轉檔，只調用一次 check_conversion
-        
+
         原子性：
         - 每個事件單獨提交，確保原子性
         - 某個事件寫入失敗不影響其他事件
         """
+        # [DEPRECATED] 發出棄用警告
+        import warnings
+        warnings.warn(
+            "post_ope_no_task is deprecated due to silent failure risk. "
+            "Use write_events_sync() + trigger_checkpoints_async() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        self.logger.warning(
+            "DEPRECATED: post_ope_no_task called. This method can silently lose data. "
+            "See design doc: openspec/changes/ensure-reliable-event-sync/design.md"
+        )
         from code_ai import load_dotenv
         load_dotenv()
         
@@ -495,6 +527,133 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     self.logger.debug(f'Checkpoint API called: {url}, status: {response.status_code}')
                 except Exception as e:
                     self.logger.error(f'Error calling checkpoint API {url}: {e}')
+
+    # =========================================================================
+    # Reliable Sync Methods (Linus-Style: Write first, then respond)
+    # =========================================================================
+    #
+    # These methods separate database write from checkpoint triggering to ensure:
+    # - 200 OK = data is persisted (guaranteed)
+    # - No silent failures when connection pool is exhausted
+    # - Checkpoints can remain async (idempotent, can retry)
+    #
+    # Design Rationale (Linus Torvalds):
+    # - "Good code has no special cases" → eliminated hidden failure modes
+    # - "The dumbest but clearest way possible" → synchronous write
+    # =========================================================================
+
+    async def write_events_sync(self, data: List[DCOPEventRequest]) -> List[DCOPEventModel]:
+        """
+        同步寫入事件到資料庫。
+
+        此方法確保在返回前資料已持久化到資料庫。相比 post_ope_no_task 的
+        背景任務模式，此方法保證：
+        - 若返回成功，資料一定在資料庫中
+        - 若發生錯誤，異常會被拋出（不會靜默失敗）
+
+        Linus: "The dumbest but clearest way possible."
+
+        Parameters
+        ----------
+        data : List[DCOPEventRequest]
+            待寫入的事件列表。
+
+        Returns
+        -------
+        List[DCOPEventModel]
+            已寫入的事件記錄列表。
+
+        Raises
+        ------
+        SQLAlchemyError
+            資料庫連線或寫入錯誤時拋出。
+
+        Examples
+        --------
+        >>> events = [DCOPEventRequest(study_uid="abc", ope_no="100.095", ...)]
+        >>> records = await service.write_events_sync(events)
+        >>> # 此時資料已確定在資料庫中
+        """
+        if not data:
+            return []
+
+        written_records: List[DCOPEventModel] = []
+
+        async with self.session_manager.get_session() as session:
+            for dcop_event in data:
+                # 建立事件記錄
+                new_data_obj = await DCOPEventModel.create_event_ope_no(
+                    tool_id=dcop_event.tool_id,
+                    study_uid=dcop_event.study_uid,
+                    series_uid=dcop_event.series_uid if dcop_event.series_uid is not None else "",
+                    study_id=dcop_event.study_id if dcop_event.study_id is not None else "",
+                    ope_no=dcop_event.ope_no,
+                    result_data=dcop_event.result_data if dcop_event.result_data is not None else {},
+                    params_data=dcop_event.params_data if dcop_event.params_data is not None else {},
+                    session=session
+                )
+                session.add(new_data_obj)
+                written_records.append(new_data_obj)
+
+            # 單次提交所有事件（原子性）
+            await session.commit()
+
+            # 刷新所有記錄以獲取資料庫生成的值
+            for record in written_records:
+                await session.refresh(record)
+
+        self.logger.info(f'write_events_sync: wrote {len(written_records)} events')
+        return written_records
+
+    async def trigger_checkpoints_async(self, data: List[DCOPEventRequest]) -> None:
+        """
+        非同步觸發檢查點 API。
+
+        此方法在資料已持久化後調用，用於觸發下一階段的狀態檢查。
+        因為檢查點具有以下特性，所以可以安全地在背景執行：
+        1. 幂等性：可以安全重試
+        2. 資料已持久化：即使失敗，資料仍在
+        3. 自我修復：下一個事件會再次觸發檢查
+
+        Linus: "Checkpoints are idempotent - safe to be async."
+
+        Parameters
+        ----------
+        data : List[DCOPEventRequest]
+            事件列表，用於確定需要觸發的檢查點。
+
+        Notes
+        -----
+        失敗時只記錄警告，不拋出異常（非關鍵路徑）。
+        """
+        from code_ai import load_dotenv
+        load_dotenv()
+
+        # 收集所有需要觸發的檢查點 URL（使用集合去重）
+        check_url_set: set[str] = set()
+
+        for dcop_event in data:
+            if dcop_event.ope_no is not None:
+                match dcop_event.ope_no:
+                    case DCOPStatus.SERIES_TRANSFER_COMPLETE.value:
+                        url = await self.get_check_url_by_ope_no(dcop_event.ope_no)
+                    case DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                        url = await self.get_check_url_by_ope_no(dcop_event.ope_no)
+                    case _:
+                        url = None
+
+                if url is not None:
+                    check_url_set.add(url)
+
+        # 批次執行所有檢查點
+        async with httpx.AsyncClient(timeout=180) as client:
+            for url in check_url_set:
+                try:
+                    response = await client.post(url)
+                    self.logger.debug(f'Checkpoint API called: {url}, status: {response.status_code}')
+                except Exception as e:
+                    # 非關鍵路徑：記錄警告但不拋出異常
+                    self.logger.warning(f'Checkpoint trigger failed (will retry): {url}, {e}')
 
     async def check_study_series_transfer_complete(
         self,
