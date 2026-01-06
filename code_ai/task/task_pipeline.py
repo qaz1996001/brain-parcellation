@@ -53,15 +53,15 @@ from funboost import Booster, fct
 from funboost.core.serialization import Serialization
 import nb_log
 
-logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_handlers(
-    log_filename="task_pipeline_inference_queue.log"
-)
-
 from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
 from code_ai.utils.inference import build_inference_cmd
 from code_ai.utils.inference.schema import InferenceCmd, InferenceCmdItem
+
+logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_handlers(
+    log_filename="task_pipeline_inference_queue.log"
+)
 
 
 def _extract_path_from_params(
@@ -608,7 +608,11 @@ def _build_series_inference_cmd(
     import pathlib
 
     from code_ai.pipeline import pipelines
-    from code_ai.utils.inference import Task, check_study_mapping_inference
+    from code_ai.utils.inference import (
+        Task,
+        check_study_mapping_inference,
+        generate_output_files,
+    )
 
     # Normalize input to list
     if isinstance(nifti_paths, str):
@@ -669,21 +673,28 @@ def _build_series_inference_cmd(
                 f"using original order"
             )
 
-    # Step 5: 創建 Task 對象
+    # Step 5: 生成輸出檔案列表（與 Study Level 的 build_analysis 一致）
+    # 使用 generate_output_files 確保 output_list 與 Study Level 格式相同
+    # base_output_path 應該是 study_path（輸出檔案在 study 資料夾內）
+    task_output_files = generate_output_files(
+        sorted_nifti_paths, inference_enum.value, str(study_path)
+    )
+
+    # Step 6: 創建 Task 對象
     # Task 需要 input_path_list 和 output_path
     # 對於多輸入模型（batch_inputs=True），傳入排序後的路徑
     #
-    # 重要：Output_folder 應該是 study_path.parent（與用戶範例一致）
-    # 範例：--Inputs .../study_id/SWAN.nii.gz --Output_folder .../
-    # 而不是 path_json 等其他路徑
-    correct_output_path = str(study_path.parent)
+    # 重要：task.output_path 應該是 study_path（與 Study Level 一致）
+    # generate_cmd 內部會用 os.path.dirname(task.output_path) 獲取 nifti root
+    # 範例：task.output_path = /mnt/e/rename_nifti/study_id
+    #       --Output_folder = /mnt/e/rename_nifti (由 generate_cmd 計算)
     task = Task(
         intput_path_list=sorted_nifti_paths,  # Note: alias is "intput_path_list"
-        output_path=correct_output_path,
-        output_path_list=[],  # 輸出檔案列表將由 pipeline 自動生成
+        output_path=str(study_path),  # study_path，不是 study_path.parent
+        output_path_list=task_output_files,  # 使用 generate_output_files 的結果
     )
 
-    # Step 6: 使用 PipelineConfig.generate_cmd 生成命令
+    # Step 7: 使用 PipelineConfig.generate_cmd 生成命令
     cmd_str = pipeline_config.generate_cmd(
         study_id=resolved_study_id,
         task=task,
@@ -691,7 +702,7 @@ def _build_series_inference_cmd(
         path_root=path_root,
     )
 
-    # Step 7: 創建 InferenceCmdItem（與 Study Level 的 build_inference_cmd 一致）
+    # Step 8: 創建 InferenceCmdItem（與 Study Level 的 build_inference_cmd 一致）
     inference_item = InferenceCmdItem(
         study_id=resolved_study_id,
         name=inference_enum,
@@ -701,7 +712,7 @@ def _build_series_inference_cmd(
         input_dicom_dir=dicom_dir or "",
     )
 
-    # Step 8: 返回 InferenceCmd（與 Study Level 格式一致）
+    # Step 9: 返回 InferenceCmd（與 Study Level 格式一致）
     return InferenceCmd(cmd_items=[inference_item])
 
 
@@ -1188,5 +1199,5 @@ def task_subprocess_inference(func_params: Dict[str, Any]):
     )
     stdout, stderr = process.communicate()
     logger.info(stdout.decode())
-    logger.warn(stderr.decode())
+    logger.warning(stderr.decode())
     return stdout.decode()

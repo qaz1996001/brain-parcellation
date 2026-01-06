@@ -5,7 +5,7 @@ import shutil
 import os
 import pathlib
 import subprocess
-from typing import List, Dict
+from typing import Any, Dict, List
 
 import httpx
 import pandas as pd
@@ -152,7 +152,7 @@ def copy_dicom_file(input_tuple, instance_path, output_path):
     return None
 
 
-def file_processing(func_params: Dict[str, any]):
+def file_processing(func_params: Dict[str, Any]):
     study_folder_path = func_params.get("study_folder_path")
     post_process_manager = func_params.get("post_process_manager")
     if study_folder_path is None:
@@ -166,7 +166,7 @@ def file_processing(func_params: Dict[str, any]):
         qps=5,
     )
 )
-def call_post_httpx(func_params: Dict[str, any]):
+def call_post_httpx(func_params: Dict[str, Any]):
     url = func_params["url"]
     data = func_params["data"]
     with httpx.Client(timeout=300) as clinet:
@@ -174,10 +174,10 @@ def call_post_httpx(func_params: Dict[str, any]):
             dcop_event_list = [
                 DCOPEventRequest.model_validate_json(temp).model_dump() for temp in data
             ]
-            rep = clinet.post(url=url, json=dcop_event_list)
+            clinet.post(url=url, json=dcop_event_list)
         else:
             dcop_event = DCOPEventRequest.model_validate_json(data).model_dump()
-            rep = clinet.post(url=url, json=[dcop_event])
+            clinet.post(url=url, json=[dcop_event])
 
 
 def _execute_dcm2niix(
@@ -250,7 +250,7 @@ def _execute_dcm2niix(
         qps=10,
     )
 )
-def call_dcm2niix(func_params: Dict[str, any]):
+def call_dcm2niix(func_params: Dict[str, Any]):
     """
     Async queue wrapper for dcm2niix conversion.
 
@@ -273,7 +273,7 @@ def call_dcm2niix(func_params: Dict[str, any]):
         qps=10,
     )
 )
-def dicom_2_nii_file(func_params: Dict[str, any]):
+def dicom_2_nii_file(func_params: Dict[str, Any]):
     task_params = intput_params.Dicom2NiiFileParams.model_validate(
         func_params, strict=False
     )
@@ -313,7 +313,8 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
         else:
             result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
             workflows.append(result)
-    result_list = [async_result.result for async_result in workflows]
+    # Wait for all async results to complete (results not used here)
+    _ = [async_result.result for async_result in workflows]
     nifti_study_folder_path = output_nifti_path.joinpath(dicom_study_folder_path.name)
     file_processing(
         func_params=dict(
@@ -330,7 +331,7 @@ def dicom_2_nii_file(func_params: Dict[str, any]):
         qps=10,
     )
 )
-def dicom_2_nii_series(func_params: Dict[str, any]):
+def dicom_2_nii_series(func_params: Dict[str, Any]):
     task_params = intput_params.Dicom2NiiSeriesParams.model_validate(func_params)
     output_dicom_path = task_params.output_dicom_path
     dicom_study_folder_path = output_dicom_path.parent
@@ -404,7 +405,7 @@ def dicom_2_nii_series(func_params: Dict[str, any]):
         log_level=logging.WARNING,
     )
 )
-def process_instances(func_params: Dict[str, any]):
+def process_instances(func_params: Dict[str, Any]):
     task_params = intput_params.ProcessInstancesParams.model_validate(
         func_params, strict=False
     )
@@ -516,7 +517,7 @@ def get_orthanc_series_uid(study_uid: str, series_dir_set: set):
         qps=10,
     )
 )
-def process_dir(func_params: Dict[str, any]):
+def process_dir(func_params: Dict[str, Any]):
     task_params = intput_params.Dicom2NiiParams.model_validate(
         func_params, strict=False
     )
@@ -613,7 +614,7 @@ def process_dir(func_params: Dict[str, any]):
         qps=10,
     )
 )
-def dicom_to_nii(func_params: Dict[str, any]):
+def dicom_to_nii(func_params: Dict[str, Any]):
     task_params = intput_params.Dicom2NiiParams.model_validate(
         func_params, strict=False
     )
@@ -643,7 +644,7 @@ def dicom_to_nii(func_params: Dict[str, any]):
         qps=10,
     )
 )
-def dicom_rename(func_params: Dict[str, any]):
+def dicom_rename(func_params: Dict[str, Any]):
     process_dir_result = process_dir.push(func_params)
     return process_dir_result
 
