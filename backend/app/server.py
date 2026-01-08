@@ -1,15 +1,17 @@
 # app/server.py
-import os
 import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
+from starlette.middleware.cors import CORSMiddleware
 
-from .routers import router
+from code_ai.pipeline.upload.schema import InferenceCompleteRequest
 from .database import alchemy
+from .routers import router
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +61,7 @@ app = FastAPI(
 
 # CORS middleware
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -79,4 +81,26 @@ async def health_check() -> dict[str, str]:
     Returns:
         Dictionary containing status and environment information
     """
+    return {"status": "healthy"}
+
+
+@app.post("/upload_json")
+async def upload_json(inference_complete_request: InferenceCompleteRequest,
+                      ) -> dict[str, str]:
+    """
+
+    """
+    # json_dict = await request.json()
+    logger.info(f'upload_json {inference_complete_request}')
+    return {"status": "healthy"}
+
+
+@app.post("/ai-inference/inference-complete")
+async def inference_complete(inference_complete_request: InferenceCompleteRequest,
+                             ) -> dict[str, str]:
+    """
+
+    """
+    # json_dict = await request.json()
+    logger.info(f'inference_complete_request {inference_complete_request}')
     return {"status": "healthy"}

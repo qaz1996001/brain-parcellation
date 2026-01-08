@@ -1,0 +1,6 @@
+prefix = "/inference"
+INFERENCE_SERIES = f"{prefix}/series"
+INFERENCE_SERIES_STATUS = f"{prefix}/series/status"
+INFERENCE_SERIES_BATCH = f"{prefix}/series/batch"
+INFERENCE_SERIES_COMPLETE = f"{prefix}/series/complete"
+INFERENCE_CACHE = f"{prefix}/cache"

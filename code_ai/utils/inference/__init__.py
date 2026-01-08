@@ -11,6 +11,7 @@ from .schema import Analysis,Task
 from .config import MODEL_MAPPING_SERIES_DICT
 
 
+
 def get_file_list(input_path: pathlib.Path, suffixes: str, filter_name=None) -> List[pathlib.Path]:
     if any(suffix in input_path.suffixes for suffix in suffixes):
         file_list = [input_path]

@@ -17,3 +17,6 @@ FSL_FLIRT = os.getenv("FSL_FLIRT")
 
 # LOCAL_DB = pathlib.Path(__file__).parent.joinpath('database.sqlite3').absolute()
 LOCAL_DB = os.getenv("LOCAL_DB","database.sqlite3")
+#  uvx ty check backend/app/inference/
+#  uvx ruff check backend/app/inference/ --fix
+#  uvx ruff format backend/app/inference/

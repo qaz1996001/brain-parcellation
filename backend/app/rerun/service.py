@@ -29,6 +29,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
     This service uses injected configuration instead of os.getenv() calls.
     Configuration is loaded via BackendConfig dependency injection.
     """
+
     class Repo(repository.SQLAlchemyAsyncRepository[DCOPEventModel]):
         model_type = DCOPEventModel
 
@@ -54,6 +55,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         super().__init__(**kwargs)
         if config is None:
             from backend.app.config.loader import load_backend_config_from_env
+
             self._config = load_backend_config_from_env(fail_safe=True)
         else:
             self._config = config
@@ -125,10 +127,11 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
             )
             if len(models) > 0:
                 logger.info("model {}".format(models[0]))
+                study_uid = str(models[0].study_uid)
                 flage = await self.re_run_by_study_uid_on_one(
-                    models[0].study_uid, dcop_event_service
+                    study_uid, dcop_event_service
                 )
-                result_list.append((models[0].study_uid, flage))
+                result_list.append((study_uid, flage))
 
     async def re_run_by_study_uid_on_one(
         self, study_uid: str, dcop_event_service: DCOPEventDicomService
@@ -275,7 +278,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
             event_data_json = json.dumps(event_data)
-            await client.post(url=url, timeout=180, data=event_data_json)
+            await client.post(url=url, timeout=180, content=event_data_json)
 
     @staticmethod
     async def del_path(input_path: pathlib.Path):

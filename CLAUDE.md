@@ -137,6 +137,121 @@ DICOM Input → Backend API → RabbitMQ → Worker → AI Pipeline → DICOM-SE
 4. **Output**: DICOM-SEG + JSON metadata uploaded to Orthanc/platform
 5. **Tracking**: PostgreSQL stores task status and results
 
+### DICOM Series Splitting Architecture
+
+**Critical Concept: MRI Machine vs AI Model Series Representation**
+
+MRI machines and AI models have different series granularity requirements:
+
+**MRI Machine Output (raw_dicom)**:
+- DWI (Diffusion-Weighted Imaging) is captured as a **single series**
+- Contains multiple b-values (e.g., b=0, b=1000) in one DICOM series
+- Example: One DWI series with 2 acquisitions
+
+**AI Model Requirements (rename_dicom)**:
+- Models need **separate series** for each b-value
+- DWI0 (b=0) and DWI1000 (b=1000) must be distinct NIfTI files
+- Example: Two separate series (DWI0.nii.gz, DWI1000.nii.gz)
+
+**Conversion Process: raw_dicom → rename_dicom**
+
+```
+MRI Machine              dcm2niix Conversion           AI Model Input
+┌─────────────┐         ┌──────────────────┐         ┌──────────────┐
+│ DWI series  │  ──→    │ Split by b-value │  ──→    │ DWI0.nii.gz  │
+│ (b=0,1000)  │         └──────────────────┘         │ DWI1000.nii  │
+└─────────────┘                                       └──────────────┘
+
+│ ADC series  │  ──→    │ Direct convert   │  ──→    │ ADC.nii.gz   │
+└─────────────┘         └──────────────────┘         └──────────────┘
+```
+
+**Implementation Details**:
+
+1. **DICOM to NIfTI Conversion** (`task_dicom2nii`):
+   - Uses `dcm2niix` to convert raw DICOM to NIfTI
+   - Automatically splits DWI series by b-value
+   - Generates multiple output files from single input series
+   - Creates DCOP events for each output series
+
+2. **Backend Series Tracking**:
+   - Tracks series at MRI machine level (2 series: ADC + DWI)
+   - DCOP events: `SERIES_TRANSFER_COMPLETE` for raw series
+   - After conversion: `SERIES_CONVERSION_COMPLETE` for each split series
+
+3. **Worker Series Processing**:
+   - Expects series at AI model level (3 series: ADC + DWI0 + DWI1000)
+   - Validates series completeness before inference
+   - Example: Infarct model requires exactly (ADC, DWI0, DWI1000)
+
+**Common Pitfall: Series Count Mismatch**
+
+```python
+# ❌ Wrong assumption: Backend series count = AI model series count
+Backend receives: 2 series (ADC, DWI)
+Worker expects: 3 series (ADC, DWI0, DWI1000)
+# This is CORRECT behavior due to splitting!
+
+# ✅ Correct flow:
+1. Backend: Validate 2 raw series (ADC, DWI)
+2. Conversion: DWI → DWI0 + DWI1000 (creates 3 total)
+3. Worker: Process 3 series for AI model
+```
+
+**Model-Specific Series Requirements**:
+
+| Model    | Required Series          | Source Series         | Splitting |
+|----------|-------------------------|-----------------------|-----------|
+| Infarct  | ADC, DWI0, DWI1000 (3)  | ADC, DWI (2)         | Yes       |
+| Aneurysm | MRA_BRAIN (1)           | MRA_BRAIN (1)        | No        |
+| WMH      | T2FLAIR_AXI (1)         | T2FLAIR_AXI (1)      | No        |
+| CMB      | SWAN, T1BRAVO (2)       | SWAN, T1BRAVO (2)    | No        |
+
+**Key Takeaway**: When debugging series-level issues, always distinguish between:
+- **Raw series** (from MRI machine, tracked by Backend)
+- **Converted series** (after splitting, used by Worker/AI models)
+
+### Backend DWI Expansion Pattern
+
+**Problem**: MRI machine outputs 1 DWI series, but AI models need 2 NIfTI files (DWI0 + DWI1000)
+
+**Solution**: Backend expands DWI series BEFORE validation, not Worker during conversion
+
+**Implementation** (`backend/app/inference/service.py:validate_series_ready()`):
+
+```python
+# Input from caller (DB-level series UIDs)
+series_uids = ["ADC", "DWI"]  # 2 series
+
+# Backend expansion (AI-level validation targets)
+validation_targets = [
+    ("ADC", "ADC", "ADC"),           # (target_id, series_desc, original_uid)
+    ("DWI0", "DWI", "DWI"),          # DWI expanded to DWI0
+    ("DWI1000", "DWI", "DWI")        # DWI expanded to DWI1000
+]  # 3 targets
+
+# Output to Worker (per-target paths)
+nifti_paths = [
+    "/path/ADC.nii.gz",
+    "/path/DWI0.nii.gz",
+    "/path/DWI1000.nii.gz"
+]  # 3 files ✅
+
+rename_dicom_paths = [
+    "/path/ADC",
+    "/path/DWI0",
+    "/path/DWI1000"
+]  # 3 directories
+```
+
+**Key Insight**:
+- **Abstraction Level**: Backend operates at AI-model granularity, not DB granularity
+- **Expansion Point**: Before validation loop, not during Worker conversion
+- **Path Construction**: Backend constructs DWI sub-series paths (e.g., `/path/series_uid/DWI0/`)
+- **Atomicity Check**: Backend validates both DWI0 and DWI1000 exist or converts both
+
+**Worker Simplification**: Worker no longer needs DWI sibling detection/conversion logic
+
 ### Key Design Patterns
 
 **Module Structure** (backend services):
@@ -244,12 +359,80 @@ logger = logging.getLogger(__name__)
 logger.info(f"Processing study {study_id}")
 ```
 
+## Code Quality Checks (MANDATORY)
+
+**Before submitting code for review**, you MUST run these checks and fix ALL errors:
+
+### Backend ALL Module
+```bash
+# Type checking (ty - strict type checker)
+uvx ty check backend/app/<module>/
+
+# Linting with auto-fix (ruff)
+uvx ruff check backend/app/<module>/ --fix
+
+# Formatting (ruff)
+uvx ruff format backend/app/<module>/
+```
+
+### Full code_ai Module
+```bash
+# For changes outside inference module
+
+uvx ty check code_ai/<module>/
+uvx ruff check code_ai/<module>/ --fix
+uvx ruff format code_ai/<module>/
+```
+
+**Requirements**:
+- ✅ `ty check` MUST pass with 0 errors
+- ✅ `ruff check` MUST pass (auto-fix applied)
+- ✅ `ruff format` MUST complete without changes
+
+**Common Type Errors**:
+- Import paths: Use `backend.app.` prefix (not `app.`)
+- Optional parameters: Handle `None` cases explicitly with `or ""` or type narrowing
+- Dict types: Use `Dict[str, Any]` for nested structures, not `Dict[str, str]`
+
 ## Important Constraints
 
 **GPU Resources**:
 - Limited GPU availability requires careful resource management
 - Dual deployment architecture maximizes GPU utilization
 - TensorFlow models require CUDA 11.x compatibility
+
+**GPU Mutual Exclusion Pattern** (CRITICAL for new GPU tasks):
+- All GPU inference tasks MUST use `task_pipeline_inference` as the unified entry point
+- Single queue with `qps=1` provides natural GPU mutual exclusion
+- NO external coordination needed (no Redis locks, no DB semaphores)
+- Data structure determines behavior: `'series_uids' in func_params` → Series Level, otherwise → Study Level
+
+```python
+# CORRECT: Use unified entry point for GPU tasks
+from code_ai.task.task_pipeline import task_pipeline_inference
+
+# Study Level (original behavior)
+task_pipeline_inference.push({
+    'study_uid': '...',
+    'nifti_study_path': '/path/to/study',
+    # NO 'series_uids' key
+})
+
+# Series Level (new behavior)
+task_pipeline_inference.push({
+    'series_uids': ['series_a', 'series_b'],  # Key presence determines level
+    'study_uid': '...',
+    'model_id': 'aneurysm_v1',
+})
+
+# WRONG: Do NOT create separate GPU queues
+# This would cause GPU conflicts!
+```
+
+**Why qps=1?**
+- funboost's `qps=1` ensures only one task executes at a time
+- First-in-first-out scheduling, fair for both Study and Series Level
+- Simple, reliable, fewer failure points than distributed locks
 
 **DICOM Standards**:
 - DICOM-SEG output must conform to medical imaging standards
@@ -263,6 +446,41 @@ logger.info(f"Processing study {study_id}")
 **Backward Compatibility**:
 - Environment fallback pattern maintains compatibility during migration
 - Task functions check parameters first, then fall back to environment variables
+
+## Common Pitfalls (MUST READ)
+
+**Path Level Confusion (Study vs Series)**:
+- Path structure: `{BASE}/{study_uid}/{series_uid}` for series-level operations
+- **NEVER assume DB data format is correct** - historical data may store study-level paths
+- When extracting paths from DB events, ALWAYS verify and append series_uid if needed:
+```python
+# WRONG: Trust DB blindly
+raw_path = event.result_data.get("raw_dicom_path")
+return raw_path  # May be study-level!
+
+# CORRECT: Verify and fix
+raw_path = event.result_data.get("raw_dicom_path")
+series_uid = event.series_uid
+if series_uid and not raw_path.endswith(series_uid):
+    series_level = os.path.join(raw_path, series_uid)
+    if os.path.exists(series_level):
+        return series_level
+return raw_path
+```
+
+**Multiple Entry Points**:
+- When fixing path issues, check ALL functions that produce the same output type
+- Example: `validate_series_ready` has TWO path sources:
+  1. `_extract_raw_dicom_path(event)` - from TRANSFER_COMPLETE event
+  2. `_infer_raw_dicom_path(study_uid, series_uid)` - from config
+- **Check logs to confirm which path is actually used before fixing**
+
+**JSON Return Format**:
+- `copy_dicom_file` returns JSON tuple: `["input", "output"]`, NOT dict
+- Always verify function return format before parsing
+
+**Serena Memory Available**:
+- See `series-level-path-debugging-lessons.md` for detailed debugging checklist
 
 ## Development Workflow
 
@@ -280,9 +498,11 @@ logger.info(f"Processing study {study_id}")
 **Adding New AI Pipeline**:
 1. Create pipeline script in `code_ai/pipeline/pipeline_<name>_tensorflow.py`
 2. Add DICOM-SEG schema in `code_ai/pipeline/dicomseg/schema/<name>.py`
-3. Add task wrapper if needed (usually reuse `task_pipeline_inference`)
-4. Update service layer to dispatch new task type
+3. **IMPORTANT**: Reuse `task_pipeline_inference` for GPU tasks (see GPU Mutual Exclusion Pattern above)
+4. Update service layer to dispatch via `task_pipeline_inference.push()`
 5. Document in `docs/API_REFERENCE.md`
+
+> **Warning**: Do NOT create separate GPU task queues. All GPU inference MUST go through `task_pipeline_inference` to ensure proper GPU mutual exclusion via `qps=1`.
 
 ## External Dependencies
 

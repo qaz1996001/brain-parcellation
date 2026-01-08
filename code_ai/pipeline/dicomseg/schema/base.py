@@ -73,14 +73,3 @@ class PredictionBaseResponse(BaseModel, Generic[DetectionT]):
 
 # TypeVar 定義在類別之後
 PredictionT = TypeVar("PredictionT", bound=PredictionBaseResponse)
-
-
-# =============================================================================
-# Request Models
-# =============================================================================
-
-class InferenceCompleteRequest(BaseModel):
-    """Request model for inference completion notification."""
-
-    studyInstanceUid: str = Field(...)
-    seriesInstanceUid: str = Field(...)

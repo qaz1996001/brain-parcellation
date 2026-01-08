@@ -23,17 +23,15 @@ OrthancID = Annotated[str, AfterValidator(validate_orthanc_id)]
 
 class PostStudyRequest(BaseModel):
     ids: list[OrthancID] = Field(
-        default=[OrthancID("ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30")]
+        default=["ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30"]
     )
     msg: str = Field(..., description="格式必須為 xxx.xxx，其中 x 為數字")
 
 
 class DCOPEventRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    study_uid: OrthancID = OrthancID("ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30")
-    series_uid: Optional[OrthancID] = OrthancID(
-        "31fb1be1-71d25700-b131126f-c73708af-42d28093"
-    )
+    study_uid: OrthancID = "ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30"
+    series_uid: Optional[OrthancID] = "31fb1be1-71d25700-b131126f-c73708af-42d28093"
     ope_no: str = Field(
         ...,
         min_length=7,

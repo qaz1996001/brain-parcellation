@@ -52,6 +52,9 @@ def get_task_execution_paths(
         >>> task_pipeline_inference.push(task_dict)
     """
     # Use override if provided, otherwise read from environment
+    from code_ai import load_dotenv
+
+    load_dotenv()
     paths = override or {}
 
     result = {
@@ -59,22 +62,37 @@ def get_task_execution_paths(
         "path_json": paths.get("path_json") or os.getenv("PATH_JSON"),
         "path_log": paths.get("path_log") or os.getenv("PATH_LOG"),
         "path_root": paths.get("path_root") or os.getenv("PATH_ROOT"),
+        # Conversion paths for Series Level conversion mode
+        "path_rename_dicom": paths.get("path_rename_dicom")
+        or os.getenv("PATH_RENAME_DICOM"),
+        "path_rename_nifti": paths.get("path_rename_nifti")
+        or os.getenv("PATH_RENAME_NIFTI"),
     }
 
-    # Validate that all required paths are configured
+    # Required paths (must be configured)
+    required_keys = {"path_process", "path_json", "path_log", "path_root"}
+    # Optional paths (only needed for conversion mode)
+    optional_keys = {"path_rename_dicom", "path_rename_nifti"}
+
+    # Validate required paths
     validated_result: Dict[str, str] = {}
     for key, value in result.items():
-        if value is None:
-            raise ValueError(
-                f"{key} must be configured via override parameter or "
-                f"{key.upper()} environment variable must be set"
-            )
-
-        # Validate that paths are absolute
-        if not os.path.isabs(value):
-            raise ValueError(f"{key} must be an absolute path, got: {value}")
-
-        validated_result[key] = value
+        if key in required_keys:
+            if value is None:
+                raise ValueError(
+                    f"{key} must be configured via override parameter or "
+                    f"{key.upper()} environment variable must be set"
+                )
+            # Validate that paths are absolute
+            if not os.path.isabs(value):
+                raise ValueError(f"{key} must be an absolute path, got: {value}")
+            validated_result[key] = value
+        elif key in optional_keys:
+            # Optional paths: include if configured, skip if None
+            if value is not None:
+                if not os.path.isabs(value):
+                    raise ValueError(f"{key} must be an absolute path, got: {value}")
+                validated_result[key] = value
 
     # Note: We don't validate path existence/writability here because:
     # 1. Paths may not exist yet and will be created by tasks (os.makedirs)

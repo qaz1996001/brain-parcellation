@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from advanced_alchemy.extensions.fastapi import base
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,8 +19,12 @@ class DCOPConfModel(base.DefaultBase):
     description = Column(String)
     active = Column(Integer, default=1)
     rec_time = Column(DateTime)
-    create_time = Column(DateTime, default=datetime.utcnow)
-    update_time = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    create_time = Column(DateTime, default=lambda: datetime.utcnow())
+    update_time = Column(
+        DateTime,
+        default=lambda: datetime.utcnow(),
+        onupdate=lambda: datetime.utcnow(),
+    )
 
 
 class DCOPEventModel(base.DefaultBase):
@@ -49,11 +53,14 @@ class DCOPEventModel(base.DefaultBase):
     ope_name = Column(String(36), nullable=True)
 
     # 時間欄位
-    claim_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    rec_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    create_time = Column(DateTime, nullable=False, default=datetime.utcnow)
+    claim_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
+    rec_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
+    create_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
     update_time = Column(
-        DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime,
+        nullable=True,
+        default=lambda: datetime.utcnow(),
+        onupdate=lambda: datetime.utcnow(),
     )
 
     # 額外方法
@@ -66,8 +73,8 @@ class DCOPEventModel(base.DefaultBase):
         study_uid: str,
         status: str,
         tool_id: str = "DICOM_TOOL",
-        series_uid: str = None,
-        session: Session | AsyncSession = None,
+        series_uid: Optional[str] = None,
+        session: Optional[Session | AsyncSession] = None,
     ):
         """
         快速創建事件的類方法
@@ -126,12 +133,12 @@ class DCOPEventModel(base.DefaultBase):
         cls,
         tool_id: str,
         study_uid: str,
-        series_uid: str,
+        series_uid: Optional[str],
         study_id: str,
         ope_no: str,
-        result_data: Dict[str, str],
-        params_data: Dict[str, str],
-        session: Session | AsyncSession = None,
+        result_data: Dict[str, Any],
+        params_data: Dict[str, Any],
+        session: Optional[Session | AsyncSession] = None,
     ):
         """
         快速創建事件的類方法

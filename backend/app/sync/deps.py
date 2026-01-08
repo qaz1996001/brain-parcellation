@@ -20,7 +20,7 @@ Usage in routers:
 """
 
 import logging
-from typing import Any, Generator, Optional, Union
+from typing import Any, Optional
 
 from backend.app.config.feature_flags import FeatureFlags
 from backend.app.config.loader import load_backend_config_from_env

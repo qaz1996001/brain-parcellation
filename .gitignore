@@ -11,3 +11,10 @@ __pycache__/
 /.venv/*
 /.env*
 /back/*
+
+# Local AI assistant configs
+.claude/
+.serena/
+
+# Build artifacts
+*.egg-info/

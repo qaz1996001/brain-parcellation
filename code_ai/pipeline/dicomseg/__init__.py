@@ -39,13 +39,15 @@ def dicom_seg_cmb_file(ID:str,
                          InputsDicomDir:str,
                          nii_path_str:str,
                          path_output:str):
+    PYTHONPATH = pathlib.Path(__file__).parent.parent.parent.parent.absolute()
     cmd_str = ('export PYTHONPATH={} && '
-               '{} code_ai/pipeline/dicomseg/build/cmb.py '
+               '{} {}/code_ai/pipeline/dicomseg/build/cmb.py '
                '--ID {} '
                '--InputsDicomDir {} '
                '--Inputs {} '
-               '--Output_folder {} '.format(pathlib.Path(__file__).parent.parent.parent.parent.absolute(),
+               '--Output_folder {} '.format(PYTHONPATH,
                                             PYTHON3,
+                                            PYTHONPATH,
                                             ID,
                                             InputsDicomDir,
                                             nii_path_str,

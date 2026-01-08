@@ -3,7 +3,7 @@ from typing import List, Optional, Dict
 import os
 
 from funboost.core.func_params_model import BaseJsonAbleModel
-from pydantic import ConfigDict, field_serializer, model_serializer, model_validator, BaseModel
+from pydantic import ConfigDict, field_serializer, model_validator
 
 
 class ResampleTaskParams(BaseJsonAbleModel):

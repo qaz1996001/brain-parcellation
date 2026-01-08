@@ -397,9 +397,9 @@ def main(args):
     # --------- 檢 參數 建立存檔名稱 start---------------
 
 
-    resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
+    resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_resample.nii.gz')),
                                   file_list))
-    synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg5.nii.gz')),
+    synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg5.nii.gz')),
                                   resample_file_list))
 
 
