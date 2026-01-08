@@ -217,6 +217,7 @@ def check_gpu_memory(gpu_n: int, threshold: float = 0.6) -> GPUCheckResult:
             available=available, memory_usage_rate=usage_rate, message=message
         )
     except Exception as e:
+        logger.error(traceback.format_exc())
         return GPUCheckResult(
             available=False, memory_usage_rate=1.0, message=f"GPU 檢查失敗: {str(e)}"
         )
