@@ -18,24 +18,30 @@ Refactored following Knuth & Linus principles (CLAUDE.md):
 - Single Responsibility: Each function does ONE thing well
 - Deterministic, testable: No side effects from environment
 """
-import glob
 
+import glob
+import json
 import shutil
 import traceback
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, Any
 
-from code_ai.pipeline.upload.inference_complete import upload_inference_complete, ModelName
+from code_ai.pipeline.upload.inference_complete import (
+    upload_inference_complete,
+    ModelName,
+)
 
 import pydicom
 
 # warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import time
 import logging
 import pynvml  # 导包
 import tensorflow as tf
+
 autotune = tf.data.experimental.AUTOTUNE
 
 from code_ai import PYTHON3, load_dotenv
@@ -53,9 +59,11 @@ logger = logging.getLogger(__name__)
 # Data Classes for Pure Function Results
 # =============================================================================
 
+
 @dataclass
 class TimingResult:
     """計時結果"""
+
     step_name: str
     elapsed_seconds: float
     success: bool
@@ -69,6 +77,7 @@ class TimingResult:
 @dataclass
 class GPUCheckResult:
     """GPU 檢查結果"""
+
     available: bool
     memory_usage_rate: float
     message: str
@@ -77,6 +86,7 @@ class GPUCheckResult:
 @dataclass
 class InferenceResult:
     """推論結果"""
+
     success: bool
     output_path: Optional[str]
     message: str
@@ -85,6 +95,7 @@ class InferenceResult:
 @dataclass
 class CMBPipelineResult:
     """CMB Pipeline 完整結果"""
+
     success: bool
     synthseg_path: Optional[str]
     output_nii_path: Optional[str]
@@ -101,6 +112,7 @@ class CMBPipelineResult:
 # =============================================================================
 # Pure Functions - Single Responsibility
 # =============================================================================
+
 
 def get_study_instance_uid_from_dicom(dicom_dir: str) -> Optional[str]:
     """
@@ -123,14 +135,16 @@ def get_study_instance_uid_from_dicom(dicom_dir: str) -> Optional[str]:
         for root, dirs, files in os.walk(dicom_dir):
             for filename in files:
                 # 跳過非 DICOM 檔案 (常見的非 DICOM 副檔名)
-                if filename.lower().endswith(('.json', '.xml', '.txt', '.nii', '.gz', '.jpg', '.png')):
+                if filename.lower().endswith(
+                    (".json", ".xml", ".txt", ".nii", ".gz", ".jpg", ".png")
+                ):
                     continue
 
                 filepath = os.path.join(root, filename)
                 try:
                     # 嘗試讀取 DICOM 檔案
                     dcm = pydicom.dcmread(filepath, stop_before_pixels=True)
-                    if hasattr(dcm, 'StudyInstanceUID'):
+                    if hasattr(dcm, "StudyInstanceUID"):
                         study_uid = str(dcm.StudyInstanceUID)
                         logger.info(f"從 DICOM 讀取 StudyInstanceUID: {study_uid}")
                         return study_uid
@@ -161,14 +175,14 @@ def setup_logger(path_log: str, log_level: int = logging.INFO) -> str:
     """
     localt = time.localtime(time.time())
     time_str_short = f"{localt.tm_year}{str(localt.tm_mon).rjust(2, '0')}{str(localt.tm_mday).rjust(2, '0')}"
-    log_file = os.path.join(path_log, f'{time_str_short}.log')
+    log_file = os.path.join(path_log, f"{time_str_short}.log")
 
     if not os.path.isfile(log_file):
         with open(log_file, "a+") as f:
             f.write("")
 
-    FORMAT = '%(asctime)s %(levelname)s %(message)s'
-    logging.basicConfig(level=log_level, filename=log_file, filemode='a', format=FORMAT)
+    FORMAT = "%(asctime)s %(levelname)s %(message)s"
+    logging.basicConfig(level=log_level, filename=log_file, filemode="a", format=FORMAT)
 
     return log_file
 
@@ -200,15 +214,11 @@ def check_gpu_memory(gpu_n: int, threshold: float = 0.6) -> GPUCheckResult:
 
         # raise RuntimeError(f"[check_gpu_memory] Debug")
         return GPUCheckResult(
-            available=available,
-            memory_usage_rate=usage_rate,
-            message=message
+            available=available, memory_usage_rate=usage_rate, message=message
         )
     except Exception as e:
         return GPUCheckResult(
-            available=False,
-            memory_usage_rate=1.0,
-            message=f"GPU 檢查失敗: {str(e)}"
+            available=False, memory_usage_rate=1.0, message=f"GPU 檢查失敗: {str(e)}"
         )
 
 
@@ -223,12 +233,14 @@ def configure_tensorflow_gpu(gpu_n: int) -> bool:
         bool: 設定是否成功
     """
     try:
-        gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
+        gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
         if not gpus or gpu_n >= len(gpus):
             logger.error(f"GPU {gpu_n} 不存在，可用 GPU 數量: {len(gpus)}")
             return False
 
-        tf.config.experimental.set_visible_devices(devices=gpus[gpu_n], device_type='GPU')
+        tf.config.experimental.set_visible_devices(
+            devices=gpus[gpu_n], device_type="GPU"
+        )
         tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
         return True
     except Exception as e:
@@ -237,9 +249,7 @@ def configure_tensorflow_gpu(gpu_n: int) -> bool:
 
 
 def run_synthseg_inference(
-    swan_file: str,
-    t1_file: str,
-    output_dir: str
+    swan_file: str, t1_file: str, output_dir: str
 ) -> InferenceResult:
     """
     執行 SynthSeg 推論 (呼叫 main.py)。
@@ -255,26 +265,28 @@ def run_synthseg_inference(
         InferenceResult: 推論結果
     """
     try:
-        gpu_line = '{} {} -i {} --template {} --output {} --all False --CMB TRUE'.format(
-            PYTHON3,
-            os.path.join(os.path.dirname(__file__), 'main.py'),
-            swan_file,
-            t1_file,
-            output_dir
+        gpu_line = (
+            "{} {} -i {} --template {} --output {} --all False --CMB TRUE".format(
+                PYTHON3,
+                os.path.join(os.path.dirname(__file__), "main.py"),
+                swan_file,
+                t1_file,
+                output_dir,
+            )
         )
 
         logger.info(f"執行 SynthSeg 推論: {gpu_line}")
         os.system(gpu_line)
 
         # 檢查輸出檔案
-        output_pattern = f'{output_dir}/synthseg_*SWAN_original_CMB*.nii.gz'
+        output_pattern = f"{output_dir}/synthseg_*SWAN_original_CMB*.nii.gz"
         output_files = glob.glob(output_pattern)
 
         if not output_files:
             return InferenceResult(
                 success=False,
                 output_path=None,
-                message=f"找不到推論輸出檔案: {output_pattern}"
+                message=f"找不到推論輸出檔案: {output_pattern}",
             )
 
         output_path = output_files[0]
@@ -282,27 +294,21 @@ def run_synthseg_inference(
             return InferenceResult(
                 success=False,
                 output_path=None,
-                message=f"輸出檔案不存在: {output_path}"
+                message=f"輸出檔案不存在: {output_path}",
             )
 
         return InferenceResult(
-            success=True,
-            output_path=output_path,
-            message="SynthSeg 推論完成"
+            success=True, output_path=output_path, message="SynthSeg 推論完成"
         )
 
     except Exception as e:
         return InferenceResult(
-            success=False,
-            output_path=None,
-            message=f"SynthSeg 推論失敗: {str(e)}"
+            success=False, output_path=None, message=f"SynthSeg 推論失敗: {str(e)}"
         )
 
 
 def process_output_files(
-    ID: str,
-    temp_path_str: str,
-    path_output: str
+    ID: str, temp_path_str: str, path_output: str
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     處理輸出檔案：複製並重命名。
@@ -323,15 +329,16 @@ def process_output_files(
 
         # 處理檔名
         temp_path_basename = os.path.basename(temp_path_str)
-        temp_path_basename = temp_path_basename.replace(
-            get_study_id(temp_path_basename), ''
-        ).replace('__', '_')
+        study_id_match = get_study_id(temp_path_basename) or ""
+        temp_path_basename = temp_path_basename.replace(study_id_match, "").replace(
+            "__", "_"
+        )
 
         synthseg_output_path = os.path.join(path_output_dir, temp_path_basename)
         shutil.copy(temp_path_str, synthseg_output_path)
 
-        output_nii_path = os.path.join(path_output_dir, 'Pred_CMB.nii.gz')
-        output_json_path = os.path.join(path_output_dir, 'Pred_CMB.json')
+        output_nii_path = os.path.join(path_output_dir, "Pred_CMB.nii.gz")
+        output_json_path = os.path.join(path_output_dir, "Pred_CMB.json")
 
         return synthseg_output_path, output_nii_path, output_json_path
 
@@ -345,7 +352,7 @@ def run_cmb_classification(
     swan_path_str: str,
     temp_path_str: str,
     output_nii_path_str: str,
-    output_json_path_str: str
+    output_json_path_str: str,
 ) -> bool:
     """
     執行 CMB 分類。
@@ -367,7 +374,7 @@ def run_cmb_classification(
             swan_path_str=swan_path_str,
             temp_path_str=temp_path_str,
             output_nii_path_str=output_nii_path_str,
-            output_json_path_str=output_json_path_str
+            output_json_path_str=output_json_path_str,
         )
         return True
     except Exception as e:
@@ -375,7 +382,86 @@ def run_cmb_classification(
         return False
 
 
-def timed_execution(func, step_name: str, *args, **kwargs) -> Tuple[any, TimingResult]:
+def copy_to_ai_result_path(
+    rdx_json_path: str,
+    output_folder: str,
+    ai_result_path: str,
+    nii_filename_prefix: str,
+    model_name: str = "cmb_model",
+) -> bool:
+    """
+    複製推論結果到 AI_INFERENCE_RESULT_PATH。
+
+    Pure function: 接收明確路徑，複製並重命名 DICOM-SEG 檔案。
+    遵循 Linus "Good Taste" 原則：簡潔、無特殊情況處理。
+
+    目錄結構:
+    ai_result_path/
+    └── <study_uid>/
+        └── <model_name>/
+            └── <inference_id>/
+                ├── prediction.json
+                └── <series_uid>_<label>.dcm
+
+    Args:
+        rdx_json_path: RDX JSON 檔案路徑（含 inference_id 和 study_uid）
+        output_folder: 當前輸出目錄（含 DICOM-SEG 檔案）
+        ai_result_path: AI_INFERENCE_RESULT_PATH 根目錄
+        nii_filename_prefix: NIfTI 檔案前綴（用於過濾 DICOM-SEG，如 "Pred_CMB"）
+        model_name: 模型名稱
+
+    Returns:
+        bool: 複製是否成功
+    """
+    try:
+        # Read inference_id and study_uid from JSON
+        with open(rdx_json_path) as f:
+            data = json.load(f)
+
+        inference_id = data.get("inference_id")
+        study_uid = data.get("input_study_instance_uid", [None])[0]
+
+        if not inference_id or not study_uid:
+            logger.warning(f"Missing inference_id or study_uid in {rdx_json_path}")
+            return False
+
+        # Create target directory
+        target_dir = os.path.join(ai_result_path, study_uid, model_name, inference_id)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Copy prediction JSON
+        target_json = os.path.join(target_dir, "prediction.json")
+        shutil.copy2(rdx_json_path, target_json)
+        logger.info(f"Copied JSON to {target_json}")
+
+        # Copy and rename DICOM-SEG files (only those matching prefix)
+        dcm_pattern = os.path.join(output_folder, f"{nii_filename_prefix}_*.dcm")
+        for dcm_file in glob.glob(dcm_pattern):
+            # Read DICOM to get SeriesInstanceUID
+            dcm = pydicom.dcmread(dcm_file, stop_before_pixels=True)
+            series_uid = str(dcm.SeriesInstanceUID)
+
+            # Extract label from original filename (e.g., "Pred_CMB_A1.dcm" -> "A1")
+            original_name = os.path.basename(dcm_file)
+            label = original_name.replace(f"{nii_filename_prefix}_", "").replace(
+                ".dcm", ""
+            )
+
+            # New filename: <SeriesInstanceUID>_<label>.dcm
+            new_name = f"{series_uid}_{label}.dcm"
+            target_dcm = os.path.join(target_dir, new_name)
+
+            shutil.copy2(dcm_file, target_dcm)
+            logger.info(f"Copied and renamed DICOM-SEG: {original_name} -> {new_name}")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to copy to AI result path: {str(e)}")
+        return False
+
+
+def timed_execution(func, step_name: str, *args, **kwargs) -> Tuple[Any, TimingResult]:
     """
     計時執行函數的通用包裝器。
 
@@ -397,7 +483,7 @@ def timed_execution(func, step_name: str, *args, **kwargs) -> Tuple[any, TimingR
             step_name=step_name,
             elapsed_seconds=elapsed,
             success=True,
-            message=f"{step_name} 完成"
+            message=f"{step_name} 完成",
         )
         logger.info(f"[完成] {step_name} | 耗時: {elapsed:.2f} 秒")
         return result, timing
@@ -408,7 +494,7 @@ def timed_execution(func, step_name: str, *args, **kwargs) -> Tuple[any, TimingR
             step_name=step_name,
             elapsed_seconds=elapsed,
             success=False,
-            message=f"{step_name} 失敗: {str(e)}"
+            message=f"{step_name} 失敗: {str(e)}",
         )
         logger.error(f"[失敗] {step_name} | 耗時: {elapsed:.2f} 秒 | 錯誤: {str(e)}")
         return None, timing
@@ -418,13 +504,14 @@ def timed_execution(func, step_name: str, *args, **kwargs) -> Tuple[any, TimingR
 # Main Pipeline Function (Orchestrator)
 # =============================================================================
 
+
 def pipeline_cmb(
     ID: str,
     swan_file: str,
     t1_file: str,
     path_output: str,
-    path_processModel: str = '/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_CMB/',
-    path_log: str = '/mnt/d/wsl_ubuntu/pipeline/sean/log/',
+    path_processModel: str = "/mnt/d/wsl_ubuntu/pipeline/sean/process/Deep_CMB/",
+    path_log: str = "/mnt/d/wsl_ubuntu/pipeline/sean/log/",
     gpu_n: int = 0,
     config: Optional[CodeAIConfig] = None,
     ai_app_inference_complete: Optional[str] = None,
@@ -480,8 +567,6 @@ def pipeline_cmb(
     # Dual-mode: use config if provided, otherwise use explicit parameters
     if config is not None:
         path_log = str(config.paths.path_log)
-        path_json = str(config.paths.path_json)
-        path_code = str(config.paths.path_code)
         gpu_n = config.model.gpu_n
 
     # 當使用 GPU 有錯時才確認
@@ -489,13 +574,10 @@ def pipeline_cmb(
     tf_logger.setLevel(logging.ERROR)
 
     # Step 1: 設定 Logger
-    log_file, timing = timed_execution(
-        setup_logger, "設定 Logger",
-        path_log
-    )
+    log_file, timing = timed_execution(setup_logger, "設定 Logger", path_log)
     timings["setup_logger"] = timing
 
-    logging.info(f'=== CMB Pipeline 開始 ID: {ID} ===')
+    logging.info(f"=== CMB Pipeline 開始 ID: {ID} ===")
 
     # 建立處理目錄
     path_processID = os.path.join(path_processModel, ID)
@@ -503,94 +585,101 @@ def pipeline_cmb(
 
     try:
         # Step 2: 檢查 GPU 記憶體
-        gpu_check, timing = timed_execution(
-            check_gpu_memory, "檢查 GPU 記憶體",
-            gpu_n
-        )
+        gpu_check, timing = timed_execution(check_gpu_memory, "檢查 GPU 記憶體", gpu_n)
         timings["check_gpu"] = timing
 
         if not gpu_check or not gpu_check.available:
-            return handle_failure(f'!!! {ID} GPU 記憶體不足: {gpu_check.message if gpu_check else "檢查失敗"}')
+            return handle_failure(
+                f"!!! {ID} GPU 記憶體不足: {gpu_check.message if gpu_check else '檢查失敗'}"
+            )
 
         logging.info(gpu_check.message)
 
         # Step 3: 設定 TensorFlow GPU
         gpu_configured, timing = timed_execution(
-            configure_tensorflow_gpu, "設定 TensorFlow GPU",
-            gpu_n
+            configure_tensorflow_gpu, "設定 TensorFlow GPU", gpu_n
         )
         timings["configure_gpu"] = timing
 
         if not gpu_configured:
-            return handle_failure(f'!!! {ID} TensorFlow GPU 設定失敗')
+            return handle_failure(f"!!! {ID} TensorFlow GPU 設定失敗")
 
         # Step 4: 執行 SynthSeg 推論
         inference_result, timing = timed_execution(
-            run_synthseg_inference, "SynthSeg 推論",
-            swan_file, t1_file, path_processID
+            run_synthseg_inference, "SynthSeg 推論", swan_file, t1_file, path_processID
         )
         timings["synthseg_inference"] = timing
 
         if not inference_result or not inference_result.success:
-            return handle_failure(f'!!! {ID} SynthSeg 推論失敗: {inference_result.message if inference_result else "未知錯誤"}')
+            return handle_failure(
+                f"!!! {ID} SynthSeg 推論失敗: {inference_result.message if inference_result else '未知錯誤'}"
+            )
 
         temp_path_str = inference_result.output_path
 
         # Step 5: 處理輸出檔案
         output_paths, timing = timed_execution(
-            process_output_files, "處理輸出檔案",
-            ID, temp_path_str, path_output
+            process_output_files, "處理輸出檔案", ID, temp_path_str, path_output
         )
         timings["process_output"] = timing
 
         if not output_paths or output_paths[0] is None:
-            return handle_failure(f'!!! {ID} 處理輸出檔案失敗')
+            return handle_failure(f"!!! {ID} 處理輸出檔案失敗")
 
         synthseg_path, output_nii_path, output_json_path = output_paths
 
         # Step 6: 執行 CMB 分類
         classification_success, timing = timed_execution(
-            run_cmb_classification, "CMB 分類",
-            swan_file, temp_path_str, output_nii_path, output_json_path
+            run_cmb_classification,
+            "CMB 分類",
+            swan_file,
+            temp_path_str,
+            output_nii_path,
+            output_json_path,
         )
         timings["cmb_classification"] = timing
 
         if not classification_success:
-            return handle_failure(f'!!! {ID} CMB 分類失敗')
+            return handle_failure(f"!!! {ID} CMB 分類失敗")
 
         # 計算總耗時
         total_elapsed = time.time() - pipeline_start_time
 
         # 輸出計時摘要
-        logging.info(f'=== CMB Pipeline 完成 ID: {ID} ===')
-        logging.info('--- 各步驟耗時摘要 ---')
+        logging.info(f"=== CMB Pipeline 完成 ID: {ID} ===")
+        logging.info("--- 各步驟耗時摘要 ---")
         for step_name, timing_result in timings.items():
             status = "✓" if timing_result.success else "✗"
-            logging.info(f'  {status} {timing_result.step_name}: {timing_result.elapsed_seconds:.2f} 秒')
-        logging.info(f'--- 總耗時: {total_elapsed:.2f} 秒 ({total_elapsed/60:.2f} 分鐘) ---')
+            logging.info(
+                f"  {status} {timing_result.step_name}: {timing_result.elapsed_seconds:.2f} 秒"
+            )
+        logging.info(
+            f"--- 總耗時: {total_elapsed:.2f} 秒 ({total_elapsed / 60:.2f} 分鐘) ---"
+        )
 
         return synthseg_path, output_nii_path, output_json_path
 
     except Exception as e:
         logging.error("Catch an exception.", exc_info=True)
-        return handle_failure(f'!!! {ID} Pipeline 執行錯誤: {str(e)}')
+        return handle_failure(f"!!! {ID} Pipeline 執行錯誤: {str(e)}")
 
 
 # =============================================================================
 # CLI Entry Point
 # =============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 計時開始
     main_start_time = time.time()
 
     import tensorflow as tf
-    gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
-    tf.config.experimental.set_visible_devices(devices=gpus, device_type='GPU')
+
+    gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
+    tf.config.experimental.set_visible_devices(devices=gpus, device_type="GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
 
-    config :CodeAIConfig = load_code_ai_config_from_env()
+    config: CodeAIConfig = load_code_ai_config_from_env()
 
     parser = pipeline_parser()
     args = parser.parse_args()
@@ -600,16 +689,19 @@ if __name__ == '__main__':
     InputsDicomDir = args.InputsDicomDir
     path_output = str(args.Output_folder)
 
-    path_code         = os.getenv("PATH_CODE", config.paths.path_code)
-    path_process      = os.getenv("PATH_PROCESS", config.paths.path_process)
-    path_processModel = os.path.join(path_process, 'Deep_CMB')
-    path_json         = os.getenv("PATH_JSON", config.paths.path_json)
-    path_log          = os.getenv("PATH_LOG", config.paths.path_log)
+    path_code = os.getenv("PATH_CODE", config.paths.path_code)
+    path_process = os.getenv("PATH_PROCESS", config.paths.path_process)
+    path_processModel = os.path.join(path_process, "Deep_CMB")
+    path_json = os.getenv("PATH_JSON", config.paths.path_json)
+    path_log = os.getenv("PATH_LOG", config.paths.path_log)
     ai_app_inference_complete = os.getenv("AI_APP_INFERENCE_COMPLETE")
+    ai_inference_result_path = os.getenv("AI_INFERENCE_RESULT_PATH")
     # 從 InputsDicomDir 讀取 study_instance_uid
     study_instance_uid = get_study_instance_uid_from_dicom(InputsDicomDir)
     if not study_instance_uid:
-        logging.warning(f"無法從 DICOM 目錄讀取 StudyInstanceUID，使用 ID 作為備用: {ID}")
+        logging.warning(
+            f"無法從 DICOM 目錄讀取 StudyInstanceUID，使用 ID 作為備用: {ID}"
+        )
         study_instance_uid = ID
 
     gpu_n = int(os.getenv("GPU_N", 0))
@@ -623,8 +715,8 @@ if __name__ == '__main__':
     os.makedirs(path_output, exist_ok=True)
 
     ## 設定 main 的 logger
-    log_file = setup_logger(path_log)
-    logging.info(f'=== CMB Pipeline CLI 開始執行 ID: {ID} ===')
+    log_file = setup_logger(str(path_log))
+    logging.info(f"=== CMB Pipeline CLI 開始執行 ID: {ID} ===")
 
     ## 執行 pipeline (已整合 upload_inference_complete)
     cmb_path_str, output_nii_path_str, output_json_path_str = pipeline_cmb(
@@ -632,7 +724,7 @@ if __name__ == '__main__':
         swan_file=swan_path_str,
         t1_file=t1_path_str,
         path_output=path_output,
-        path_log=path_log,
+        path_log=str(path_log),
         path_processModel=path_processModel,
         gpu_n=gpu_n,
         ai_app_inference_complete=ai_app_inference_complete,
@@ -641,34 +733,61 @@ if __name__ == '__main__':
     )
 
     # 後處理：DICOM-SEG 轉換 (若推論成功)
-    if output_nii_path_str is not None:
-        dicom_seg_result, timing = timed_execution(dicom_seg_cmb_file,
-                                                   'dicom_seg_cmb_file',
-                                                   ID, InputsDicomDir, output_nii_path_str, path_output
-                        )
+    if output_nii_path_str is not None and output_json_path_str is not None:
+        dicom_seg_result, timing = timed_execution(
+            dicom_seg_cmb_file,
+            "dicom_seg_cmb_file",
+            ID,
+            InputsDicomDir,
+            output_nii_path_str,
+            path_output,
+        )
 
         # Step: 發送推論成功通知 (在 DICOM-SEG 轉換完成之後)
         if ai_app_inference_complete:
-
-            rdx_json_path = output_json_path_str.replace('.json', '_rdx_cmb_pred_json.json')
-            upload_result, timing = timed_execution(upload_inference_complete,
-                                                    'upload_inference_complete',
-                                                    ai_app_inference_complete,
-                                                    True,
-                                                    rdx_json_path,
-                                                    "cmb_model"
-                                                    )
-            # upload_result = upload_inference_complete(
-            #     url=ai_app_inference_complete,
-            #     success=True,
-            #     output_json_path=rdx_json_path,
-            #     model_name="cmb_model",
-            # )
+            rdx_json_path = output_json_path_str.replace(
+                ".json", "_rdx_cmb_pred_json.json"
+            )
+            upload_result, timing = timed_execution(
+                upload_inference_complete,
+                "upload_inference_complete",
+                ai_app_inference_complete,
+                True,
+                rdx_json_path,
+                "cmb_model",
+            )
             if upload_result:
-                logging.info(f"已發送推論成功通知: inference_id={upload_result.inferenceId}")
+                logging.info(
+                    f"已發送推論成功通知: inference_id={upload_result.inferenceId}"
+                )
             else:
                 logging.warning("發送推論成功通知失敗，但推論結果已保存")
 
+        # Step: 複製結果到 AI_INFERENCE_RESULT_PATH (若配置存在)
+        if ai_inference_result_path:
+            output_id_folder = os.path.join(path_output, ID)
+            # Extract NIfTI filename prefix for filtering DICOM-SEG
+            nii_prefix = os.path.basename(output_nii_path_str).replace(".nii.gz", "")
+            copy_success, timing = timed_execution(
+                copy_to_ai_result_path,
+                "copy_to_ai_result_path",
+                rdx_json_path,
+                output_id_folder,
+                ai_inference_result_path,
+                nii_prefix,
+                "cmb_model",
+            )
+            if copy_success:
+                logging.info(
+                    f"結果已複製到 AI_INFERENCE_RESULT_PATH: {ai_inference_result_path}"
+                )
+            else:
+                logging.warning(
+                    "複製到 AI_INFERENCE_RESULT_PATH 失敗，但推論結果已保存在原始路徑"
+                )
+
     # 計時結束
     main_elapsed = time.time() - main_start_time
-    logging.info(f'=== CMB Pipeline CLI 執行完成 ID: {ID} | 總耗時: {main_elapsed:.2f} 秒 ({main_elapsed/60:.2f} 分鐘) ===')
+    logging.info(
+        f"=== CMB Pipeline CLI 執行完成 ID: {ID} | 總耗時: {main_elapsed:.2f} 秒 ({main_elapsed / 60:.2f} 分鐘) ==="
+    )

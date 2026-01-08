@@ -214,7 +214,7 @@ class PipelineConfig:
         command_parts = [
             f"export PYTHONPATH={self.base_path}",
             "&&",
-            f"{self.python3} {self.base_path}code_ai/pipeline/{self.script_name}",
+            f"{self.python3} {self.base_path}/code_ai/pipeline/{self.script_name}",
             f"--ID {study_id}",
             "--Inputs",
             *input_paths,
