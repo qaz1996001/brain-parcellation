@@ -3,21 +3,9 @@ funboost现在 新增 命令行启动消费 发布  和清空消息
 
 
 """
-import os
 import sys
 from pathlib import Path
-from code_ai import load_dotenv
-load_dotenv()
-path_process = os.getenv("PATH_PROCESS")
-path_json = os.getenv("PATH_JSON")
-path_log = os.getenv("PATH_LOG")
-# 建置資料夾
-os.makedirs(path_process, exist_ok=True)  # 如果資料夾不存在就建立，
-os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
-os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
-
-from code_ai.scheduler.scheduler_check_add_task import add_raw_dicom_to_nii_inference
-
+import fire
 
 project_root_path = Path(__file__).absolute().parent
 print(f'project_root_path is : {project_root_path}  ,请确认是否正确')
@@ -26,10 +14,9 @@ sys.path.insert(1, str(project_root_path))  # 这个是为了方便命令行不�
 # $$$$$$$$$$$$
 # 以上的sys.path代码需要放在最上面,先设置好pythonpath再导入funboost相关的模块
 # $$$$$$$$$$$$
-import fire
-from funboost.timing_job import ApsJobAdder
+
+
 from funboost.core.cli.funboost_fire import BoosterFire, env_dict
-from funboost import BoostersManager
 from funboost.core.cli.discovery_boosters import BoosterDiscovery
 
 # 需要启动的函数,那么该模块或函数建议建议要被import到这来, 否则需要要在 --import_modules_str 或 booster_dirs 中指定用户项目中有哪些模块包括了booster
@@ -43,17 +30,16 @@ from funboost.core.cli.discovery_boosters import BoosterDiscovery
 '''
 env_dict['project_root_path'] = project_root_path
 
-
 if __name__ == '__main__':
-
     # booster_dirs 用户可以自己增加扫描的文件夹,这样可以命令行少传了 --booster_dirs_str
     # BoosterDiscovery 可以多次调用
-    BoosterDiscovery(project_root_path,
-                     booster_dirs=['code_ai/task'], max_depth=1, py_file_re_str=None).auto_discovery()
-    # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
+    BoosterDiscovery(project_root_path, booster_dirs=[], max_depth=1, py_file_re_str=None).auto_discovery()  # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
     fire.Fire(BoosterFire, )
 
 '''
+
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  push test_find_queue1 --x=1 --y=2
+
 python /codes/funboost/funboost_cli_user.py   --booster_dirs_str=test_frame/test_funboost_cli/test_find_boosters --max_depth=2  consume test_find_queue1 
+
 '''
