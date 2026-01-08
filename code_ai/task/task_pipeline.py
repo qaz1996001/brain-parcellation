@@ -602,7 +602,7 @@ def _resolve_model_id_to_inference_enum(model_id: str):
     MODEL_UUID_MAPPING = {
         # CMB (Cerebral Microbleed) - Swagger 示例 UUID
         "48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6": InferenceEnum.CMB,
-        "3fa85f64-5717-4562-b3fc-2c963f66afa6": InferenceEnum.Aneurysm,
+        "924d1538-597c-41d6-bc27-4b0b359111cf": InferenceEnum.Aneurysm,
         "7e94d381-3f5d-46b6-b440-e5d44ebc48d2": InferenceEnum.WMH,
         "97abe75d-34de-4e91-80c2-ce74b6c70438": InferenceEnum.Infarct,
         # 可在此添加更多 UUID 映射
@@ -920,6 +920,155 @@ def _build_series_inference_cmd(
     return InferenceCmd(cmd_items=[inference_item])
 
 
+def _reorder_series_by_config(
+    target_labels: List[str],
+    series_uids: List[str],
+    model_id: str,
+    nifti_series_paths: Optional[List[str]] = None,
+    raw_dicom_series_paths: Optional[List[str]] = None,
+    rename_dicom_paths: Optional[List[str]] = None,
+) -> tuple:
+    """
+    根據 config.yaml 中定義的順序重新排列 series 相關列表。
+
+    Args:
+        target_labels: Target 標籤列表（後端傳入的順序）
+        series_uids: Series UID 列表
+        model_id: 模型識別碼
+        nifti_series_paths: NIFTI 檔案路徑列表（可選）
+        raw_dicom_series_paths: 原始 DICOM 路徑列表（可選）
+        rename_dicom_paths: Rename DICOM 路徑列表（可選）
+
+    Returns:
+        tuple: (sorted_target_labels, sorted_series_uids, sorted_nifti_paths,
+                sorted_raw_dicom_paths, sorted_rename_dicom_paths)
+    """
+    import yaml
+
+    # Step 1: 讀取 config.yaml 獲取模型定義的 series 順序
+    config_path = os.path.join(
+        os.path.dirname(__file__), "..", "utils", "inference", "config.yaml"
+    )
+
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+
+        # 解析 model_id 到模型名稱
+        inference_enum = _resolve_model_id_to_inference_enum(model_id)
+        model_name = inference_enum.value
+
+        # 獲取模型定義的 series 順序
+        model_mapping = config.get("model_mapping_series", {}).get(model_name, [])
+
+        if not model_mapping:
+            logger.warning(
+                f"No series mapping found in config.yaml for model {model_name}, "
+                f"keeping original order"
+            )
+            return (
+                target_labels,
+                series_uids,
+                nifti_series_paths,
+                raw_dicom_series_paths,
+                rename_dicom_paths,
+            )
+
+        # 提取第一個匹配的 series 列表（通常只有一個配置）
+        # 例如 CMB: [["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"], ...]
+        # 取第一個: ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"]
+        config_series = model_mapping[0] if model_mapping else []
+
+        # 提取純標籤名稱（去掉 Enum 前綴）
+        # "MRSeriesRenameEnum.SWAN" -> "SWAN"
+        config_labels = []
+        for series_enum_str in config_series:
+            if "." in series_enum_str:
+                label = series_enum_str.split(".")[-1]
+            else:
+                label = series_enum_str
+            config_labels.append(label)
+
+        # Step 2: 建立 target_label -> 原始索引的映射
+        label_to_index = {label: i for i, label in enumerate(target_labels)}
+
+        # Step 3: 根據 config.yaml 的順序重新排列
+        # 找到每個 config_label 在 target_labels 中的索引
+        sorted_indices = []
+        for config_label in config_labels:
+            if config_label in label_to_index:
+                sorted_indices.append(label_to_index[config_label])
+            else:
+                # 嘗試模糊匹配（例如 T1BRAVO_AXI 可能匹配 T1BRAVO）
+                found = False
+                for label, idx in label_to_index.items():
+                    if config_label in label or label in config_label:
+                        sorted_indices.append(idx)
+                        found = True
+                        break
+                if not found:
+                    logger.warning(
+                        f"Config label '{config_label}' not found in target_labels, skipping"
+                    )
+
+        # 如果沒有匹配項，保持原順序
+        if not sorted_indices or len(sorted_indices) != len(target_labels):
+            logger.warning(
+                f"Cannot match all config labels to target_labels, keeping original order. "
+                f"Config: {config_labels}, Target: {target_labels}"
+            )
+            return (
+                target_labels,
+                series_uids,
+                nifti_series_paths,
+                raw_dicom_series_paths,
+                rename_dicom_paths,
+            )
+
+        # Step 4: 重新排列所有列表
+        sorted_target_labels = [target_labels[i] for i in sorted_indices]
+        sorted_series_uids = [series_uids[i] for i in sorted_indices]
+        sorted_nifti_paths = (
+            [nifti_series_paths[i] for i in sorted_indices]
+            if nifti_series_paths
+            else None
+        )
+        sorted_raw_dicom_paths = (
+            [raw_dicom_series_paths[i] for i in sorted_indices]
+            if raw_dicom_series_paths
+            else None
+        )
+        sorted_rename_dicom_paths = (
+            [rename_dicom_paths[i] for i in sorted_indices]
+            if rename_dicom_paths
+            else None
+        )
+
+        logger.info(
+            f"Reordered series by config.yaml: {target_labels} -> {sorted_target_labels}"
+        )
+
+        return (
+            sorted_target_labels,
+            sorted_series_uids,
+            sorted_nifti_paths,
+            sorted_raw_dicom_paths,
+            sorted_rename_dicom_paths,
+        )
+
+    except Exception as e:
+        logger.warning(
+            f"Failed to reorder series by config.yaml: {e}, keeping original order"
+        )
+        return (
+            target_labels,
+            series_uids,
+            nifti_series_paths,
+            raw_dicom_series_paths,
+            rename_dicom_paths,
+        )
+
+
 def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     """
     Series Level 推論 - 處理指定的 series。
@@ -989,11 +1138,39 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     target_labels = func_params.get(
         "target_labels", series_uids
     )  # 向後兼容：默認使用 series_uids
+    model_id = func_params["model_id"]
 
     # Knuth: 驗證不變量
     assert len(series_uids) == len(target_labels), (
         f"Invariant violation: {len(series_uids)} UIDs != {len(target_labels)} labels"
     )
+
+    # Step 2.6: 根據 config.yaml 重新排序 target_labels 和相關列表
+    # 確保 --InputsDicomDir 取到正確的第一個序列
+    (
+        target_labels,
+        series_uids,
+        sorted_nifti_paths,
+        sorted_raw_dicom_paths,
+        sorted_rename_dicom_paths,
+    ) = _reorder_series_by_config(
+        target_labels=target_labels,
+        series_uids=series_uids,
+        model_id=model_id,
+        nifti_series_paths=func_params.get("nifti_series_paths"),
+        raw_dicom_series_paths=func_params.get("raw_dicom_series_paths"),
+        rename_dicom_paths=func_params.get("rename_dicom_paths"),
+    )
+
+    # 更新 func_params 中的排序後列表
+    func_params["series_uids"] = series_uids
+    func_params["target_labels"] = target_labels
+    if sorted_nifti_paths is not None:
+        func_params["nifti_series_paths"] = sorted_nifti_paths
+    if sorted_raw_dicom_paths is not None:
+        func_params["raw_dicom_series_paths"] = sorted_raw_dicom_paths
+    if sorted_rename_dicom_paths is not None:
+        func_params["rename_dicom_paths"] = sorted_rename_dicom_paths
 
     if needs_conversion:
         # 轉換模式或混合模式: 執行 DICOM 轉換
@@ -1247,7 +1424,7 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                         shell=True,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        cwd=path_process,
+                        # cwd=path_process,
                     )
                     stdout, stderr = process.communicate(timeout=600)
 
@@ -1486,33 +1663,3 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
             logger.error(f"Failed to post COMPLETE event: {e}")
 
     return result_json
-
-
-# =============================================================================
-# Subprocess Task（保持不變）
-# =============================================================================
-
-#
-# @Booster(
-#     BoosterParamsMyRABBITMQ(
-#         queue_name="task_subprocess_queue",
-#         concurrent_num=3,
-#         qps=1,
-#     )
-# )
-# def task_subprocess_inference(func_params: Dict[str, Any]):
-#     """Subprocess 推論任務（保持不變）"""
-#     path_process = _extract_path_from_params(
-#         func_params, "path_process", "PATH_PROCESS"
-#     )
-#     path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
-#     os.makedirs(path_cmd_tools, exist_ok=True)
-#
-#     cmd_str = func_params["cmd_str"]
-#     process = subprocess.Popen(
-#         args=cmd_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-#     )
-#     stdout, stderr = process.communicate()
-#     logger.info(stdout.decode())
-#     logger.warning(stderr.decode())
-#     return stdout.decode()
