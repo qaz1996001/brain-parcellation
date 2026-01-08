@@ -1,6 +1,7 @@
 # app/listen/service.py
 import json
 import logging
+import os
 import pathlib
 import traceback
 from typing import Any, List, Optional, Tuple
@@ -17,9 +18,9 @@ from fastapi_cache import FastAPICache
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from backend.app.service import BaseRepositoryService
 from backend.app.config.models import BackendConfig
-from .model import DCOPEventModel
+from backend.app.sync.model import DCOPEventModel
 from .schemas import DCOPStatus, DCOPEventRequest, DCOPEventNIFTITOOLRequest
-from .urls import (
+from backend.app.sync.urls import (
     SYNC_PROT_OPE_NO,
     SYNC_PROT_STUDY_NIFTI_TOOL,
     SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID,
@@ -62,6 +63,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         super().__init__(**kwargs)
         if config is None:
             from backend.app.config.loader import load_backend_config_from_env
+
             self._config = load_backend_config_from_env(fail_safe=True)
         else:
             self._config = config
@@ -264,7 +266,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         async with httpx.AsyncClient(timeout=180) as client:
             url = f"{api_url}{SYNC_PROT_OPE_NO}"
             event_data_json = json.dumps(event_data)
-            await client.post(url=url, timeout=180, data=event_data_json)
+            await client.post(url=url, timeout=180, content=event_data_json)
 
     async def _initiate_conversion_process(
         self,
@@ -492,7 +494,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         await session.commit()
                         await session.flush()
                         task_dict = task_params.get_str_dict()
-                        task_dict["upload_data_api_url"] = self.config.api.upload_data_url
+                        task_dict["upload_data_api_url"] = (
+                            self.config.api.upload_data_url
+                        )
                         # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
                         # These are only needed by task_pipeline_inference
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)

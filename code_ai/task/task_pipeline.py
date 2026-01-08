@@ -45,23 +45,29 @@ Usage:
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 
+import pydicom
 from funboost import Booster, fct
 from funboost.core.serialization import Serialization
 import nb_log
 
 from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
-from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
+from code_ai.task.params import BoosterParamsMyAI
 from code_ai.utils.inference import build_inference_cmd
-from code_ai.utils.inference.schema import InferenceCmd, InferenceCmdItem
+from code_ai.utils.inference.schema import InferenceCmd, InferenceCmdItem, InferenceEnum
+from code_ai.dicom2nii.convert import ConvertManager
 
 logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_handlers(
     log_filename="task_pipeline_inference_queue.log"
 )
+
+# Infarct 模型要求的 target series（與 Study Level 一致）
+INFARCT_TARGET_SERIES = ("ADC", "DWI0", "DWI1000")
 
 
 def _extract_path_from_params(
@@ -258,9 +264,10 @@ def _validate_series_params(func_params: Dict[str, Any]) -> None:
     """
     驗證 Series Level 參數。
 
-    支持兩種模式：
+    支持三種模式：
     1. 直接模式: nifti_series_paths 已存在
     2. 轉換模式: needs_conversion=True + raw_dicom_series_paths
+    3. 混合模式: needs_conversion=True + raw_dicom_series_paths + nifti_series_paths
 
     Linus: "Fail fast and fail loud. Don't try to be clever."
     """
@@ -278,10 +285,12 @@ def _validate_series_params(func_params: Dict[str, Any]) -> None:
         raise ValueError(f"series_uids must be a list, got {type(series_uids)}")
 
     needs_conversion = func_params.get("needs_conversion", False)
+    has_nifti_paths = "nifti_series_paths" in func_params
+    has_raw_paths = "raw_dicom_series_paths" in func_params
 
     if needs_conversion:
-        # 轉換模式: 需要 raw_dicom_series_paths
-        if "raw_dicom_series_paths" not in func_params:
+        # 轉換模式或混合模式: 需要 raw_dicom_series_paths
+        if not has_raw_paths:
             raise ValueError(
                 "When needs_conversion=True, raw_dicom_series_paths is required"
             )
@@ -290,18 +299,43 @@ def _validate_series_params(func_params: Dict[str, Any]) -> None:
             raise ValueError(
                 f"raw_dicom_series_paths must be a list, got {type(raw_paths)}"
             )
-        if len(series_uids) != len(raw_paths):
-            raise ValueError(
-                f"series_uids ({len(series_uids)} items) and "
-                f"raw_dicom_series_paths ({len(raw_paths)} items) must have same length"
+
+        # 檢查是否為混合模式
+        if has_nifti_paths:
+            # 混合模式: 同時有 raw_dicom 和 nifti 路徑
+            # series_uids = accepted_direct + accepted_convert (service.py line 850)
+            # nifti_paths 對應 accepted_direct，raw_paths 對應 accepted_convert
+            nifti_paths = func_params["nifti_series_paths"]
+            if not isinstance(nifti_paths, list):
+                raise ValueError(
+                    f"nifti_series_paths must be a list, got {type(nifti_paths)}"
+                )
+            total_paths = len(nifti_paths) + len(raw_paths)
+            if len(series_uids) != total_paths:
+                raise ValueError(
+                    f"series_uids ({len(series_uids)} items) must equal "
+                    f"nifti_series_paths ({len(nifti_paths)}) + "
+                    f"raw_dicom_series_paths ({len(raw_paths)}) = {total_paths}"
+                )
+            logger.info(
+                f"Validated Series Level params (mixed mode): "
+                f"{len(series_uids)} series ({len(nifti_paths)} direct, {len(raw_paths)} convert), "
+                f"model_id={func_params['model_id']}"
             )
-        logger.info(
-            f"Validated Series Level params (conversion mode): "
-            f"{len(series_uids)} series, model_id={func_params['model_id']}"
-        )
+        else:
+            # 純轉換模式
+            if len(series_uids) != len(raw_paths):
+                raise ValueError(
+                    f"series_uids ({len(series_uids)} items) and "
+                    f"raw_dicom_series_paths ({len(raw_paths)} items) must have same length"
+                )
+            logger.info(
+                f"Validated Series Level params (conversion mode): "
+                f"{len(series_uids)} series, model_id={func_params['model_id']}"
+            )
     else:
         # 直接模式: 需要 nifti_series_paths
-        if "nifti_series_paths" not in func_params:
+        if not has_nifti_paths:
             raise ValueError(
                 "nifti_series_paths is required when needs_conversion is False or not set"
             )
@@ -327,6 +361,7 @@ def _convert_single_series_to_nifti(
     output_nifti_base: str,
     series_uid: str,
     study_id: str,
+    target_label: str,
 ) -> tuple:
     """
     單個 series 的 DICOM 轉換: raw_dicom → rename_dicom → nifti。
@@ -334,20 +369,23 @@ def _convert_single_series_to_nifti(
     這是同步執行的轉換函數，直接調用底層轉換邏輯，
     而非使用 funboost 的異步 push（避免額外的 queue 調度開銷）。
 
+    【Knuth: Parameter Authority Principle】
+    target_label 是輸出檔案命名的**唯一權威來源**，不應從 filesystem 推導。
+    這確保了 Backend 的 AI 模型層抽象（DWI0/DWI1000）能正確傳遞到 Worker。
+
     Args:
         raw_dicom_path: 原始 DICOM 目錄路徑
         output_dicom_base: rename_dicom 基礎目錄
         output_nifti_base: nifti 輸出基礎目錄
-        series_uid: Series UID
-        study_id: Study ID
+        series_uid: Series UID (真實 UID，用於事件追踪)
+        study_id: Study ID (用於路徑構建)
+        target_label: Target 標籤 (AI 模型期待的標籤，如 "DWI0", "DWI1000", 或 series_uid)
+                      **這是輸出檔案命名的權威來源**
 
     Returns:
         tuple: (rename_dicom_path, nifti_path) 或 (None, None) 如果失敗
     """
     from code_ai.task.task_dicom2nii import (
-        rename_dicom_file,
-        copy_dicom_file,
-        ConvertManager,
         _execute_dcm2niix,
     )
 
@@ -360,6 +398,12 @@ def _convert_single_series_to_nifti(
         return None, None
 
     # Step 1: raw_dicom → rename_dicom
+    # 【Knuth: Parameter Authority】使用 target_label 覆蓋 DICOM metadata 推導的名稱
+    # 原因：對於 DWI expansion，同一個 raw DICOM 需要生成兩個不同的 rename 目錄
+    # - 第一次：target_label="DWI0" → rename_dicom/.../DWI0/
+    # - 第二次：target_label="DWI1000" → rename_dicom/.../DWI1000/
+    # 如果讓 ConvertManager 自動推導，兩次都會得到 DWI0（因為 DICOM metadata 一樣）
+
     # 收集所有 DICOM 文件
     dicom_files = list(raw_dicom_dir.rglob("*.dcm"))
     if not dicom_files:
@@ -369,40 +413,45 @@ def _convert_single_series_to_nifti(
         logger.error(f"No DICOM files found in: {raw_dicom_path}")
         return None, None
 
-    # 處理每個 DICOM 文件
-    rename_dicom_path = None
+    # 計算 rename_dicom 路徑（使用 target_label 而非 DICOM 推導）
+    # 構建 rename_dicom 路徑：{output_dicom_base}/{study_id}/{target_label}/
+    rename_dicom_path = output_dicom_base_path / study_id / target_label
+    rename_dicom_path.mkdir(parents=True, exist_ok=True)
+    convert_manager = ConvertManager(raw_dicom_dir, output_dicom_base_path)
+    # 複製 DICOM 文件到 rename_dicom 目錄
     for dicom_file in dicom_files:
+        if target_label in ["DWI0", "DWI1000"]:
+            dicom_ds = pydicom.read_file(dicom_file)
+            dcm_label = convert_manager.rename_dicom_path(dicom_ds)
+            if dcm_label != target_label:
+                continue
         try:
-            rename_result = rename_dicom_file(
-                dicom_file,
-                ConvertManager.processing_strategy_list,
-                ConvertManager.modality_processing_strategy,
-                ConvertManager.mr_acquisition_type_processing_strategy,
-            )
-            copy_result = copy_dicom_file(
-                rename_result, dicom_file, output_dicom_base_path
-            )
-            if copy_result:
-                # 從結果中提取 rename_dicom 路徑
-                # copy_dicom_file 返回 JSON tuple: [input_path, output_path]
-                result_tuple = json.loads(copy_result)
-                # result_tuple[1] = output path (renamed DICOM file)
-                rename_dicom_path = pathlib.Path(result_tuple[1]).parent
+            dest_file = rename_dicom_path / dicom_file.name
+            shutil.copy2(dicom_file, dest_file)
         except Exception as e:
-            logger.warning(f"Failed to process DICOM file {dicom_file}: {e}")
+            logger.warning(f"Failed to copy DICOM file {dicom_file}: {e}")
             continue
 
-    if rename_dicom_path is None:
-        logger.error(f"Failed to rename DICOM files for series: {series_uid}")
+    if not any(rename_dicom_path.iterdir()):
+        logger.error(f"Failed to copy DICOM files for series: {series_uid}")
         return None, None
 
-    logger.info(f"DICOM renamed: {raw_dicom_path} → {rename_dicom_path}")
+    logger.info(
+        f"DICOM renamed: {raw_dicom_path} → {rename_dicom_path}, "
+        f"using target_label={target_label} for output naming"
+    )
 
-    # Step 2: rename_dicom → nifti (使用純函數，避免重複造輪子)
+    # Step 2: rename_dicom → nifti
+    # 【Knuth: Single Source of Truth】
+    # 使用 target_label 作為 series 命名的權威來源（而非從 path 推導）
+    # 這確保了 Backend DWI Expansion Pattern 的正確性：
+    # - Backend 傳遞 target_label="DWI1000"
+    # - Worker 使用 target_label="DWI1000" (不是從 path 得到的 "DWI0")
+    series_name = target_label  # ✅ 權威來源：caller's explicit intent
+
     # 計算輸出 NIFTI 路徑
-    study_folder = rename_dicom_path.parent
-    series_name = rename_dicom_path.name
-    nifti_study_path = output_nifti_base_path / study_folder.name
+    # 【Knuth: Parameter Usage】使用 study_id 參數（而非從 path 推導）
+    nifti_study_path = output_nifti_base_path / study_id
     nifti_series_path = nifti_study_path / series_name
     nifti_file_path = pathlib.Path(f"{nifti_series_path}.nii.gz")
 
@@ -434,17 +483,28 @@ def _convert_single_series_to_nifti(
 def _batch_convert_series_to_nifti(
     raw_dicom_paths: List[str],
     series_uids: List[str],
+    target_labels: List[str],
     output_dicom_base: str,
     output_nifti_base: str,
     study_id: str,
-    upload_data_api_url: str = None,
+    study_uid: str,
+    upload_data_api_url: Optional[str] = None,
 ) -> tuple:
     """
     批量轉換多個 series: raw_dicom → rename_dicom → nifti。
 
+    【Knuth: 數學定義】
+    對於每個 i，處理元組 (series_uids[i], target_labels[i])：
+      - series_uids[i]: 真實 UID（用於事件追踪和數據庫查詢）
+      - target_labels[i]: AI 模型的目標標籤（用於文件命名和日誌）
+
+    【不變量】
+    len(series_uids) == len(target_labels) == len(raw_dicom_paths)
+
     Args:
         raw_dicom_paths: 原始 DICOM 路徑列表
-        series_uids: Series UID 列表
+        series_uids: Series UID 列表（真實 UID，來自 Orthanc）
+        target_labels: Target 標籤列表（AI 模型期待的標籤，如 "DWI0", "DWI1000"）
         output_dicom_base: rename_dicom 基礎目錄
         output_nifti_base: nifti 輸出基礎目錄
         study_id: Study ID
@@ -457,11 +517,22 @@ def _batch_convert_series_to_nifti(
     from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
     from backend.app.sync import urls as sync_urls
 
+    # Knuth: 驗證不變量
+    assert len(series_uids) == len(target_labels) == len(raw_dicom_paths), (
+        f"Invariant violation: {len(series_uids)} UIDs, {len(target_labels)} labels, {len(raw_dicom_paths)} paths"
+    )
+
     dicom_series_paths = []
     nifti_paths = []
 
-    for i, (raw_path, series_uid) in enumerate(zip(raw_dicom_paths, series_uids)):
-        logger.info(f"Converting series {i + 1}/{len(series_uids)}: {series_uid}")
+    # Knuth: 主循環保持 (UID, Label) 元組的完整性
+    for i, (raw_path, series_uid, target_label) in enumerate(
+        zip(raw_dicom_paths, series_uids, target_labels)
+    ):
+        logger.info(
+            f"Converting series {i + 1}/{len(series_uids)}: {target_label} "
+            f"(UID: {series_uid})"
+        )
 
         dicom_path, nifti_path = _convert_single_series_to_nifti(
             raw_dicom_path=raw_path,
@@ -469,12 +540,14 @@ def _batch_convert_series_to_nifti(
             output_nifti_base=output_nifti_base,
             series_uid=series_uid,
             study_id=study_id,
+            target_label=target_label,  # ✅ 傳遞 target_label 參數
         )
 
+        # Backend now handles DWI expansion - no need for Worker to detect/convert siblings
         dicom_series_paths.append(dicom_path)
         nifti_paths.append(nifti_path)
 
-        # 發送轉換完成事件（可選）
+        # 發送轉換完成事件（Knuth: 使用真實 UID，額外記錄 target_label）
         if upload_data_api_url and dicom_path:
             try:
                 status = (
@@ -483,8 +556,8 @@ def _batch_convert_series_to_nifti(
                     else DCOPStatus.SERIES_CONVERSION_SKIP.value
                 )
                 dcop_event = DCOPEventRequest(
-                    study_uid=None,  # Series Level 可能沒有 study_uid
-                    series_uid=series_uid,
+                    study_uid=study_uid,
+                    series_uid=series_uid,  # ✅ 真實 UID（Backend 可查數據庫）
                     study_id=study_id,
                     ope_no=status,
                     tool_id="NIFTI_TOOL",
@@ -492,6 +565,7 @@ def _batch_convert_series_to_nifti(
                         "raw_dicom_path": raw_path,
                         "rename_dicom_path": dicom_path,
                         "nifti_path": nifti_path,
+                        "target_label": target_label,  # 額外記錄（用於調試）
                     },
                 )
                 api_url = f"{upload_data_api_url}{sync_urls.SYNC_PROT_OPE_NO}"
@@ -499,7 +573,9 @@ def _batch_convert_series_to_nifti(
                     {"url": api_url, "data": dcop_event.model_dump_json()}
                 )
             except Exception as e:
-                logger.warning(f"Failed to send conversion event: {e}")
+                logger.warning(
+                    f"Failed to send conversion event for {target_label}: {e}"
+                )
 
     return dicom_series_paths, nifti_paths
 
@@ -525,7 +601,10 @@ def _resolve_model_id_to_inference_enum(model_id: str):
     # 這些 UUID 應該與資料庫中的模型配置對應
     MODEL_UUID_MAPPING = {
         # CMB (Cerebral Microbleed) - Swagger 示例 UUID
-        "3fa85f64-5717-4562-b3fc-2c963f66afa6": InferenceEnum.CMB,
+        "48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6": InferenceEnum.CMB,
+        "3fa85f64-5717-4562-b3fc-2c963f66afa6": InferenceEnum.Aneurysm,
+        "7e94d381-3f5d-46b6-b440-e5d44ebc48d2": InferenceEnum.WMH,
+        "97abe75d-34de-4e91-80c2-ce74b6c70438": InferenceEnum.Infarct,
         # 可在此添加更多 UUID 映射
     }
 
@@ -574,11 +653,90 @@ def _is_batch_inputs_model(model_id: str) -> bool:
     return False
 
 
+def _is_infarct_model(model_id: str) -> bool:
+    """
+    檢查模型是否為 Infarct 模型。
+
+    Infarct 模型需要為每個 NIfTI 輸入傳遞對應的 DICOM 目錄。
+    其他 batch_inputs 模型（如 CMB）只需要單個 DICOM 目錄。
+
+    Args:
+        model_id: 模型識別碼（UUID 或模型名稱）
+
+    Returns:
+        bool: True 如果是 Infarct 模型
+    """
+    try:
+        inference_enum = _resolve_model_id_to_inference_enum(model_id)
+        return inference_enum == InferenceEnum.Infarct
+    except (ValueError, KeyError):
+        return False
+
+
+def _validate_infarct_target_series(
+    nifti_paths: List[str], dicom_paths: List[str]
+) -> bool:
+    """
+    驗證 Infarct 模型是否包含所有必需的 target series。
+
+    與 Study Level 的 _resolve_infarct_dicom_inputs 邏輯一致：
+    - 必須包含 ADC, DWI0, DWI1000 三個 series
+    - 所有 DICOM 路徑必須非空
+
+    如果驗證失敗，應該 fallback 到單個 DICOM 目錄。
+
+    Args:
+        nifti_paths: NIfTI 檔案路徑列表
+        dicom_paths: 對應的 DICOM 目錄列表
+
+    Returns:
+        bool: True 如果所有 target series 都存在且有效
+    """
+    if len(nifti_paths) != len(dicom_paths):
+        return False
+
+    # 提取 series 名稱（從 NIfTI 檔案路徑）
+    series_names = []
+    for path in nifti_paths:
+        basename = os.path.basename(path)
+        # 移除 .nii.gz 或 .nii 後綴
+        if basename.endswith(".nii.gz"):
+            name = basename[:-7]
+        elif basename.endswith(".nii"):
+            name = basename[:-4]
+        else:
+            name = basename
+        series_names.append(name)
+
+    # 檢查是否包含所有 target series
+    for target in INFARCT_TARGET_SERIES:
+        found = False
+        for name in series_names:
+            # 模糊匹配（與 Study Level 的 _match_series_basename 一致）
+            if target == name or target.lower() in name.lower():
+                found = True
+                break
+        if not found:
+            logger.warning(
+                f"Infarct validation failed: missing target series '{target}'"
+            )
+            return False
+
+    # 檢查所有 DICOM 路徑都非空
+    for i, dicom_path in enumerate(dicom_paths):
+        if not dicom_path or dicom_path == "":
+            logger.warning(f"Infarct validation failed: empty DICOM path at index {i}")
+            return False
+
+    return True
+
+
 def _build_series_inference_cmd(
     nifti_paths: list,
     model_id: str,
     output_dir: str,
     dicom_dir: Optional[str] = None,
+    dicom_dirs: Optional[List[str]] = None,
     study_id: Optional[str] = None,
     path_root: Optional[str] = None,
 ) -> InferenceCmd:
@@ -588,13 +746,14 @@ def _build_series_inference_cmd(
     使用 code_ai/pipeline/__init__.py 中的 pipelines 配置來生成正確的推論命令。
     重用 check_study_mapping_inference 的邏輯確保 nifti_paths 順序與 config.yaml 一致。
 
-    支援多輸入模型（如 CMB 需要 SWAN + T1BRAVO）。
+    支援多輸入模型（如 CMB、Infarct 需要多個 series 同時輸入）。
 
     Args:
         nifti_paths: NIFTI 檔案路徑列表（單輸入模型傳 [path]，多輸入傳 [path1, path2, ...]）
         model_id: 模型識別碼（UUID 或模型名稱如 'CMB'）
         output_dir: 輸出目錄
-        dicom_dir: DICOM 目錄（用於 DICOM-SEG 生成）
+        dicom_dir: 單個 DICOM 目錄（向後兼容，用於 DICOM-SEG 生成）
+        dicom_dirs: DICOM 目錄列表（batch_inputs 模型，每個 NIfTI 對應一個 DICOM 目錄）
         study_id: Study ID（可選，從 nifti_path 推斷）
         path_root: PATH_ROOT 配置（可選，用於雙部署架構）
 
@@ -653,7 +812,10 @@ def _build_series_inference_cmd(
 
     # Step 4: 重用 check_study_mapping_inference 獲取正確順序的 nifti_paths
     # 這確保 CMB 等多輸入模型的參數順序與 config.yaml 定義一致
+    # Knuth: 同時重新排序 dicom_dirs 以保持位置對應關係
     sorted_nifti_paths = nifti_paths  # 預設使用原順序
+    sorted_dicom_dirs = dicom_dirs  # 預設使用原順序
+
     if pipeline_config.batch_inputs and len(nifti_paths) > 1:
         try:
             mapping_result = check_study_mapping_inference(study_path)
@@ -661,12 +823,51 @@ def _build_series_inference_cmd(
                 study_mapping = mapping_result.get(study_path.name, {})
                 model_paths = study_mapping.get(inference_enum.value, [])
                 if model_paths and len(model_paths) == len(nifti_paths):
+                    # 建立原始路徑到新順序的映射（通過檔名匹配）
+                    # Knuth: 索引映射保證數據完整性
+                    path_to_index = {}
+                    for i, path in enumerate(nifti_paths):
+                        basename = (
+                            os.path.basename(path)
+                            .replace(".nii.gz", "")
+                            .replace(".nii", "")
+                        )
+                        path_to_index[basename] = i
+
                     # 使用 check_study_mapping_inference 返回的順序
                     sorted_nifti_paths = model_paths
-                    logger.info(
-                        f"Using sorted nifti_paths from check_study_mapping_inference: "
-                        f"{[os.path.basename(p) for p in sorted_nifti_paths]}"
-                    )
+
+                    # 【修復】同步重新排序 dicom_dirs（保持位置對應）
+                    if dicom_dirs and len(dicom_dirs) == len(nifti_paths):
+                        sorted_dicom_dirs = []
+                        for sorted_path in sorted_nifti_paths:
+                            sorted_basename = (
+                                os.path.basename(sorted_path)
+                                .replace(".nii.gz", "")
+                                .replace(".nii", "")
+                            )
+                            original_index = path_to_index.get(sorted_basename)
+                            if original_index is not None:
+                                sorted_dicom_dirs.append(dicom_dirs[original_index])
+                            else:
+                                # Fallback: 如果無法匹配，保持原順序
+                                logger.warning(
+                                    f"Cannot match basename '{sorted_basename}' to original paths, "
+                                    f"keeping original dicom_dir order"
+                                )
+                                sorted_dicom_dirs = dicom_dirs
+                                break
+
+                        logger.info(
+                            f"Sorted both nifti_paths and dicom_dirs: "
+                            f"nifti={[os.path.basename(p) for p in sorted_nifti_paths]}, "
+                            f"dicom={[os.path.basename(d) if d else 'None' for d in sorted_dicom_dirs]}"
+                        )
+                    else:
+                        logger.info(
+                            f"Using sorted nifti_paths from check_study_mapping_inference: "
+                            f"{[os.path.basename(p) for p in sorted_nifti_paths]}"
+                        )
         except Exception as e:
             logger.warning(
                 f"Failed to get sorted paths from check_study_mapping_inference: {e}, "
@@ -695,10 +896,13 @@ def _build_series_inference_cmd(
     )
 
     # Step 7: 使用 PipelineConfig.generate_cmd 生成命令
+    # 優先使用 sorted_dicom_dirs（多個目錄，已重新排序），fallback 到 dicom_dir（單個）
+    # Knuth: 使用排序後的 DICOM 路徑，確保與 NIfTI 路徑位置對應
     cmd_str = pipeline_config.generate_cmd(
         study_id=resolved_study_id,
         task=task,
-        input_dicom_dir=dicom_dir,
+        input_dicom_dir=dicom_dir if not sorted_dicom_dirs else None,
+        input_dicom_dirs=sorted_dicom_dirs,
         path_root=path_root,
     )
 
@@ -779,14 +983,20 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     os.makedirs(path_log, exist_ok=True)
 
     # Step 2.5: 條件式轉換 (raw_dicom → rename_dicom → nifti)
+    # Knuth: 提取 (UID, Label) 元組
     needs_conversion = func_params.get("needs_conversion", False)
     series_uids = func_params["series_uids"]
+    target_labels = func_params.get(
+        "target_labels", series_uids
+    )  # 向後兼容：默認使用 series_uids
+
+    # Knuth: 驗證不變量
+    assert len(series_uids) == len(target_labels), (
+        f"Invariant violation: {len(series_uids)} UIDs != {len(target_labels)} labels"
+    )
 
     if needs_conversion:
-        # 轉換模式: 執行 DICOM 轉換
-        logger.info(f"Conversion mode enabled for {len(series_uids)} series")
-
-        # 提取轉換所需的路徑參數
+        # 轉換模式或混合模式: 執行 DICOM 轉換
         raw_dicom_paths = func_params["raw_dicom_series_paths"]
         path_rename_dicom = _extract_path_from_params(
             func_params, "path_rename_dicom", "PATH_RENAME_DICOM"
@@ -795,16 +1005,67 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
             func_params, "path_rename_nifti", "PATH_RENAME_NIFTI"
         )
         study_id = func_params.get("study_id", "unknown_study")
+        study_uid = func_params.get("study_uid") or ""
 
-        # 執行批量轉換
-        dicom_series_paths, nifti_paths = _batch_convert_series_to_nifti(
-            raw_dicom_paths=raw_dicom_paths,
-            series_uids=series_uids,
-            output_dicom_base=path_rename_dicom,
-            output_nifti_base=path_rename_nifti,
-            study_id=study_id,
-            upload_data_api_url=upload_data_api_url,
-        )
+        # 檢查是否為混合模式（同時有 nifti_series_paths）
+        existing_nifti_paths = func_params.get("nifti_series_paths", [])
+        is_mixed_mode = len(existing_nifti_paths) > 0
+
+        if is_mixed_mode:
+            # 混合模式: 部分需要轉換，部分已存在
+            # Linus: Data structure drives behavior
+            convert_count = len(raw_dicom_paths)
+            direct_count = len(existing_nifti_paths)
+            logger.info(
+                f"Mixed mode: {direct_count} direct, {convert_count} convert, "
+                f"{len(series_uids)} total series"
+            )
+
+            # Knuth: 只轉換需要轉換的 series（保持 UID 和 Label 元組對應）
+            series_to_convert_uids = series_uids[direct_count:]
+            labels_to_convert = target_labels[direct_count:]
+            dicom_paths_converted, nifti_paths_converted = (
+                _batch_convert_series_to_nifti(
+                    raw_dicom_paths=raw_dicom_paths,
+                    series_uids=series_to_convert_uids,  # ✅ 真實 UID
+                    target_labels=labels_to_convert,  # ✅ Target 標籤
+                    output_dicom_base=path_rename_dicom,
+                    output_nifti_base=path_rename_nifti,
+                    study_id=study_id,
+                    study_uid=study_uid,
+                    upload_data_api_url=upload_data_api_url,
+                )
+            )
+
+            # 合併路徑: 已存在的 + 轉換後的
+            nifti_paths = existing_nifti_paths + nifti_paths_converted
+
+            # Linus: "Good taste - eliminate special cases"
+            # Use real rename_dicom paths from backend instead of [None]
+            rename_dicom_paths_direct = func_params.get("rename_dicom_paths", [])
+            dicom_series_paths = rename_dicom_paths_direct + dicom_paths_converted
+
+            # Linus: "Fail fast and fail loud"
+            expected_count = len(series_uids)
+            actual_count = len(dicom_series_paths)
+            if actual_count != expected_count:
+                logger.warning(
+                    f"dicom_series_paths count mismatch: expected {expected_count}, got {actual_count}. "
+                    f"Some paths may be empty."
+                )
+        else:
+            # 純轉換模式: 所有 series 都需要轉換
+            logger.info(f"Conversion mode: {len(series_uids)} series")
+            dicom_series_paths, nifti_paths = _batch_convert_series_to_nifti(
+                raw_dicom_paths=raw_dicom_paths,
+                series_uids=series_uids,  # ✅ 真實 UID
+                target_labels=target_labels,  # ✅ Target 標籤
+                output_dicom_base=path_rename_dicom,
+                output_nifti_base=path_rename_nifti,
+                study_id=study_id,
+                study_uid=study_uid,
+                upload_data_api_url=upload_data_api_url,
+            )
 
         # 檢查轉換結果
         failed_conversions = [
@@ -818,8 +1079,10 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     else:
         # 直接模式: 使用已存在的 NIFTI 路徑
         nifti_paths = func_params["nifti_series_paths"]
+        # Linus: "Fix the data structure bug - use the correct key name"
+        # Backend sends "rename_dicom_paths", not "dicom_series_paths"
         dicom_series_paths = func_params.get(
-            "dicom_series_paths", [None] * len(series_uids)
+            "rename_dicom_paths", [None] * len(series_uids)
         )
 
     # Step 3: 提取其他 series 參數
@@ -828,6 +1091,19 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     study_uid = func_params.get("study_uid")
     study_id = func_params.get("study_id")
     # 注意: dicom_series_paths 和 nifti_paths 已在 Step 2.5 中設置
+
+    # Linus: "Make bugs visible - log what you got"
+    logger.info(
+        f"Series-level inference setup: {len(series_uids)} series, "
+        f"{len(nifti_paths)} NIfTI paths, {len(dicom_series_paths)} DICOM paths"
+    )
+    # Warn if DICOM paths contain None/empty
+    none_count = sum(1 for p in dicom_series_paths if not p)
+    if none_count > 0:
+        logger.warning(
+            f"{none_count}/{len(dicom_series_paths)} DICOM paths are None/empty - "
+            f"DICOM-SEG generation may be affected"
+        )
 
     api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
 
@@ -867,7 +1143,7 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     error_message = None
     all_inference_cmd_items = []  # 收集所有 InferenceCmdItem（與 Study Level 一致）
 
-    # 檢查是否為批量輸入模型（如 CMB 需要 SWAN + T1BRAVO）
+    # 檢查是否為批量輸入模型（如 CMB 需要 SWAN + T1BRAVO、Infarct）
     is_batch_model = _is_batch_inputs_model(model_id)
 
     try:
@@ -879,15 +1155,20 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                 f"processing {len(series_uids)} series as single inference"
             )
 
-            # 檢查所有 NIFTI 檔案存在
+            # 檢查所有 NIFTI 檔案存在，同時收集對應的 DICOM 目錄
             valid_nifti_paths = []
+            valid_dicom_dirs = []
             missing_series = []
-            for series_uid, nifti_path in zip(series_uids, nifti_paths):
+            for series_uid, nifti_path, dicom_path in zip(
+                series_uids, nifti_paths, dicom_series_paths
+            ):
                 if nifti_path is None or not os.path.exists(nifti_path):
                     missing_series.append(series_uid)
                     logger.error(f"NIFTI file not found: {nifti_path}")
                 else:
                     valid_nifti_paths.append(nifti_path)
+                    # 收集對應的 DICOM 目錄（batch_inputs 模型需要每個 NIfTI 對應的 DICOM）
+                    valid_dicom_dirs.append(dicom_path if dicom_path else "")
 
             if missing_series:
                 error_msg = f"Missing NIFTI files for series: {missing_series}"
@@ -903,23 +1184,56 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                 all_success = False
 
             if valid_nifti_paths:
-                # 建立輸出目錄（使用所有 series UID 組合）
-                combined_uid = "_".join(series_uids[:2])  # 最多用前兩個
-                output_dir = os.path.join(path_json, f"{combined_uid}_{model_id}")
+                # 建立輸出目錄（使用 inference_id，Linus: "Data structure drives behavior"）
+                # 單次推理任務 → 用 inference_id 標識，而非拼接多個 series UID
+                output_dir = os.path.join(path_json, inference_id)
                 os.makedirs(output_dir, exist_ok=True)
 
-                # 取得第一個 DICOM 路徑（用於 DICOM-SEG）
-                dicom_dir = dicom_series_paths[0] if dicom_series_paths else None
+                # 檢查是否為 Infarct 模型（需要每個 NIfTI 對應一個 DICOM 目錄）
+                # CMB 和其他 batch_inputs 模型只需要單個 DICOM 目錄
+                is_infarct = _is_infarct_model(model_id)
 
-                # 建立推論命令（傳入所有 NIFTI 路徑，返回 InferenceCmd）
-                inference_cmd = _build_series_inference_cmd(
-                    nifti_paths=valid_nifti_paths,
-                    model_id=model_id,
-                    output_dir=output_dir,
-                    dicom_dir=dicom_dir,
-                    study_id=study_id,
-                    path_root=path_root,
-                )
+                # 決定使用多個 DICOM 目錄還是單個
+                use_multiple_dicom_dirs = False
+                if is_infarct:
+                    # Infarct: 驗證是否包含所有必需的 target series (ADC, DWI0, DWI1000)
+                    if _validate_infarct_target_series(
+                        valid_nifti_paths, valid_dicom_dirs
+                    ):
+                        use_multiple_dicom_dirs = True
+                        logger.info(
+                            f"Infarct validation passed: using {len(valid_dicom_dirs)} DICOM directories"
+                        )
+                    else:
+                        logger.warning(
+                            "Infarct validation failed: falling back to single DICOM directory"
+                        )
+
+                if use_multiple_dicom_dirs:
+                    # Infarct (驗證通過): 傳入所有對應的 DICOM 目錄
+                    inference_cmd = _build_series_inference_cmd(
+                        nifti_paths=valid_nifti_paths,
+                        model_id=model_id,
+                        output_dir=output_dir,
+                        dicom_dirs=valid_dicom_dirs,  # 多個 DICOM 目錄
+                        study_id=study_id,
+                        path_root=path_root,
+                    )
+                else:
+                    # CMB 或 Infarct (驗證失敗): 只傳入第一個有效的 DICOM 目錄
+                    dicom_dir = None
+                    for path in valid_dicom_dirs:
+                        if path:  # 非空字符串
+                            dicom_dir = path
+                            break
+                    inference_cmd = _build_series_inference_cmd(
+                        nifti_paths=valid_nifti_paths,
+                        model_id=model_id,
+                        output_dir=output_dir,
+                        dicom_dir=dicom_dir,  # 單個 DICOM 目錄
+                        study_id=study_id,
+                        path_root=path_root,
+                    )
                 # 收集 InferenceCmdItem（與 Study Level 一致）
                 all_inference_cmd_items.extend(inference_cmd.cmd_items)
                 # 提取 cmd_str 用於 subprocess 執行
@@ -1029,8 +1343,9 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                     all_success = False
                     continue
 
-                # 建立輸出目錄
-                output_dir = os.path.join(path_json, f"{series_uid}_{model_id}")
+                # 建立輸出目錄（Linus: "Keep it simple"）
+                # 使用 inference_id + series 索引，而非完整 UUID
+                output_dir = os.path.join(path_json, f"{inference_id}_series_{i}")
                 os.makedirs(output_dir, exist_ok=True)
 
                 # 取得 DICOM 路徑（如果有）
@@ -1177,27 +1492,27 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
 # Subprocess Task（保持不變）
 # =============================================================================
 
-
-@Booster(
-    BoosterParamsMyRABBITMQ(
-        queue_name="task_subprocess_queue",
-        concurrent_num=3,
-        qps=1,
-    )
-)
-def task_subprocess_inference(func_params: Dict[str, Any]):
-    """Subprocess 推論任務（保持不變）"""
-    path_process = _extract_path_from_params(
-        func_params, "path_process", "PATH_PROCESS"
-    )
-    path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
-    os.makedirs(path_cmd_tools, exist_ok=True)
-
-    cmd_str = func_params["cmd_str"]
-    process = subprocess.Popen(
-        args=cmd_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    stdout, stderr = process.communicate()
-    logger.info(stdout.decode())
-    logger.warning(stderr.decode())
-    return stdout.decode()
+#
+# @Booster(
+#     BoosterParamsMyRABBITMQ(
+#         queue_name="task_subprocess_queue",
+#         concurrent_num=3,
+#         qps=1,
+#     )
+# )
+# def task_subprocess_inference(func_params: Dict[str, Any]):
+#     """Subprocess 推論任務（保持不變）"""
+#     path_process = _extract_path_from_params(
+#         func_params, "path_process", "PATH_PROCESS"
+#     )
+#     path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
+#     os.makedirs(path_cmd_tools, exist_ok=True)
+#
+#     cmd_str = func_params["cmd_str"]
+#     process = subprocess.Popen(
+#         args=cmd_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+#     )
+#     stdout, stderr = process.communicate()
+#     logger.info(stdout.decode())
+#     logger.warning(stderr.decode())
+#     return stdout.decode()

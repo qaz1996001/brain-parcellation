@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import pathlib
 import traceback
 from typing import Any, List, Optional, Tuple
@@ -61,6 +62,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         super().__init__(**kwargs)
         if config is None:
             from backend.app.config.loader import load_backend_config_from_env
+
             self._config = load_backend_config_from_env(fail_safe=True)
         else:
             self._config = config
@@ -492,7 +494,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         await session.commit()
                         await session.flush()
                         task_dict = task_params.get_str_dict()
-                        task_dict["upload_data_api_url"] = self.config.api.upload_data_url
+                        task_dict["upload_data_api_url"] = (
+                            self.config.api.upload_data_url
+                        )
                         # NOTE: dicom_to_nii does NOT need path_process/path_json/path_log
                         # These are only needed by task_pipeline_inference
                         # task_dict['upload_data_api_url'] = '{}/{}'.format(base_api_url, SYNC_PROT_OPE_NO)

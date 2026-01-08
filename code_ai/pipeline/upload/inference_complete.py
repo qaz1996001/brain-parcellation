@@ -16,7 +16,7 @@ from typing import Optional, Literal, Union
 import httpx
 
 from code_ai.pipeline.dicomseg.schema import CmbDetectionResponse
-from .schema import InferenceCompleteRequest, InferenceSuccessRequest, InferenceFailedRequest
+from .schema import InferenceSuccessRequest, InferenceFailedRequest
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,6 @@ import json
 import pathlib
 from typing import Dict, Any, Union, List
 import numpy as np
-import pandas as pd
 import pydicom
 from pydicom import FileDataset
 from pydicom.dicomdir import DicomDir

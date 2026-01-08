@@ -1,4 +1,4 @@
-from typing import Optional, Union, Literal, Annotated
+from typing import Union, Literal, Annotated
 from pydantic import BaseModel, Field, ConfigDict
 
 class InferenceFailedRequest(BaseModel):

@@ -61,7 +61,7 @@ async def get_redis_client() -> Redis:
             )
             # Test connection
             await _redis_client.ping()
-            logger.info(f"Connected to Redis for inference cache")
+            logger.info("Connected to Redis for inference cache")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise ConnectionError(f"Redis connection failed: {e}") from e

@@ -237,3 +237,26 @@ class CacheDeleteResponse(BaseModel):
 
     deleted_count: int
     cache_keys: List[str]
+
+
+class CacheStatistics(BaseModel):
+    """Cache statistics for monitoring.
+
+    Tracks cache usage metrics including hits, misses, and overall size.
+    """
+
+    total_entries: int = Field(description="Total number of cache entries")
+    hits: int = Field(default=0, description="Total cache hits since startup")
+    misses: int = Field(default=0, description="Total cache misses since startup")
+    hit_rate: float = Field(
+        default=0.0, description="Cache hit rate (hits / total requests)"
+    )
+    memory_bytes: int = Field(
+        default=0, description="Approximate memory usage in bytes"
+    )
+    oldest_entry: Optional[datetime.datetime] = Field(
+        default=None, description="Timestamp of oldest cache entry"
+    )
+    newest_entry: Optional[datetime.datetime] = Field(
+        default=None, description="Timestamp of newest cache entry"
+    )

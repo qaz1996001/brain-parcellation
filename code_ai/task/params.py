@@ -18,12 +18,5 @@ class BoosterParamsMyRABBITMQ(BoosterParams): # 传这个类就可以少每次�
 
 
 class BoosterParamsMyAI(BoosterParamsMyRABBITMQ): # 传这个类就可以少每次都亲自指定使用rabbitmq作为消息队列，和重试改为4次,和消费发布日志写入自定义.log文件。
-    concurrent_mode: str = ConcurrentModeEnum.SOLO
-    concurrent_num: int  = 5
-    qps           : int  = 1
-
-    # ⭐ 啟用分布式控頻 (Distributed Frequency Control)
-    # 確保多個 worker 共享 QPS 配額，防止 GPU 資源競爭
-    # 工作原理：qps_per_worker = qps / active_consumer_num
-    # 例如：2 workers × (1/2) qps = 全局 1 qps ✅
-    is_using_distributed_frequency_control: bool = True
+    concurrent_mode: str = ConcurrentModeEnum.THREADING
+    concurrent_num: int  = 1

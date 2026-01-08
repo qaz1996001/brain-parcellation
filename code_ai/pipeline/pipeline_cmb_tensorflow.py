@@ -22,7 +22,6 @@ import glob
 
 import shutil
 import traceback
-import warnings
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict
 
@@ -30,7 +29,7 @@ from code_ai.pipeline.upload.inference_complete import upload_inference_complete
 
 import pydicom
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+# warnings.filterwarnings("ignore")  # 忽略警告输出
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import time
@@ -564,7 +563,7 @@ def pipeline_cmb(
 
         # 輸出計時摘要
         logging.info(f'=== CMB Pipeline 完成 ID: {ID} ===')
-        logging.info(f'--- 各步驟耗時摘要 ---')
+        logging.info('--- 各步驟耗時摘要 ---')
         for step_name, timing_result in timings.items():
             status = "✓" if timing_result.success else "✗"
             logging.info(f'  {status} {timing_result.step_name}: {timing_result.elapsed_seconds:.2f} 秒')
@@ -592,9 +591,7 @@ if __name__ == '__main__':
         tf.config.experimental.set_memory_growth(gpu, True)
 
     config :CodeAIConfig = load_code_ai_config_from_env()
-    print('config',config)
 
-    # python /mnt/d/wsl_ubuntu/pipeline/sean/code/pipeline_cmb_tensorflow.py --ID 00971591_20160503_MR_250425032 --Inputs /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/SWAN.nii.gz /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/T1FLAIR_AXI.nii.gz
     parser = pipeline_parser()
     args = parser.parse_args()
 
@@ -649,25 +646,28 @@ if __name__ == '__main__':
                                                    'dicom_seg_cmb_file',
                                                    ID, InputsDicomDir, output_nii_path_str, path_output
                         )
-        # dicomseg_start = time.time()
-        # dicomseg_elapsed = time.time() - dicomseg_start
-        # logging.info(f'DICOM-SEG stdout | {dicom_seg_stdout}')
-        # logging.info(f'DICOM-SEG stderr | {dicom_seg_stderr}')
-        # logging.info(f'DICOM-SEG 轉換完成 | 耗時: {dicomseg_elapsed:.2f} 秒')
 
         # Step: 發送推論成功通知 (在 DICOM-SEG 轉換完成之後)
         if ai_app_inference_complete:
+
             rdx_json_path = output_json_path_str.replace('.json', '_rdx_cmb_pred_json.json')
-            upload_result = upload_inference_complete(
-                url=ai_app_inference_complete,
-                success=True,
-                output_json_path=rdx_json_path,
-                model_name="cmb_model",
-            )
+            upload_result, timing = timed_execution(upload_inference_complete,
+                                                    'upload_inference_complete',
+                                                    ai_app_inference_complete,
+                                                    True,
+                                                    rdx_json_path,
+                                                    "cmb_model"
+                                                    )
+            # upload_result = upload_inference_complete(
+            #     url=ai_app_inference_complete,
+            #     success=True,
+            #     output_json_path=rdx_json_path,
+            #     model_name="cmb_model",
+            # )
             if upload_result:
                 logging.info(f"已發送推論成功通知: inference_id={upload_result.inferenceId}")
             else:
-                logging.warning(f"發送推論成功通知失敗，但推論結果已保存")
+                logging.warning("發送推論成功通知失敗，但推論結果已保存")
 
     # 計時結束
     main_elapsed = time.time() - main_start_time

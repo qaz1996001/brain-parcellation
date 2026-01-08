@@ -137,6 +137,121 @@ DICOM Input → Backend API → RabbitMQ → Worker → AI Pipeline → DICOM-SE
 4. **Output**: DICOM-SEG + JSON metadata uploaded to Orthanc/platform
 5. **Tracking**: PostgreSQL stores task status and results
 
+### DICOM Series Splitting Architecture
+
+**Critical Concept: MRI Machine vs AI Model Series Representation**
+
+MRI machines and AI models have different series granularity requirements:
+
+**MRI Machine Output (raw_dicom)**:
+- DWI (Diffusion-Weighted Imaging) is captured as a **single series**
+- Contains multiple b-values (e.g., b=0, b=1000) in one DICOM series
+- Example: One DWI series with 2 acquisitions
+
+**AI Model Requirements (rename_dicom)**:
+- Models need **separate series** for each b-value
+- DWI0 (b=0) and DWI1000 (b=1000) must be distinct NIfTI files
+- Example: Two separate series (DWI0.nii.gz, DWI1000.nii.gz)
+
+**Conversion Process: raw_dicom → rename_dicom**
+
+```
+MRI Machine              dcm2niix Conversion           AI Model Input
+┌─────────────┐         ┌──────────────────┐         ┌──────────────┐
+│ DWI series  │  ──→    │ Split by b-value │  ──→    │ DWI0.nii.gz  │
+│ (b=0,1000)  │         └──────────────────┘         │ DWI1000.nii  │
+└─────────────┘                                       └──────────────┘
+
+│ ADC series  │  ──→    │ Direct convert   │  ──→    │ ADC.nii.gz   │
+└─────────────┘         └──────────────────┘         └──────────────┘
+```
+
+**Implementation Details**:
+
+1. **DICOM to NIfTI Conversion** (`task_dicom2nii`):
+   - Uses `dcm2niix` to convert raw DICOM to NIfTI
+   - Automatically splits DWI series by b-value
+   - Generates multiple output files from single input series
+   - Creates DCOP events for each output series
+
+2. **Backend Series Tracking**:
+   - Tracks series at MRI machine level (2 series: ADC + DWI)
+   - DCOP events: `SERIES_TRANSFER_COMPLETE` for raw series
+   - After conversion: `SERIES_CONVERSION_COMPLETE` for each split series
+
+3. **Worker Series Processing**:
+   - Expects series at AI model level (3 series: ADC + DWI0 + DWI1000)
+   - Validates series completeness before inference
+   - Example: Infarct model requires exactly (ADC, DWI0, DWI1000)
+
+**Common Pitfall: Series Count Mismatch**
+
+```python
+# ❌ Wrong assumption: Backend series count = AI model series count
+Backend receives: 2 series (ADC, DWI)
+Worker expects: 3 series (ADC, DWI0, DWI1000)
+# This is CORRECT behavior due to splitting!
+
+# ✅ Correct flow:
+1. Backend: Validate 2 raw series (ADC, DWI)
+2. Conversion: DWI → DWI0 + DWI1000 (creates 3 total)
+3. Worker: Process 3 series for AI model
+```
+
+**Model-Specific Series Requirements**:
+
+| Model    | Required Series          | Source Series         | Splitting |
+|----------|-------------------------|-----------------------|-----------|
+| Infarct  | ADC, DWI0, DWI1000 (3)  | ADC, DWI (2)         | Yes       |
+| Aneurysm | MRA_BRAIN (1)           | MRA_BRAIN (1)        | No        |
+| WMH      | T2FLAIR_AXI (1)         | T2FLAIR_AXI (1)      | No        |
+| CMB      | SWAN, T1BRAVO (2)       | SWAN, T1BRAVO (2)    | No        |
+
+**Key Takeaway**: When debugging series-level issues, always distinguish between:
+- **Raw series** (from MRI machine, tracked by Backend)
+- **Converted series** (after splitting, used by Worker/AI models)
+
+### Backend DWI Expansion Pattern
+
+**Problem**: MRI machine outputs 1 DWI series, but AI models need 2 NIfTI files (DWI0 + DWI1000)
+
+**Solution**: Backend expands DWI series BEFORE validation, not Worker during conversion
+
+**Implementation** (`backend/app/inference/service.py:validate_series_ready()`):
+
+```python
+# Input from caller (DB-level series UIDs)
+series_uids = ["ADC", "DWI"]  # 2 series
+
+# Backend expansion (AI-level validation targets)
+validation_targets = [
+    ("ADC", "ADC", "ADC"),           # (target_id, series_desc, original_uid)
+    ("DWI0", "DWI", "DWI"),          # DWI expanded to DWI0
+    ("DWI1000", "DWI", "DWI")        # DWI expanded to DWI1000
+]  # 3 targets
+
+# Output to Worker (per-target paths)
+nifti_paths = [
+    "/path/ADC.nii.gz",
+    "/path/DWI0.nii.gz",
+    "/path/DWI1000.nii.gz"
+]  # 3 files ✅
+
+rename_dicom_paths = [
+    "/path/ADC",
+    "/path/DWI0",
+    "/path/DWI1000"
+]  # 3 directories
+```
+
+**Key Insight**:
+- **Abstraction Level**: Backend operates at AI-model granularity, not DB granularity
+- **Expansion Point**: Before validation loop, not during Worker conversion
+- **Path Construction**: Backend constructs DWI sub-series paths (e.g., `/path/series_uid/DWI0/`)
+- **Atomicity Check**: Backend validates both DWI0 and DWI1000 exist or converts both
+
+**Worker Simplification**: Worker no longer needs DWI sibling detection/conversion logic
+
 ### Key Design Patterns
 
 **Module Structure** (backend services):

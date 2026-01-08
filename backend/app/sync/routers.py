@@ -1,6 +1,6 @@
 # app/sync/routers.py
 import logging
-from typing import Annotated, List, Optional, Union
+from typing import Annotated, List, Optional
 from advanced_alchemy.extensions.fastapi.providers import FieldNameType
 from advanced_alchemy.service import OffsetPagination
 from fastapi import APIRouter, Depends, Response, BackgroundTasks, Body, Query

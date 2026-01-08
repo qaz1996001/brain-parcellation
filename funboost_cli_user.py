@@ -27,7 +27,6 @@ sys.path.insert(1, str(project_root_path))  # 这个是为了方便命令行不�
 # 以上的sys.path代码需要放在最上面,先设置好pythonpath再导入funboost相关的模块
 # $$$$$$$$$$$$
 import fire
-from funboost.timing_job import ApsJobAdder
 from funboost.core.cli.funboost_fire import BoosterFire, env_dict
 from funboost import BoostersManager
 from funboost.core.cli.discovery_boosters import BoosterDiscovery
@@ -52,8 +51,8 @@ if __name__ == '__main__':
                      booster_dirs=['code_ai/task'], max_depth=1, py_file_re_str=None).auto_discovery()
     # 这个最好放到main里面,如果要扫描自身文件夹,没写正则排除文件本身,会无限懵逼死循环导入
     fire.Fire(BoosterFire, )
-    from funboost.funboost_web_manager.app import start_funboost_web_manager
-    start_funboost_web_manager()
+    # from funboost.funboost_web_manager.app import start_funboost_web_manager
+    # start_funboost_web_manager()
     BoostersManager.multi_process_consume_all_queues(1)
 
 

@@ -19,8 +19,12 @@ class DCOPConfModel(base.DefaultBase):
     description = Column(String)
     active = Column(Integer, default=1)
     rec_time = Column(DateTime)
-    create_time = Column(DateTime, default=datetime.utcnow)
-    update_time = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    create_time = Column(DateTime, default=lambda: datetime.utcnow())
+    update_time = Column(
+        DateTime,
+        default=lambda: datetime.utcnow(),
+        onupdate=lambda: datetime.utcnow(),
+    )
 
 
 class DCOPEventModel(base.DefaultBase):
@@ -49,11 +53,14 @@ class DCOPEventModel(base.DefaultBase):
     ope_name = Column(String(36), nullable=True)
 
     # 時間欄位
-    claim_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    rec_time = Column(DateTime, nullable=False, default=datetime.utcnow)
-    create_time = Column(DateTime, nullable=False, default=datetime.utcnow)
+    claim_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
+    rec_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
+    create_time = Column(DateTime, nullable=False, default=lambda: datetime.utcnow())
     update_time = Column(
-        DateTime, nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime,
+        nullable=True,
+        default=lambda: datetime.utcnow(),
+        onupdate=lambda: datetime.utcnow(),
     )
 
     # 額外方法

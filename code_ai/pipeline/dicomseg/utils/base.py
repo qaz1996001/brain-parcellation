@@ -245,7 +245,7 @@ def create_dicom_seg_file(pred_data_unique: np.ndarray,
             dcm_seg.save_as(dcm_seg_path)
 
             # Clear console line and show progress
-            print(f" " * 100, end='\r')
+            print(" " * 100, end='\r')
             print(f"{index + 1}/{pred_data_unique_len} Saved: {dcm_seg_path}", end='\r')
 
             # Add result to the list if file was created successfully

@@ -1862,7 +1862,8 @@ class ConvertManager:
                                                                         CVRProcessingStrategy(),
                                                                         DTIProcessingStrategy()]
 
-    def __init__(self, input_path: Union[str, pathlib.Path], output_path: Union[str, pathlib.Path], *args, **kwargs):
+    def __init__(self, input_path: Union[str, pathlib.Path],
+                 output_path: Union[str, pathlib.Path], *args, **kwargs):
         """Initialize the ConvertManager.
 
         Parameters:

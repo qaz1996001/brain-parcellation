@@ -33,7 +33,6 @@ from pyorthanc import Orthanc, Study
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.config.api_urls import get_upload_data_api_url
 from backend.app.config.models import BackendConfig
 from backend.app.config.task_paths import get_task_execution_paths
 from backend.app.service import BaseRepositoryService
@@ -141,10 +140,10 @@ class DCOPEventDicomServiceV2(BaseRepositoryService[DCOPEventModel]):
                     tool_id=dcop_event.tool_id,
                     study_uid=dcop_event.study_uid,
                     series_uid=dcop_event.series_uid,
-                    study_id=dcop_event.study_id,
+                    study_id=dcop_event.study_id or "",
                     ope_no=dcop_event.ope_no,
-                    result_data=dcop_event.result_data,
-                    params_data=dcop_event.params_data,
+                    result_data=dcop_event.result_data or {},
+                    params_data=dcop_event.params_data or {},
                     session=session,
                 )
                 session.add(new_data_obj)
@@ -293,7 +292,7 @@ class DCOPEventDicomServiceV2(BaseRepositoryService[DCOPEventModel]):
         """Initiate the conversion process for each study."""
         url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
         for event in events:
-            study_id = event.study_id
+            study_id = event.study_id or ""
             output_dicom_path = pathlib.Path(dicom_path).joinpath(study_id)
             output_nifti_path = pathlib.Path(nifti_path)
 
@@ -525,11 +524,13 @@ class DCOPEventDicomServiceV2(BaseRepositoryService[DCOPEventModel]):
                                 status=DCOPStatus.SERIES_NEW.name,
                                 session=session,
                             )
-                            series_transferring_data = await DCOPEventModel.create_event(
-                                study_uid=study_uid,
-                                series_uid=series_uid,
-                                status=DCOPStatus.SERIES_TRANSFERRING.name,
-                                session=session,
+                            series_transferring_data = (
+                                await DCOPEventModel.create_event(
+                                    study_uid=study_uid,
+                                    series_uid=series_uid,
+                                    status=DCOPStatus.SERIES_TRANSFERRING.name,
+                                    session=session,
+                                )
                             )
                             series_transferring_data.params_data = (
                                 task_params.get_str_dict()

@@ -68,7 +68,7 @@ class AneurysmDetectionBuilder(PredictionBaseBuilder[AneurysmDetectionItem, Aneu
                                   source_images: List[FileDataset | DicomDir], ):
         # Load prediction data from NIfTI file
         if series_name == "MRA_BRAIN":
-            new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii.joinpath(f'Pred.nii.gz'))
+            new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii.joinpath('Pred.nii.gz'))
         else:
             new_nifti_array = utils.get_array_to_dcm_axcodes(path_nii.joinpath(f'{series_name}_pred.nii.gz'))
         pred_data_unique = np.unique(new_nifti_array)

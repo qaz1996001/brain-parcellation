@@ -91,6 +91,8 @@ async def analyze_dicom_files_by_path(
     """
 
     rename_dicom_list = []
+    if file_path_list is None:
+        return []
     if len(file_path_list) > 100:
         file_path_list = file_path_list[:100]
     for file_path in file_path_list:
@@ -161,6 +163,8 @@ async def analyze_dicom_files_by_upload(
     """
 
     rename_dicom_list = []
+    if dicom_file_list is None:
+        return []
     if len(dicom_file_list) > 100:
         dicom_file_list = dicom_file_list[:100]
     for dicom_file in dicom_file_list:
@@ -172,7 +176,7 @@ async def analyze_dicom_files_by_upload(
 
         rename_dicom_list.append(
             SeriesResponse(
-                file_name=dicom_file.filename,
+                file_name=dicom_file.filename or "unknown",
                 series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
                 series_orientation=str(orientation.value),
             )

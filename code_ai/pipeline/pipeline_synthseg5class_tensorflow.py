@@ -29,7 +29,6 @@ import tensorflow as tf
 from code_ai.pipeline import study_id_pattern, pipeline_parser, dicom_seg_multi_file
 from code_ai import PYTHON3, load_dotenv
 from code_ai.config import CodeAIConfig
-from code_ai.pipeline.base import get_config, get_gpu_n
 load_dotenv()
 autotune = tf.data.experimental.AUTOTUNE
 

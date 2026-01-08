@@ -24,6 +24,7 @@ from .schemas import (
     InferenceCallbackRequest,
     CacheListResponse,
     CacheDeleteResponse,
+    CacheStatistics,
 )
 
 logger = logging.getLogger(__name__)
@@ -208,34 +209,34 @@ async def get_inference_status(
         )
 
 
-@router.post(
-    "/series/complete",
-    status_code=status.HTTP_200_OK,
-    summary="Inference completion callback",
-    description="""
-    Callback endpoint for GPU worker to report inference completion.
-
-    **Called by**: task_pipeline_inference (Series Level) after inference completes
-
-    **Payload**:
-    ```json
-    {
-      "studyInstanceUid": "study-uid",
-      "modelName": "aneurysm_model",
-      "inferenceId": "inference-uuid",
-      "result": "success",
-      "resultData": {
-        "predictions": [...]
-      }
-    }
-    ```
-
-    **Actions**:
-    - Creates SERIES_INFERENCE_COMPLETE (or FAILED) event
-    - Updates cache entry
-    - Stores result_data in DCOP event
-    """,
-)
+# @router.post(
+#     "/series/complete",
+#     status_code=status.HTTP_200_OK,
+#     summary="Inference completion callback",
+#     description="""
+#     Callback endpoint for GPU worker to report inference completion.
+#
+#     **Called by**: task_pipeline_inference (Series Level) after inference completes
+#
+#     **Payload**:
+#     ```json
+#     {
+#       "studyInstanceUid": "study-uid",
+#       "modelName": "aneurysm_model",
+#       "inferenceId": "inference-uuid",
+#       "result": "success",
+#       "resultData": {
+#         "predictions": [...]
+#       }
+#     }
+#     ```
+#
+#     **Actions**:
+#     - Creates SERIES_INFERENCE_COMPLETE (or FAILED) event
+#     - Updates cache entry
+#     - Stores result_data in DCOP event
+#     """,
+# )
 async def inference_complete_callback(
     callback: InferenceCallbackRequest,
     inference_service: Annotated[
@@ -290,6 +291,24 @@ async def inference_complete_callback(
     List all cached inference requests.
 
     Useful for monitoring and debugging cache behavior.
+
+    **Response Example**:
+    ```json
+    {
+      "entries": [
+        {
+          "cache_key": "a1b2c3d4...",
+          "inference_id": "uuid",
+          "study_uid": "study-uid",
+          "series_uids": ["series1"],
+          "model_name": "aneurysm",
+          "timestamp": "2024-01-15T10:30:00",
+          "status": "queued"
+        }
+      ],
+      "total": 1
+    }
+    ```
     """,
 )
 async def list_cache(
@@ -311,13 +330,7 @@ async def list_cache(
     """
     try:
         logger.info("Listing cache entries")
-
-        # TODO: Implement cache listing
-        # Query Redis for all cache keys
-        # Return cache metadata
-
-        # Placeholder
-        return CacheListResponse(entries=[], total=0)
+        return await inference_service.cache_list()
 
     except Exception as e:
         logger.error(f"Failed to list cache: {e}", exc_info=True)
@@ -337,6 +350,14 @@ async def list_cache(
 
     **Warning**: This will clear ALL cache entries.
     Use for debugging or maintenance only.
+
+    **Response Example**:
+    ```json
+    {
+      "deleted_count": 5,
+      "cache_keys": ["a1b2c3...", "d4e5f6..."]
+    }
+    ```
     """,
 )
 async def clear_cache(
@@ -358,18 +379,67 @@ async def clear_cache(
     """
     try:
         logger.warning("Clearing all cache entries")
-
-        # TODO: Implement cache clearing
-        # Delete all cache keys from Redis
-
-        # Placeholder
-        return CacheDeleteResponse(deleted_count=0, cache_keys=[])
+        return await inference_service.cache_clear()
 
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to clear cache: {str(e)}",
+        )
+
+
+@router.get(
+    "/cache/stats",
+    status_code=status.HTTP_200_OK,
+    response_model=CacheStatistics,
+    summary="Get cache statistics",
+    description="""
+    Get cache statistics for monitoring and debugging.
+
+    **Response Example**:
+    ```json
+    {
+      "total_entries": 15,
+      "hits": 0,
+      "misses": 0,
+      "hit_rate": 0.0,
+      "memory_bytes": 4096,
+      "oldest_entry": "2024-01-15T08:00:00",
+      "newest_entry": "2024-01-15T10:30:00"
+    }
+    ```
+
+    **Note**: Hits/misses tracking requires application-level counters
+    which are not implemented in this version. Those fields return 0.
+    """,
+)
+async def get_cache_statistics(
+    inference_service: Annotated[
+        DCOPEventInferenceService,
+        Depends(alchemy.provide_service(DCOPEventInferenceService)),
+    ],
+) -> CacheStatistics:
+    """Get cache statistics.
+
+    Args:
+        inference_service: Inference service dependency
+
+    Returns:
+        Cache statistics including entry count and memory usage
+
+    Raises:
+        HTTPException: If statistics retrieval fails
+    """
+    try:
+        logger.info("Getting cache statistics")
+        return await inference_service.cache_statistics()
+
+    except Exception as e:
+        logger.error(f"Failed to get cache statistics: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get cache statistics: {str(e)}",
         )
 
 

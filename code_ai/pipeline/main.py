@@ -362,7 +362,7 @@ from code_ai.utils_parcellation import CMBProcess, DWIProcess, run_wmh, run_with
 from code_ai.utils_synthseg import SynthSeg, TemplateProcessor
 import gc
 
-from code_ai.utils.resample import resampleSynthSEG2original,resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
+from code_ai.utils.resample import resampleSynthSEG2original_z_index, resample_one, save_original_seg_by_argmin_z_index
 
 
 def str_to_bool(v):
@@ -407,14 +407,14 @@ def main(args):
         if args.template_name:
             template_file_list = list(filter(lambda x: args.template_name in x.name, template_file_list))
 
-        template_resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
+        template_resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_resample.nii.gz')),
                                                template_file_list))
 
-        template_synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg.nii.gz')),
+        template_synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg.nii.gz')),
                                                template_resample_file_list))
 
         template_synthseg33_file_list = list(
-            map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg33.nii.gz')),
+            map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg33.nii.gz')),
                 template_resample_file_list))
     else:
         pass
@@ -449,27 +449,27 @@ def main(args):
         else:
             wmh_file_list = []
 
-        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
+        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_david.nii.gz')),
                                 template_resample_file_list))
-        wm_file_list    = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_wm.nii.gz')),
+        wm_file_list    = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_wm.nii.gz')),
                                    template_resample_file_list))
-        resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
+        resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_resample.nii.gz')),
                                       file_list))
-        synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg.nii.gz')),
+        synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg.nii.gz')),
                                       resample_file_list))
-        synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg5.nii.gz')),
+        synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg5.nii.gz')),
                                       resample_file_list))
-        synthseg33_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg33.nii.gz')),
+        synthseg33_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg33.nii.gz')),
                                         resample_file_list))
     else:
 
-        resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_resample.nii.gz')),
+        resample_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_resample.nii.gz')),
                                       file_list))
-        synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg.nii.gz')),
+        synthseg_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg.nii.gz')),
                                       resample_file_list))
-        synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg5.nii.gz')),
+        synthseg5_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg5.nii.gz')),
                                       resample_file_list))
-        synthseg33_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_synthseg33.nii.gz')),
+        synthseg33_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_synthseg33.nii.gz')),
                                         resample_file_list))
         if args.cmb:
             cmb_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_{args.cmb_file}.nii.gz')),
@@ -488,10 +488,10 @@ def main(args):
         else:
             wmh_file_list = []
 
-        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_david.nii.gz')),
+        david_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_david.nii.gz')),
                                 resample_file_list))
 
-        wm_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, f'_wm.nii.gz')),
+        wm_file_list = list(map(lambda x: x.parent.joinpath(replace_suffix(x.name, '_wm.nii.gz')),
                                    resample_file_list))
 
 
@@ -621,7 +621,7 @@ def main(args):
                                     fr'-out "{dwi_coregistration_file_name}" ' \
                                     fr'-init "{template_coregistration_file_name}.mat" ' \
                                     fr'-applyxfm -interp nearestneighbour'
-                    print(f'dwi')
+                    print('dwi')
                     print(flirt_dwi_str)
                     os.system(flirt_dwi_str)
                 #
