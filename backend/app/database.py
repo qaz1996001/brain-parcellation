@@ -63,7 +63,7 @@ from advanced_alchemy.extensions.fastapi import (
     AsyncSessionConfig,
     SQLAlchemyAsyncConfig,
 )
-from advanced_alchemy.config.engine import EngineConfig
+from advanced_alchemy.extensions.starlette.config import EngineConfig
 
 # SQLAlchemy 非同步配置
 # 使用 PostgreSQL + asyncpg 驅動進行非同步資料庫操作
