@@ -1151,7 +1151,7 @@ def process_dir(func_params: Dict[str, Any]):
 
 
     # 根據 rename_parent 去重，確保每個 rename 路徑只保留一筆記錄
-    df['rename_parent'] = df['rename_dicom_path'].map(lambda x: str(pathlib.Path(x['rename_dicom_path']).parent))
+    df['rename_parent'] = df['rename_dicom_path'].map(lambda x: str(pathlib.Path(x).parent))
     df.drop_duplicates(subset=['rename_parent'], inplace=True)
 
     study_uid_unique = df['study_uid'].unique()
