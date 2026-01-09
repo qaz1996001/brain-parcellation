@@ -1148,8 +1148,11 @@ def process_dir(func_params: Dict[str, Any]):
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x: pydicom.dcmread(x)[0x0020, 0x000E].value)
     df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
-    # 根據 rename_dicom_path 去重，確保每個 rename 路徑只保留一筆記錄
-    df.drop_duplicates(subset=['rename_dicom_path'], inplace=True)
+
+
+    # 根據 rename_parent 去重，確保每個 rename 路徑只保留一筆記錄
+    df['rename_parent'] = df['rename_dicom_path'].map(lambda x: str(pathlib.Path(x['rename_dicom_path']).parent))
+    df.drop_duplicates(subset=['rename_parent'], inplace=True)
 
     study_uid_unique = df['study_uid'].unique()
     dcop_event_list = []
@@ -1178,7 +1181,7 @@ def process_dir(func_params: Dict[str, Any]):
                                series_sop_uid, study_uid, row['rename_dicom_path'])
                 continue
             raw_parent = str(pathlib.Path(row['instance_dir_path']).parent)
-            rename_parent = str(pathlib.Path(row['rename_dicom_path']).parent)
+            rename_parent = row['rename_parent']
             # 在 params_data 中包含 rename_dicom_path，以便後續查詢時可以區分不同的 rename 路徑
             dcop_event = DCOPEventRequest(
                 study_uid=study_uid,
