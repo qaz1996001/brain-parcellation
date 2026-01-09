@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     pass
 
 # 導入所有子模組的路由器
-from backend.app import series, sync, rerun, study
+from backend.app import series, sync, rerun
 
 # 建立主路由器
 router = APIRouter()
@@ -74,7 +74,6 @@ router = APIRouter()
 router.include_router(series.router, tags=["series"])
 router.include_router(rerun.router, tags=["rerun"])
 router.include_router(sync.router, tags=["sync"])
-router.include_router(study.router, tags=["study"])
 
 
 @router.post("/upload_json")
