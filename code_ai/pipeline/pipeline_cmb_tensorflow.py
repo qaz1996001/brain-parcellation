@@ -744,26 +744,6 @@ if __name__ == "__main__":
             path_output,
         )
 
-        # Step: 發送推論成功通知 (在 DICOM-SEG 轉換完成之後)
-        if ai_app_inference_complete:
-            rdx_json_path = output_json_path_str.replace(
-                ".json", "_rdx_cmb_pred_json.json"
-            )
-            upload_result, timing = timed_execution(
-                upload_inference_complete,
-                "upload_inference_complete",
-                ai_app_inference_complete,
-                True,
-                rdx_json_path,
-                "cmb_model",
-            )
-            if upload_result:
-                logging.info(
-                    f"已發送推論成功通知: inference_id={upload_result.inferenceId}"
-                )
-            else:
-                logging.warning("發送推論成功通知失敗，但推論結果已保存")
-
         # Step: 複製結果到 AI_INFERENCE_RESULT_PATH (若配置存在)
         if ai_inference_result_path:
             output_id_folder = os.path.join(path_output, ID)
@@ -786,6 +766,26 @@ if __name__ == "__main__":
                 logging.warning(
                     "複製到 AI_INFERENCE_RESULT_PATH 失敗，但推論結果已保存在原始路徑"
                 )
+
+        # Step: 發送推論成功通知 (在 DICOM-SEG 轉換完成之後)
+        if ai_app_inference_complete:
+            rdx_json_path = output_json_path_str.replace(
+                ".json", "_rdx_cmb_pred_json.json"
+            )
+            upload_result, timing = timed_execution(
+                upload_inference_complete,
+                "upload_inference_complete",
+                ai_app_inference_complete,
+                True,
+                rdx_json_path,
+                "cmb_model",
+            )
+            if upload_result:
+                logging.info(
+                    f"已發送推論成功通知: inference_id={upload_result.inferenceId}"
+                )
+            else:
+                logging.warning("發送推論成功通知失敗，但推論結果已保存")
 
     # 計時結束
     main_elapsed = time.time() - main_start_time
