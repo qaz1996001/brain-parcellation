@@ -743,6 +743,9 @@ if __name__ == "__main__":
             output_nii_path_str,
             path_output,
         )
+        rdx_json_path = output_json_path_str.replace(
+            ".json", "_rdx_cmb_pred_json.json"
+        )
 
         # Step: 複製結果到 AI_INFERENCE_RESULT_PATH (若配置存在)
         if ai_inference_result_path:
@@ -769,9 +772,6 @@ if __name__ == "__main__":
 
         # Step: 發送推論成功通知 (在 DICOM-SEG 轉換完成之後)
         if ai_app_inference_complete:
-            rdx_json_path = output_json_path_str.replace(
-                ".json", "_rdx_cmb_pred_json.json"
-            )
             upload_result, timing = timed_execution(
                 upload_inference_complete,
                 "upload_inference_complete",
