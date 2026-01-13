@@ -18,7 +18,7 @@ Refactored following Knuth & Linus principles (CLAUDE.md):
 - Single Responsibility: Each function does ONE thing well
 - Deterministic, testable: No side effects from environment
 """
-
+import sys
 import glob
 import json
 import shutil
@@ -718,6 +718,7 @@ if __name__ == "__main__":
     ## 設定 main 的 logger
     log_file = setup_logger(str(path_log))
     logging.info(f"=== CMB Pipeline CLI 開始執行 ID: {ID} ===")
+    logging.info(f"==== CMB Pipeline CLI args : {' '.join(sys.argv)} ===")
 
     ## 執行 pipeline (已整合 upload_inference_complete)
     cmb_path_str, output_nii_path_str, output_json_path_str = pipeline_cmb(

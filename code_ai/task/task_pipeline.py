@@ -47,12 +47,12 @@ import os
 import pathlib
 import shutil
 import subprocess
-from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Any, Literal
 from uuid import uuid4
 
 import pydicom
 from funboost import Booster, fct
-from funboost.core.serialization import Serialization
 import nb_log
 
 from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
@@ -68,6 +68,243 @@ logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_h
 
 # Infarct 模型要求的 target series（與 Study Level 一致）
 INFARCT_TARGET_SERIES = ("ADC", "DWI0", "DWI1000")
+
+
+# =============================================================================
+# Error Handling Infrastructure (Knuth: 精確性 + Linus: 資料結構優先)
+# =============================================================================
+
+
+@dataclass
+class ErrorContext:
+    """錯誤處理上下文 - 在任何業務邏輯之前提取，不拋出任何異常。
+
+    【Knuth 精確性】：明確定義錯誤處理所需的最小資料集
+    【Linus 資料優先】：先把資料結構定義好，程式碼自然簡單
+
+    這個結構確保即使業務邏輯失敗，我們仍有足夠資訊發送錯誤通知。
+    """
+
+    study_uid: Optional[str]
+    study_id: Optional[str]
+    inference_id: str
+    series_uids: List[str]
+    model_id: str
+    api_url: Optional[str]  # DCOP 事件用 (upload_data_api_url)
+    ai_app_inference_complete: Optional[str]  # 平台推論失敗通知用
+
+
+def _extract_error_context(func_params: Dict[str, Any]) -> ErrorContext:
+    """提取錯誤處理上下文 - 永遠不會拋出異常。
+
+    【Knuth 不變量】：此函數保證返回有效的 ErrorContext
+    【Linus Good Taste】：在任何業務邏輯之前執行，消除特殊情況
+
+    這是 _task_series_pipeline_inference 的第一個操作，確保：
+    - 即使後續驗證失敗，我們仍有 context 可以發送錯誤通知
+    - 所有欄位都有合理的 fallback 值
+
+    Args:
+        func_params: 任務參數字典
+
+    Returns:
+        ErrorContext: 錯誤處理所需的上下文資料
+    """
+    return ErrorContext(
+        study_uid=func_params.get("study_uid"),
+        study_id=func_params.get("study_id"),
+        inference_id=func_params.get("inference_id", str(uuid4())),
+        series_uids=func_params.get("series_uids", []),
+        model_id=func_params.get("model_id", "unknown"),
+        api_url=func_params.get("upload_data_api_url")
+        or os.getenv("UPLOAD_DATA_API_URL"),
+        ai_app_inference_complete=os.getenv("AI_APP_INFERENCE_COMPLETE"),
+    )
+
+
+def _try_send_dcop_failed(ctx: ErrorContext, error_msg: str) -> bool:
+    """嘗試發送 DCOP 失敗事件 - 不會拋出異常。
+
+    【Linus Good Taste】：有資料就發，沒有就跳過，不需要 if/else 分支在呼叫端
+
+    Args:
+        ctx: 錯誤處理上下文
+        error_msg: 錯誤訊息
+
+    Returns:
+        bool: 是否成功發送
+    """
+    from code_ai.task.task_dicom2nii import call_post_httpx
+
+    # 檢查必要資料
+    if not ctx.api_url or not ctx.study_uid or not ctx.study_id:
+        logger.warning(
+            f"Cannot send DCOP_FAILED: missing required data "
+            f"(api_url={bool(ctx.api_url)}, study_uid={bool(ctx.study_uid)}, "
+            f"study_id={bool(ctx.study_id)})"
+        )
+        return False
+
+    try:
+        api_url = f"{ctx.api_url}{SYNC_PROT_OPE_NO}"
+        dcop_event = DCOPEventRequest(
+            study_uid=ctx.study_uid,
+            series_uid=ctx.series_uids[0] if len(ctx.series_uids) == 1 else None,
+            study_id=ctx.study_id,
+            ope_no=DCOPStatus.SERIES_INFERENCE_FAILED.value,
+            tool_id="SERIES_INFERENCE_TOOL",
+            params_data={
+                "inference_id": ctx.inference_id,
+                "series_uids": ctx.series_uids,
+                "model_id": ctx.model_id,
+                "error_source": "task_pipeline",
+            },
+            result_data={
+                "error": error_msg,
+                "all_success": False,
+            },
+        )
+        call_post_httpx.push(
+            {
+                "url": api_url,
+                "data": dcop_event.model_dump_json(),
+            }
+        )
+        logger.info(
+            f"Posted SERIES_INFERENCE_FAILED for inference_id={ctx.inference_id}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to send DCOP_FAILED event: {e}")
+        return False
+
+
+def _try_send_inference_failed(ctx: ErrorContext) -> bool:
+    """嘗試發送平台推論失敗通知 - 不會拋出異常。
+
+    【Linus Good Taste】：有資料就發，沒有就跳過
+
+    Args:
+        ctx: 錯誤處理上下文
+
+    Returns:
+        bool: 是否成功發送
+    """
+    from code_ai.pipeline.upload.inference_complete import upload_inference_failed
+
+    # 檢查必要資料
+    if not ctx.ai_app_inference_complete or not ctx.study_uid:
+        logger.debug(
+            f"Skipping inference_failed notification: "
+            f"ai_app_inference_complete={bool(ctx.ai_app_inference_complete)}, "
+            f"study_uid={bool(ctx.study_uid)}"
+        )
+        return False
+
+    try:
+        # 解析 model_id 到 model_name
+        model_name = _resolve_model_name_for_notification(ctx.model_id)
+
+        result = upload_inference_failed(
+            url=ctx.ai_app_inference_complete,
+            study_instance_uid=ctx.study_uid,
+            model_name=model_name,
+        )
+        if result:
+            logger.info(
+                f"Sent inference_failed notification for study_uid={ctx.study_uid}"
+            )
+            return True
+        else:
+            logger.warning("upload_inference_failed returned None")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to send inference_failed notification: {e}")
+        return False
+
+
+# Type alias for model names used in notification API
+ModelNameLiteral = Literal["cmb_model", "aneurysm_model"]
+
+
+def _resolve_model_name_for_notification(model_id: str) -> ModelNameLiteral:
+    """解析 model_id 到通知用的 model_name。
+
+    【Knuth 精確性】：明確的映射關係
+
+    Args:
+        model_id: 模型識別碼（可能是 UUID 或名稱）
+
+    Returns:
+        ModelNameLiteral: 通知用的 model_name ("cmb_model" 或 "aneurysm_model")
+    """
+    # 嘗試解析為 InferenceEnum
+    try:
+        inference_enum = _resolve_model_id_to_inference_enum(model_id)
+        # 映射 InferenceEnum 到通知 API 的 model_name
+        # 注意：目前 API 只支援 "cmb_model" 和 "aneurysm_model"
+        enum_to_name: Dict[InferenceEnum, ModelNameLiteral] = {
+            InferenceEnum.CMB: "cmb_model",
+            InferenceEnum.Aneurysm: "aneurysm_model",
+        }
+        return enum_to_name.get(inference_enum, "cmb_model")
+    except (ValueError, KeyError):
+        # 無法解析，返回預設值
+        logger.warning(
+            f"Cannot resolve model_id '{model_id}' to model_name, using cmb_model"
+        )
+        return "cmb_model"
+
+
+def _handle_series_error(ctx: ErrorContext, error: Exception, error_type: str) -> str:
+    """統一的 Series Level 錯誤處理。
+
+    【Knuth 不變量】：保證所有錯誤都會觸發 DCOP 和通知（如果資料可用）
+    【Linus Good Taste】：消除所有特殊情況，所有錯誤走同一條路徑
+
+    Args:
+        ctx: 錯誤處理上下文
+        error: 捕獲的異常
+        error_type: 錯誤類型名稱 ("ValueError", "AssertionError", "Exception")
+
+    Returns:
+        str: JSON 格式的失敗結果
+    """
+    error_msg = str(error)
+
+    # 1. Log（永遠執行）
+    logger.error(
+        f"[{error_type}] Series inference failed: "
+        f"inference_id={ctx.inference_id}, study_uid={ctx.study_uid}, "
+        f"series_count={len(ctx.series_uids)}, error={error_msg}"
+    )
+
+    # 2. DCOP 事件（有資料就發）
+    _try_send_dcop_failed(ctx, error_msg)
+
+    # 3. 平台通知（有資料就發）
+    _try_send_inference_failed(ctx)
+
+    # 4. 返回結構化失敗結果
+    return json.dumps(
+        [
+            {
+                "status": "failed",
+                "error_type": error_type,
+                "error": error_msg,
+                "inference_id": ctx.inference_id,
+                "study_uid": ctx.study_uid,
+                "series_uids": ctx.series_uids,
+            }
+        ]
+    )
+
+
+# =============================================================================
+# Path Extraction Utilities
+# =============================================================================
 
 
 def _extract_path_from_params(
@@ -183,6 +420,16 @@ def _task_study_pipeline_inference(func_params: Dict[str, Any]):
         path_root=path_root,
     )
 
+    # 防禦性檢查：確保 build_inference_cmd 返回有效物件
+    if inference_item_cmd is None:
+        logger.error(f"build_inference_cmd 返回 None: nifti={nifti_study_path}")
+        return json.dumps(
+            {
+                "error": "build_inference_cmd returned None",
+                "nifti_path": nifti_study_path,
+            }
+        )
+
     if inference_item_cmd.cmd_items:
         cmd_output_path = os.path.join(
             path_cmd_tools, f"{inference_item_cmd.cmd_items[0].study_id}_cmd.json"
@@ -229,7 +476,7 @@ def _task_study_pipeline_inference(func_params: Dict[str, Any]):
         stdout, stderr = process.communicate()
         result_list.append((inference_item.cmd_str, stdout.decode(), stderr.decode()))
 
-    result = Serialization.to_json_str(result_list)
+    result = json.dumps(result_list)
 
     if study_uid and study_id:
         dcop_event = DCOPEventRequest(
@@ -582,12 +829,20 @@ def _batch_convert_series_to_nifti(
 
 def _resolve_model_id_to_inference_enum(model_id: str):
     """
-    將 model_id (UUID 或字串) 映射到 InferenceEnum。
+    將 model_id 映射到 InferenceEnum。
+
+    Linus: "Bad programmers worry about the code. Good programmers worry about
+    data structures." - 這個函數應該只處理 ModelName，不應該處理 UUID。
+
+    UUID → ModelName 的映射應該在 Backend 層完成（查詢數據庫）。
+    Worker 層不應該知道 UUID（避免硬編碼配置數據）。
+
+    TODO: Backend 重構完成後，重命名為 _resolve_model_name_to_inference_enum
+          並移除 UUID 向後兼容邏輯。
 
     Args:
-        model_id: 模型識別碼，可以是：
-            - UUID 字串（例如 '3fa85f64-5717-4562-b3fc-2c963f66afa6'）
-            - 模型名稱（例如 'CMB', 'Aneurysm'）
+        model_id: 模型識別碼，應該是模型名稱（如 "CMB", "Aneurysm"）
+                  臨時向後兼容：也接受 UUID（但會記錄警告）
 
     Returns:
         InferenceEnum: 對應的推論枚舉值
@@ -597,36 +852,38 @@ def _resolve_model_id_to_inference_enum(model_id: str):
     """
     from code_ai.utils.inference import InferenceEnum
 
-    # model_id UUID 到 InferenceEnum 的映射表
-    # 這些 UUID 應該與資料庫中的模型配置對應
-    MODEL_UUID_MAPPING = {
-        # CMB (Cerebral Microbleed) - Swagger 示例 UUID
-        "48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6": InferenceEnum.CMB,
-        "924d1538-597c-41d6-bc27-4b0b359111cf": InferenceEnum.Aneurysm,
-        "7e94d381-3f5d-46b6-b440-e5d44ebc48d2": InferenceEnum.WMH,
-        "97abe75d-34de-4e91-80c2-ce74b6c70438": InferenceEnum.Infarct,
-        # 可在此添加更多 UUID 映射
-    }
+    # Linus: "消除特殊情況" - 理想情況下只需要這一行
+    # return InferenceEnum(model_id)
 
-    # 首先嘗試直接從 UUID 映射
-    if model_id in MODEL_UUID_MAPPING:
-        return MODEL_UUID_MAPPING[model_id]
+    # 向後兼容：檢查是否為 UUID（36 字元，包含 '-'）
+    if len(model_id) == 36 and model_id.count("-") == 4:
+        logger.warning(
+            f"DEPRECATED: Worker received UUID '{model_id}'. "
+            f"Backend should pass model_name instead. "
+            f"UUID hardcoding violates 'data structures first' principle."
+        )
+        # Legacy mapping (臨時方案，應該由 Backend 處理)
+        # Linus: "修坑洞而非仰望星空" - 先支持舊代碼，但標記為過時
+        LEGACY_UUID_MAPPING = {
+            "48c0cfa2-347b-4d32-aa74-a7b1e20dd2e6": "CMB",
+            "924d1538-597c-41d6-bc27-4b0b359111cf": "Aneurysm",
+            "7e94d381-3f5d-46b6-b440-e5d44ebc48d2": "WMH",
+            "97abe75d-34de-4e91-80c2-ce74b6c70438": "Infarct",
+        }
+        model_name = LEGACY_UUID_MAPPING.get(model_id)
+        if not model_name:
+            raise ValueError(
+                f"Unknown UUID: {model_id}. Backend should pass model_name, not UUID."
+            )
+        model_id = model_name
 
-    # 其次嘗試將 model_id 當作 InferenceEnum 名稱
+    # 現代方式：直接映射 ModelName → InferenceEnum
     try:
         return InferenceEnum(model_id)
     except ValueError:
-        pass
-
-    # 最後嘗試不區分大小寫匹配
-    model_id_upper = model_id.upper()
-    for enum_member in InferenceEnum:
-        if enum_member.value.upper() == model_id_upper:
-            return enum_member
-
-    raise ValueError(
-        f"Unknown model_id: {model_id}. Valid models: {[e.value for e in InferenceEnum]}"
-    )
+        # Linus: "Fail fast and fail loud"
+        valid_models = [e.value for e in InferenceEnum]
+        raise ValueError(f"Unknown model: '{model_id}'. Valid models: {valid_models}")
 
 
 def _is_batch_inputs_model(model_id: str) -> bool:
@@ -732,7 +989,7 @@ def _validate_infarct_target_series(
 
 
 def _build_series_inference_cmd(
-    nifti_paths: list,
+    nifti_paths: List[str],
     model_id: str,
     output_dir: str,
     dicom_dir: Optional[str] = None,
@@ -813,8 +1070,8 @@ def _build_series_inference_cmd(
     # Step 4: 重用 check_study_mapping_inference 獲取正確順序的 nifti_paths
     # 這確保 CMB 等多輸入模型的參數順序與 config.yaml 定義一致
     # Knuth: 同時重新排序 dicom_dirs 以保持位置對應關係
-    sorted_nifti_paths = nifti_paths  # 預設使用原順序
-    sorted_dicom_dirs = dicom_dirs  # 預設使用原順序
+    sorted_nifti_paths: List[str] = list(nifti_paths)  # 預設使用原順序（確保是新 list）
+    sorted_dicom_dirs: Optional[List[str]] = list(dicom_dirs) if dicom_dirs else None
 
     if pipeline_config.batch_inputs and len(nifti_paths) > 1:
         try:
@@ -835,7 +1092,8 @@ def _build_series_inference_cmd(
                         path_to_index[basename] = i
 
                     # 使用 check_study_mapping_inference 返回的順序
-                    sorted_nifti_paths = model_paths
+                    # 確保類型正確：model_paths 應為 List[str]
+                    sorted_nifti_paths = [str(p) for p in model_paths]
 
                     # 【修復】同步重新排序 dicom_dirs（保持位置對應）
                     if dicom_dirs and len(dicom_dirs) == len(nifti_paths):
@@ -974,20 +1232,39 @@ def _reorder_series_by_config(
                 rename_dicom_paths,
             )
 
-        # 提取第一個匹配的 series 列表（通常只有一個配置）
-        # 例如 CMB: [["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"], ...]
-        # 取第一個: ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"]
-        config_series = model_mapping[0] if model_mapping else []
+        # 遍歷所有配置項，找到能匹配 target_labels 的那一個
+        # 例如 CMB 有兩個配置：
+        #   - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1BRAVO_AXI"]
+        #   - ["MRSeriesRenameEnum.SWAN", "T1SeriesRenameEnum.T1FLAIR_AXI"]
+        # 需要找到與 target_labels 匹配的那一個
+        config_series = None
+        config_labels: List[str] = []
 
-        # 提取純標籤名稱（去掉 Enum 前綴）
-        # "MRSeriesRenameEnum.SWAN" -> "SWAN"
-        config_labels = []
-        for series_enum_str in config_series:
-            if "." in series_enum_str:
-                label = series_enum_str.split(".")[-1]
-            else:
-                label = series_enum_str
-            config_labels.append(label)
+        for mapping in model_mapping:
+            # 提取純標籤名稱（去掉 Enum 前綴）
+            # "MRSeriesRenameEnum.SWAN" -> "SWAN"
+            candidate_labels = []
+            for series_enum_str in mapping:
+                if "." in series_enum_str:
+                    label = series_enum_str.split(".")[-1]
+                else:
+                    label = series_enum_str
+                candidate_labels.append(label)
+
+            # 檢查是否匹配（忽略順序）
+            if set(candidate_labels) == set(target_labels):
+                config_series = mapping
+                config_labels = candidate_labels
+                logger.debug(f"Matched config entry: {mapping}")
+                break
+
+        if not config_series:
+            error_msg = (
+                f"No matching config entry found for target_labels {target_labels}, "
+                f"available mappings: {model_mapping}"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         # Step 2: 建立 target_label -> 原始索引的映射
         label_to_index = {label: i for i, label in enumerate(target_labels)}
@@ -1106,330 +1383,396 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
     Returns:
         str: 推論結果 JSON 字串
     """
-    from code_ai.task.task_dicom2nii import call_post_httpx
+    # ==========================================================================
+    # Step 0: 提取錯誤處理上下文（永遠成功，必須是第一個操作）
+    # ==========================================================================
+    # 【Knuth 不變量】：ErrorContext 在任何可能失敗的操作之前建立
+    # 【Linus Good Taste】：消除「錯誤處理本身可能失敗」的特殊情況
+    ctx = _extract_error_context(func_params)
 
-    # Step 1: 驗證參數
-    _validate_series_params(func_params)
+    try:
+        from code_ai.task.task_dicom2nii import call_post_httpx
 
-    # Step 2: 提取配置
-    upload_data_api_url = func_params.get("upload_data_api_url")
-    if upload_data_api_url is None:
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        # Step 1: 驗證參數
+        _validate_series_params(func_params)
+
+        # Step 2: 提取配置
+        upload_data_api_url = func_params.get("upload_data_api_url")
         if upload_data_api_url is None:
-            raise ValueError(
-                "upload_data_api_url must be provided in task parameters or "
-                "UPLOAD_DATA_API_URL environment variable must be set"
-            )
+            upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+            if upload_data_api_url is None:
+                raise ValueError(
+                    "upload_data_api_url must be provided in task parameters or "
+                    "UPLOAD_DATA_API_URL environment variable must be set"
+                )
 
-    path_process = _extract_path_from_params(
-        func_params, "path_process", "PATH_PROCESS"
-    )
-    path_json = _extract_path_from_params(func_params, "path_json", "PATH_JSON")
-    path_log = _extract_path_from_params(func_params, "path_log", "PATH_LOG")
-    path_root = _extract_path_from_params(func_params, "path_root", "PATH_ROOT")
-
-    os.makedirs(path_json, exist_ok=True)
-    os.makedirs(path_log, exist_ok=True)
-
-    # Step 2.5: 條件式轉換 (raw_dicom → rename_dicom → nifti)
-    # Knuth: 提取 (UID, Label) 元組
-    needs_conversion = func_params.get("needs_conversion", False)
-    series_uids = func_params["series_uids"]
-    target_labels = func_params.get(
-        "target_labels", series_uids
-    )  # 向後兼容：默認使用 series_uids
-    model_id = func_params["model_id"]
-
-    # Knuth: 驗證不變量
-    assert len(series_uids) == len(target_labels), (
-        f"Invariant violation: {len(series_uids)} UIDs != {len(target_labels)} labels"
-    )
-
-    # Step 2.6: 根據 config.yaml 重新排序 target_labels 和相關列表
-    # 確保 --InputsDicomDir 取到正確的第一個序列
-    (
-        target_labels,
-        series_uids,
-        sorted_nifti_paths,
-        sorted_raw_dicom_paths,
-        sorted_rename_dicom_paths,
-    ) = _reorder_series_by_config(
-        target_labels=target_labels,
-        series_uids=series_uids,
-        model_id=model_id,
-        nifti_series_paths=func_params.get("nifti_series_paths"),
-        raw_dicom_series_paths=func_params.get("raw_dicom_series_paths"),
-        rename_dicom_paths=func_params.get("rename_dicom_paths"),
-    )
-
-    # 更新 func_params 中的排序後列表
-    func_params["series_uids"] = series_uids
-    func_params["target_labels"] = target_labels
-    if sorted_nifti_paths is not None:
-        func_params["nifti_series_paths"] = sorted_nifti_paths
-    if sorted_raw_dicom_paths is not None:
-        func_params["raw_dicom_series_paths"] = sorted_raw_dicom_paths
-    if sorted_rename_dicom_paths is not None:
-        func_params["rename_dicom_paths"] = sorted_rename_dicom_paths
-
-    if needs_conversion:
-        # 轉換模式或混合模式: 執行 DICOM 轉換
-        raw_dicom_paths = func_params["raw_dicom_series_paths"]
-        path_rename_dicom = _extract_path_from_params(
-            func_params, "path_rename_dicom", "PATH_RENAME_DICOM"
+        path_process = _extract_path_from_params(
+            func_params, "path_process", "PATH_PROCESS"
         )
-        path_rename_nifti = _extract_path_from_params(
-            func_params, "path_rename_nifti", "PATH_RENAME_NIFTI"
+        path_json = _extract_path_from_params(func_params, "path_json", "PATH_JSON")
+        path_log = _extract_path_from_params(func_params, "path_log", "PATH_LOG")
+        path_root = _extract_path_from_params(func_params, "path_root", "PATH_ROOT")
+
+        os.makedirs(path_json, exist_ok=True)
+        os.makedirs(path_log, exist_ok=True)
+
+        # Step 2.5: 條件式轉換 (raw_dicom → rename_dicom → nifti)
+        # Knuth: 提取 (UID, Label) 元組
+        needs_conversion = func_params.get("needs_conversion", False)
+        series_uids = func_params["series_uids"]
+        target_labels = func_params.get(
+            "target_labels", series_uids
+        )  # 向後兼容：默認使用 series_uids
+        model_id = func_params["model_id"]
+
+        # Knuth: 驗證不變量
+        assert len(series_uids) == len(target_labels), (
+            f"Invariant violation: {len(series_uids)} UIDs != {len(target_labels)} labels"
         )
-        study_id = func_params.get("study_id", "unknown_study")
-        study_uid = func_params.get("study_uid") or ""
 
-        # 檢查是否為混合模式（同時有 nifti_series_paths）
-        existing_nifti_paths = func_params.get("nifti_series_paths", [])
-        is_mixed_mode = len(existing_nifti_paths) > 0
+        # Step 2.6: 根據 config.yaml 重新排序 target_labels 和相關列表
+        # 確保 --InputsDicomDir 取到正確的第一個序列
+        (
+            target_labels,
+            series_uids,
+            sorted_nifti_paths,
+            sorted_raw_dicom_paths,
+            sorted_rename_dicom_paths,
+        ) = _reorder_series_by_config(
+            target_labels=target_labels,
+            series_uids=series_uids,
+            model_id=model_id,
+            nifti_series_paths=func_params.get("nifti_series_paths"),
+            raw_dicom_series_paths=func_params.get("raw_dicom_series_paths"),
+            rename_dicom_paths=func_params.get("rename_dicom_paths"),
+        )
 
-        if is_mixed_mode:
-            # 混合模式: 部分需要轉換，部分已存在
-            # Linus: Data structure drives behavior
-            convert_count = len(raw_dicom_paths)
-            direct_count = len(existing_nifti_paths)
-            logger.info(
-                f"Mixed mode: {direct_count} direct, {convert_count} convert, "
-                f"{len(series_uids)} total series"
+        # 更新 func_params 中的排序後列表
+        func_params["series_uids"] = series_uids
+        func_params["target_labels"] = target_labels
+        if sorted_nifti_paths is not None:
+            func_params["nifti_series_paths"] = sorted_nifti_paths
+        if sorted_raw_dicom_paths is not None:
+            func_params["raw_dicom_series_paths"] = sorted_raw_dicom_paths
+        if sorted_rename_dicom_paths is not None:
+            func_params["rename_dicom_paths"] = sorted_rename_dicom_paths
+
+        if needs_conversion:
+            # 轉換模式或混合模式: 執行 DICOM 轉換
+            raw_dicom_paths = func_params["raw_dicom_series_paths"]
+            path_rename_dicom = _extract_path_from_params(
+                func_params, "path_rename_dicom", "PATH_RENAME_DICOM"
             )
+            path_rename_nifti = _extract_path_from_params(
+                func_params, "path_rename_nifti", "PATH_RENAME_NIFTI"
+            )
+            study_id = func_params.get("study_id", "unknown_study")
+            study_uid = func_params.get("study_uid") or ""
 
-            # Knuth: 只轉換需要轉換的 series（保持 UID 和 Label 元組對應）
-            series_to_convert_uids = series_uids[direct_count:]
-            labels_to_convert = target_labels[direct_count:]
-            dicom_paths_converted, nifti_paths_converted = (
-                _batch_convert_series_to_nifti(
+            # 檢查是否為混合模式（同時有 nifti_series_paths）
+            existing_nifti_paths = func_params.get("nifti_series_paths", [])
+            is_mixed_mode = len(existing_nifti_paths) > 0
+
+            if is_mixed_mode:
+                # 混合模式: 部分需要轉換，部分已存在
+                # Linus: Data structure drives behavior
+                convert_count = len(raw_dicom_paths)
+                direct_count = len(existing_nifti_paths)
+                logger.info(
+                    f"Mixed mode: {direct_count} direct, {convert_count} convert, "
+                    f"{len(series_uids)} total series"
+                )
+
+                # Knuth: 只轉換需要轉換的 series（保持 UID 和 Label 元組對應）
+                series_to_convert_uids = series_uids[direct_count:]
+                labels_to_convert = target_labels[direct_count:]
+                dicom_paths_converted, nifti_paths_converted = (
+                    _batch_convert_series_to_nifti(
+                        raw_dicom_paths=raw_dicom_paths,
+                        series_uids=series_to_convert_uids,  # ✅ 真實 UID
+                        target_labels=labels_to_convert,  # ✅ Target 標籤
+                        output_dicom_base=path_rename_dicom,
+                        output_nifti_base=path_rename_nifti,
+                        study_id=study_id,
+                        study_uid=study_uid,
+                        upload_data_api_url=upload_data_api_url,
+                    )
+                )
+
+                # 合併路徑: 已存在的 + 轉換後的
+                nifti_paths = existing_nifti_paths + nifti_paths_converted
+
+                # Linus: "Good taste - eliminate special cases"
+                # Use real rename_dicom paths from backend instead of [None]
+                rename_dicom_paths_direct = func_params.get("rename_dicom_paths", [])
+                dicom_series_paths = rename_dicom_paths_direct + dicom_paths_converted
+
+                # Linus: "Fail fast and fail loud"
+                expected_count = len(series_uids)
+                actual_count = len(dicom_series_paths)
+                if actual_count != expected_count:
+                    logger.warning(
+                        f"dicom_series_paths count mismatch: expected {expected_count}, got {actual_count}. "
+                        f"Some paths may be empty."
+                    )
+            else:
+                # 純轉換模式: 所有 series 都需要轉換
+                logger.info(f"Conversion mode: {len(series_uids)} series")
+                dicom_series_paths, nifti_paths = _batch_convert_series_to_nifti(
                     raw_dicom_paths=raw_dicom_paths,
-                    series_uids=series_to_convert_uids,  # ✅ 真實 UID
-                    target_labels=labels_to_convert,  # ✅ Target 標籤
+                    series_uids=series_uids,  # ✅ 真實 UID
+                    target_labels=target_labels,  # ✅ Target 標籤
                     output_dicom_base=path_rename_dicom,
                     output_nifti_base=path_rename_nifti,
                     study_id=study_id,
                     study_uid=study_uid,
                     upload_data_api_url=upload_data_api_url,
                 )
-            )
 
-            # 合併路徑: 已存在的 + 轉換後的
-            nifti_paths = existing_nifti_paths + nifti_paths_converted
-
-            # Linus: "Good taste - eliminate special cases"
-            # Use real rename_dicom paths from backend instead of [None]
-            rename_dicom_paths_direct = func_params.get("rename_dicom_paths", [])
-            dicom_series_paths = rename_dicom_paths_direct + dicom_paths_converted
-
-            # Linus: "Fail fast and fail loud"
-            expected_count = len(series_uids)
-            actual_count = len(dicom_series_paths)
-            if actual_count != expected_count:
+            # 檢查轉換結果
+            failed_conversions = [
+                (uid, path)
+                for uid, path in zip(series_uids, nifti_paths)
+                if path is None
+            ]
+            if failed_conversions:
                 logger.warning(
-                    f"dicom_series_paths count mismatch: expected {expected_count}, got {actual_count}. "
-                    f"Some paths may be empty."
+                    f"Some series failed to convert: "
+                    f"{[uid for uid, _ in failed_conversions]}"
                 )
         else:
-            # 純轉換模式: 所有 series 都需要轉換
-            logger.info(f"Conversion mode: {len(series_uids)} series")
-            dicom_series_paths, nifti_paths = _batch_convert_series_to_nifti(
-                raw_dicom_paths=raw_dicom_paths,
-                series_uids=series_uids,  # ✅ 真實 UID
-                target_labels=target_labels,  # ✅ Target 標籤
-                output_dicom_base=path_rename_dicom,
-                output_nifti_base=path_rename_nifti,
-                study_id=study_id,
-                study_uid=study_uid,
-                upload_data_api_url=upload_data_api_url,
+            # 直接模式: 使用已存在的 NIFTI 路徑
+            nifti_paths = func_params["nifti_series_paths"]
+            # Linus: "Fix the data structure bug - use the correct key name"
+            # Backend sends "rename_dicom_paths", not "dicom_series_paths"
+            dicom_series_paths = func_params.get(
+                "rename_dicom_paths", [None] * len(series_uids)
             )
 
-        # 檢查轉換結果
-        failed_conversions = [
-            (uid, path) for uid, path in zip(series_uids, nifti_paths) if path is None
-        ]
-        if failed_conversions:
+        # Step 3: 提取其他 series 參數
+        model_id = func_params["model_id"]
+        inference_id = func_params.get("inference_id", str(uuid4()))
+        study_uid = func_params.get("study_uid")
+        study_id = func_params.get("study_id")
+        # 注意: dicom_series_paths 和 nifti_paths 已在 Step 2.5 中設置
+
+        # Linus: "Make bugs visible - log what you got"
+        logger.info(
+            f"Series-level inference setup: {len(series_uids)} series, "
+            f"{len(nifti_paths)} NIfTI paths, {len(dicom_series_paths)} DICOM paths"
+        )
+        # Warn if DICOM paths contain None/empty
+        none_count = sum(1 for p in dicom_series_paths if not p)
+        if none_count > 0:
             logger.warning(
-                f"Some series failed to convert: "
-                f"{[uid for uid, _ in failed_conversions]}"
+                f"{none_count}/{len(dicom_series_paths)} DICOM paths are None/empty - "
+                f"DICOM-SEG generation may be affected"
             )
-    else:
-        # 直接模式: 使用已存在的 NIFTI 路徑
-        nifti_paths = func_params["nifti_series_paths"]
-        # Linus: "Fix the data structure bug - use the correct key name"
-        # Backend sends "rename_dicom_paths", not "dicom_series_paths"
-        dicom_series_paths = func_params.get(
-            "rename_dicom_paths", [None] * len(series_uids)
-        )
 
-    # Step 3: 提取其他 series 參數
-    model_id = func_params["model_id"]
-    inference_id = func_params.get("inference_id", str(uuid4()))
-    study_uid = func_params.get("study_uid")
-    study_id = func_params.get("study_id")
-    # 注意: dicom_series_paths 和 nifti_paths 已在 Step 2.5 中設置
+        api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
 
-    # Linus: "Make bugs visible - log what you got"
-    logger.info(
-        f"Series-level inference setup: {len(series_uids)} series, "
-        f"{len(nifti_paths)} NIfTI paths, {len(dicom_series_paths)} DICOM paths"
-    )
-    # Warn if DICOM paths contain None/empty
-    none_count = sum(1 for p in dicom_series_paths if not p)
-    if none_count > 0:
-        logger.warning(
-            f"{none_count}/{len(dicom_series_paths)} DICOM paths are None/empty - "
-            f"DICOM-SEG generation may be affected"
-        )
+        # Step 4: 發送 SERIES_INFERENCE_RUNNING 事件
+        if study_uid and study_id:
+            dcop_event = DCOPEventRequest(
+                study_uid=study_uid,
+                series_uid=series_uids[0] if len(series_uids) == 1 else None,
+                study_id=study_id,
+                ope_no=DCOPStatus.SERIES_INFERENCE_RUNNING.value,
+                tool_id="SERIES_INFERENCE_TOOL",
+                params_data={
+                    "inference_id": inference_id,
+                    "series_count": len(series_uids),
+                    "series_uids": series_uids,
+                    "model_id": model_id,
+                    "func_params": func_params,
+                    "task": fct.function_result_status.get_status_dict(),
+                },
+            )
+            try:
+                call_post_httpx.push(
+                    {
+                        "url": api_url,
+                        "data": dcop_event.model_dump_json(),
+                    }
+                )
+                logger.info(
+                    f"Posted SERIES_INFERENCE_RUNNING for inference_id={inference_id}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to post RUNNING event: {e}")
 
-    api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
+        # Step 5: 執行推論
+        result_list = []
+        all_success = True
+        error_message = None
+        all_inference_cmd_items = []  # 收集所有 InferenceCmdItem（與 Study Level 一致）
 
-    # Step 4: 發送 SERIES_INFERENCE_RUNNING 事件
-    if study_uid and study_id:
-        dcop_event = DCOPEventRequest(
-            study_uid=study_uid,
-            series_uid=series_uids[0] if len(series_uids) == 1 else None,
-            study_id=study_id,
-            ope_no=DCOPStatus.SERIES_INFERENCE_RUNNING.value,
-            tool_id="SERIES_INFERENCE_TOOL",
-            params_data={
-                "inference_id": inference_id,
-                "series_count": len(series_uids),
-                "series_uids": series_uids,
-                "model_id": model_id,
-                "func_params": func_params,
-                "task": fct.function_result_status.get_status_dict(),
-            },
-        )
+        # 檢查是否為批量輸入模型（如 CMB 需要 SWAN + T1BRAVO、Infarct）
+        is_batch_model = _is_batch_inputs_model(model_id)
+
         try:
-            call_post_httpx.push(
-                {
-                    "url": api_url,
-                    "data": dcop_event.model_dump_json(),
-                }
-            )
-            logger.info(
-                f"Posted SERIES_INFERENCE_RUNNING for inference_id={inference_id}"
-            )
-        except Exception as e:
-            logger.error(f"Failed to post RUNNING event: {e}")
+            if is_batch_model:
+                # ====== 批量輸入模式 ======
+                # 所有 series 的 NIFTI 檔案作為單次推論的多個輸入
+                logger.info(
+                    f"Batch inputs model detected: {model_id}, "
+                    f"processing {len(series_uids)} series as single inference"
+                )
 
-    # Step 5: 執行推論
-    result_list = []
-    all_success = True
-    error_message = None
-    all_inference_cmd_items = []  # 收集所有 InferenceCmdItem（與 Study Level 一致）
+                # 檢查所有 NIFTI 檔案存在，同時收集對應的 DICOM 目錄
+                valid_nifti_paths = []
+                valid_dicom_dirs = []
+                missing_series = []
+                for series_uid, nifti_path, dicom_path in zip(
+                    series_uids, nifti_paths, dicom_series_paths
+                ):
+                    if nifti_path is None or not os.path.exists(nifti_path):
+                        missing_series.append(series_uid)
+                        logger.error(f"NIFTI file not found: {nifti_path}")
+                    else:
+                        valid_nifti_paths.append(nifti_path)
+                        # 收集對應的 DICOM 目錄（batch_inputs 模型需要每個 NIfTI 對應的 DICOM）
+                        valid_dicom_dirs.append(dicom_path if dicom_path else "")
 
-    # 檢查是否為批量輸入模型（如 CMB 需要 SWAN + T1BRAVO、Infarct）
-    is_batch_model = _is_batch_inputs_model(model_id)
+                if missing_series:
+                    error_msg = f"Missing NIFTI files for series: {missing_series}"
+                    logger.error(error_msg)
+                    for series_uid in missing_series:
+                        result_list.append(
+                            {
+                                "series_uid": series_uid,
+                                "status": "failed",
+                                "error": error_msg,
+                            }
+                        )
+                    all_success = False
 
-    try:
-        if is_batch_model:
-            # ====== 批量輸入模式 ======
-            # 所有 series 的 NIFTI 檔案作為單次推論的多個輸入
-            logger.info(
-                f"Batch inputs model detected: {model_id}, "
-                f"processing {len(series_uids)} series as single inference"
-            )
+                if valid_nifti_paths:
+                    # 建立輸出目錄（使用 inference_id，Linus: "Data structure drives behavior"）
+                    # 單次推理任務 → 用 inference_id 標識，而非拼接多個 series UID
+                    output_dir = os.path.join(path_json, inference_id)
+                    os.makedirs(output_dir, exist_ok=True)
 
-            # 檢查所有 NIFTI 檔案存在，同時收集對應的 DICOM 目錄
-            valid_nifti_paths = []
-            valid_dicom_dirs = []
-            missing_series = []
-            for series_uid, nifti_path, dicom_path in zip(
-                series_uids, nifti_paths, dicom_series_paths
-            ):
-                if nifti_path is None or not os.path.exists(nifti_path):
-                    missing_series.append(series_uid)
-                    logger.error(f"NIFTI file not found: {nifti_path}")
-                else:
-                    valid_nifti_paths.append(nifti_path)
-                    # 收集對應的 DICOM 目錄（batch_inputs 模型需要每個 NIfTI 對應的 DICOM）
-                    valid_dicom_dirs.append(dicom_path if dicom_path else "")
+                    # 檢查是否為 Infarct 模型（需要每個 NIfTI 對應一個 DICOM 目錄）
+                    # CMB 和其他 batch_inputs 模型只需要單個 DICOM 目錄
+                    is_infarct = _is_infarct_model(model_id)
 
-            if missing_series:
-                error_msg = f"Missing NIFTI files for series: {missing_series}"
-                logger.error(error_msg)
-                for series_uid in missing_series:
-                    result_list.append(
-                        {
-                            "series_uid": series_uid,
-                            "status": "failed",
-                            "error": error_msg,
-                        }
-                    )
-                all_success = False
+                    # 決定使用多個 DICOM 目錄還是單個
+                    use_multiple_dicom_dirs = False
+                    if is_infarct:
+                        # Infarct: 驗證是否包含所有必需的 target series (ADC, DWI0, DWI1000)
+                        if _validate_infarct_target_series(
+                            valid_nifti_paths, valid_dicom_dirs
+                        ):
+                            use_multiple_dicom_dirs = True
+                            logger.info(
+                                f"Infarct validation passed: using {len(valid_dicom_dirs)} DICOM directories"
+                            )
+                        else:
+                            logger.warning(
+                                "Infarct validation failed: falling back to single DICOM directory"
+                            )
 
-            if valid_nifti_paths:
-                # 建立輸出目錄（使用 inference_id，Linus: "Data structure drives behavior"）
-                # 單次推理任務 → 用 inference_id 標識，而非拼接多個 series UID
-                output_dir = os.path.join(path_json, inference_id)
-                os.makedirs(output_dir, exist_ok=True)
-
-                # 檢查是否為 Infarct 模型（需要每個 NIfTI 對應一個 DICOM 目錄）
-                # CMB 和其他 batch_inputs 模型只需要單個 DICOM 目錄
-                is_infarct = _is_infarct_model(model_id)
-
-                # 決定使用多個 DICOM 目錄還是單個
-                use_multiple_dicom_dirs = False
-                if is_infarct:
-                    # Infarct: 驗證是否包含所有必需的 target series (ADC, DWI0, DWI1000)
-                    if _validate_infarct_target_series(
-                        valid_nifti_paths, valid_dicom_dirs
-                    ):
-                        use_multiple_dicom_dirs = True
-                        logger.info(
-                            f"Infarct validation passed: using {len(valid_dicom_dirs)} DICOM directories"
+                    if use_multiple_dicom_dirs:
+                        # Infarct (驗證通過): 傳入所有對應的 DICOM 目錄
+                        inference_cmd = _build_series_inference_cmd(
+                            nifti_paths=valid_nifti_paths,
+                            model_id=model_id,
+                            output_dir=output_dir,
+                            dicom_dirs=valid_dicom_dirs,  # 多個 DICOM 目錄
+                            study_id=study_id,
+                            path_root=path_root,
                         )
                     else:
-                        logger.warning(
-                            "Infarct validation failed: falling back to single DICOM directory"
+                        # CMB 或 Infarct (驗證失敗): 只傳入第一個有效的 DICOM 目錄
+                        dicom_dir = None
+                        for path in valid_dicom_dirs:
+                            if path:  # 非空字符串
+                                dicom_dir = path
+                                break
+                        inference_cmd = _build_series_inference_cmd(
+                            nifti_paths=valid_nifti_paths,
+                            model_id=model_id,
+                            output_dir=output_dir,
+                            dicom_dir=dicom_dir,  # 單個 DICOM 目錄
+                            study_id=study_id,
+                            path_root=path_root,
                         )
+                    # 收集 InferenceCmdItem（與 Study Level 一致）
+                    all_inference_cmd_items.extend(inference_cmd.cmd_items)
+                    # 提取 cmd_str 用於 subprocess 執行
+                    cmd_str = inference_cmd.cmd_items[0].cmd_str
+                    logger.info(f"Executing batch inference: {cmd_str}")
 
-                if use_multiple_dicom_dirs:
-                    # Infarct (驗證通過): 傳入所有對應的 DICOM 目錄
-                    inference_cmd = _build_series_inference_cmd(
-                        nifti_paths=valid_nifti_paths,
-                        model_id=model_id,
-                        output_dir=output_dir,
-                        dicom_dirs=valid_dicom_dirs,  # 多個 DICOM 目錄
-                        study_id=study_id,
-                        path_root=path_root,
-                    )
-                else:
-                    # CMB 或 Infarct (驗證失敗): 只傳入第一個有效的 DICOM 目錄
-                    dicom_dir = None
-                    for path in valid_dicom_dirs:
-                        if path:  # 非空字符串
-                            dicom_dir = path
-                            break
-                    inference_cmd = _build_series_inference_cmd(
-                        nifti_paths=valid_nifti_paths,
-                        model_id=model_id,
-                        output_dir=output_dir,
-                        dicom_dir=dicom_dir,  # 單個 DICOM 目錄
-                        study_id=study_id,
-                        path_root=path_root,
-                    )
-                # 收集 InferenceCmdItem（與 Study Level 一致）
-                all_inference_cmd_items.extend(inference_cmd.cmd_items)
-                # 提取 cmd_str 用於 subprocess 執行
-                cmd_str = inference_cmd.cmd_items[0].cmd_str
-                logger.info(f"Executing batch inference: {cmd_str}")
+                    # 執行推論
+                    try:
+                        process = subprocess.Popen(
+                            args=cmd_str,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            # cwd=path_process,
+                        )
+                        stdout, stderr = process.communicate(timeout=600)
 
-                # 執行推論
-                try:
-                    process = subprocess.Popen(
-                        args=cmd_str,
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        # cwd=path_process,
-                    )
-                    stdout, stderr = process.communicate(timeout=600)
+                        if process.returncode != 0:
+                            error_msg = f"Inference failed with code {process.returncode}: {stderr.decode()}"
+                            logger.error(error_msg)
+                            for series_uid in series_uids:
+                                if series_uid not in missing_series:
+                                    result_list.append(
+                                        {
+                                            "series_uid": series_uid,
+                                            "status": "failed",
+                                            "error": error_msg,
+                                            "stderr": stderr.decode(),
+                                        }
+                                    )
+                            all_success = False
+                        else:
+                            # 解析結果
+                            prediction_file = os.path.join(
+                                output_dir, "prediction.json"
+                            )
+                            if os.path.exists(prediction_file):
+                                with open(prediction_file, "r") as f:
+                                    prediction = json.load(f)
+                            else:
+                                prediction = {"raw_output": stdout.decode()}
 
-                    if process.returncode != 0:
-                        error_msg = f"Inference failed with code {process.returncode}: {stderr.decode()}"
+                            # 批量模式：所有有效 series 共享同一結果
+                            for series_uid in series_uids:
+                                if series_uid not in missing_series:
+                                    result_list.append(
+                                        {
+                                            "series_uid": series_uid,
+                                            "status": "success",
+                                            "prediction": prediction,
+                                            "output_dir": output_dir,
+                                            "batch_inference": True,
+                                        }
+                                    )
+                            logger.info(
+                                f"Batch inference completed successfully for {len(valid_nifti_paths)} series"
+                            )
+
+                    except subprocess.TimeoutExpired:
+                        error_msg = "Batch inference timeout (>10 min)"
+                        logger.error(error_msg)
+                        process.kill()
+                        for series_uid in series_uids:
+                            if series_uid not in missing_series:
+                                result_list.append(
+                                    {
+                                        "series_uid": series_uid,
+                                        "status": "failed",
+                                        "error": error_msg,
+                                    }
+                                )
+                        all_success = False
+
+                    except Exception as e:
+                        error_msg = f"Batch inference error: {str(e)}"
                         logger.error(error_msg)
                         for series_uid in series_uids:
                             if series_uid not in missing_series:
@@ -1438,228 +1781,194 @@ def _task_series_pipeline_inference(func_params: Dict[str, Any]):
                                         "series_uid": series_uid,
                                         "status": "failed",
                                         "error": error_msg,
-                                        "stderr": stderr.decode(),
                                     }
                                 )
                         all_success = False
-                    else:
-                        # 解析結果
-                        prediction_file = os.path.join(output_dir, "prediction.json")
-                        if os.path.exists(prediction_file):
-                            with open(prediction_file, "r") as f:
-                                prediction = json.load(f)
-                        else:
-                            prediction = {"raw_output": stdout.decode()}
 
-                        # 批量模式：所有有效 series 共享同一結果
-                        for series_uid in series_uids:
-                            if series_uid not in missing_series:
-                                result_list.append(
-                                    {
-                                        "series_uid": series_uid,
-                                        "status": "success",
-                                        "prediction": prediction,
-                                        "output_dir": output_dir,
-                                        "batch_inference": True,
-                                    }
-                                )
-                        logger.info(
-                            f"Batch inference completed successfully for {len(valid_nifti_paths)} series"
+            else:
+                # ====== 單一輸入模式（原有邏輯） ======
+                # 每個 series 獨立執行推論
+                for i, (series_uid, nifti_path) in enumerate(
+                    zip(series_uids, nifti_paths)
+                ):
+                    logger.info(
+                        f"Processing series {i + 1}/{len(series_uids)}: {series_uid}"
+                    )
+
+                    # 檢查 NIFTI 檔案存在
+                    if nifti_path is None or not os.path.exists(nifti_path):
+                        error_msg = (
+                            f"NIFTI file not found or conversion failed: {nifti_path}"
                         )
-
-                except subprocess.TimeoutExpired:
-                    error_msg = "Batch inference timeout (>10 min)"
-                    logger.error(error_msg)
-                    process.kill()
-                    for series_uid in series_uids:
-                        if series_uid not in missing_series:
-                            result_list.append(
-                                {
-                                    "series_uid": series_uid,
-                                    "status": "failed",
-                                    "error": error_msg,
-                                }
-                            )
-                    all_success = False
-
-                except Exception as e:
-                    error_msg = f"Batch inference error: {str(e)}"
-                    logger.error(error_msg)
-                    for series_uid in series_uids:
-                        if series_uid not in missing_series:
-                            result_list.append(
-                                {
-                                    "series_uid": series_uid,
-                                    "status": "failed",
-                                    "error": error_msg,
-                                }
-                            )
-                    all_success = False
-
-        else:
-            # ====== 單一輸入模式（原有邏輯） ======
-            # 每個 series 獨立執行推論
-            for i, (series_uid, nifti_path) in enumerate(zip(series_uids, nifti_paths)):
-                logger.info(
-                    f"Processing series {i + 1}/{len(series_uids)}: {series_uid}"
-                )
-
-                # 檢查 NIFTI 檔案存在
-                if nifti_path is None or not os.path.exists(nifti_path):
-                    error_msg = (
-                        f"NIFTI file not found or conversion failed: {nifti_path}"
-                    )
-                    logger.error(error_msg)
-                    result_list.append(
-                        {
-                            "series_uid": series_uid,
-                            "status": "failed",
-                            "error": error_msg,
-                        }
-                    )
-                    all_success = False
-                    continue
-
-                # 建立輸出目錄（Linus: "Keep it simple"）
-                # 使用 inference_id + series 索引，而非完整 UUID
-                output_dir = os.path.join(path_json, f"{inference_id}_series_{i}")
-                os.makedirs(output_dir, exist_ok=True)
-
-                # 取得 DICOM 路徑（如果有）
-                dicom_dir = (
-                    dicom_series_paths[i] if i < len(dicom_series_paths) else None
-                )
-
-                # 建立推論命令（傳入單一路徑的列表，返回 InferenceCmd）
-                inference_cmd = _build_series_inference_cmd(
-                    nifti_paths=[nifti_path],
-                    model_id=model_id,
-                    output_dir=output_dir,
-                    dicom_dir=dicom_dir,
-                    study_id=study_id,
-                    path_root=path_root,
-                )
-                # 收集 InferenceCmdItem（與 Study Level 一致）
-                all_inference_cmd_items.extend(inference_cmd.cmd_items)
-                # 提取 cmd_str 用於 subprocess 執行
-                cmd_str = inference_cmd.cmd_items[0].cmd_str
-                logger.info(f"Executing: {cmd_str}")
-
-                # 執行推論
-                try:
-                    process = subprocess.Popen(
-                        args=cmd_str,
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        cwd=path_process,
-                    )
-                    stdout, stderr = process.communicate(timeout=600)  # 10 分鐘超時
-
-                    if process.returncode != 0:
-                        error_msg = f"Inference failed with code {process.returncode}: {stderr.decode()}"
                         logger.error(error_msg)
                         result_list.append(
                             {
                                 "series_uid": series_uid,
                                 "status": "failed",
                                 "error": error_msg,
-                                "stderr": stderr.decode(),
                             }
                         )
                         all_success = False
-                    else:
-                        # 解析結果
-                        prediction_file = os.path.join(output_dir, "prediction.json")
-                        if os.path.exists(prediction_file):
-                            with open(prediction_file, "r") as f:
-                                prediction = json.load(f)
-                        else:
-                            prediction = {"raw_output": stdout.decode()}
+                        continue
 
+                    # 建立輸出目錄（Linus: "Keep it simple"）
+                    # 使用 inference_id + series 索引，而非完整 UUID
+                    output_dir = os.path.join(path_json, f"{inference_id}_series_{i}")
+                    os.makedirs(output_dir, exist_ok=True)
+
+                    # 取得 DICOM 路徑（如果有）
+                    dicom_dir = (
+                        dicom_series_paths[i] if i < len(dicom_series_paths) else None
+                    )
+
+                    # 建立推論命令（傳入單一路徑的列表，返回 InferenceCmd）
+                    inference_cmd = _build_series_inference_cmd(
+                        nifti_paths=[nifti_path],
+                        model_id=model_id,
+                        output_dir=output_dir,
+                        dicom_dir=dicom_dir,
+                        study_id=study_id,
+                        path_root=path_root,
+                    )
+                    # 收集 InferenceCmdItem（與 Study Level 一致）
+                    all_inference_cmd_items.extend(inference_cmd.cmd_items)
+                    # 提取 cmd_str 用於 subprocess 執行
+                    cmd_str = inference_cmd.cmd_items[0].cmd_str
+                    logger.info(f"Executing: {cmd_str}")
+
+                    # 執行推論
+                    try:
+                        process = subprocess.Popen(
+                            args=cmd_str,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            cwd=path_process,
+                        )
+                        stdout, stderr = process.communicate(timeout=600)  # 10 分鐘超時
+
+                        if process.returncode != 0:
+                            error_msg = f"Inference failed with code {process.returncode}: {stderr.decode()}"
+                            logger.error(error_msg)
+                            result_list.append(
+                                {
+                                    "series_uid": series_uid,
+                                    "status": "failed",
+                                    "error": error_msg,
+                                    "stderr": stderr.decode(),
+                                }
+                            )
+                            all_success = False
+                        else:
+                            # 解析結果
+                            prediction_file = os.path.join(
+                                output_dir, "prediction.json"
+                            )
+                            if os.path.exists(prediction_file):
+                                with open(prediction_file, "r") as f:
+                                    prediction = json.load(f)
+                            else:
+                                prediction = {"raw_output": stdout.decode()}
+
+                            result_list.append(
+                                {
+                                    "series_uid": series_uid,
+                                    "status": "success",
+                                    "prediction": prediction,
+                                    "output_dir": output_dir,
+                                }
+                            )
+                            logger.info(
+                                f"Series {series_uid} inference completed successfully"
+                            )
+
+                    except subprocess.TimeoutExpired:
+                        error_msg = (
+                            f"Inference timeout (>10 min) for series {series_uid}"
+                        )
+                        logger.error(error_msg)
+                        process.kill()
                         result_list.append(
                             {
                                 "series_uid": series_uid,
-                                "status": "success",
-                                "prediction": prediction,
-                                "output_dir": output_dir,
+                                "status": "failed",
+                                "error": error_msg,
                             }
                         )
-                        logger.info(
-                            f"Series {series_uid} inference completed successfully"
+                        all_success = False
+
+                    except Exception as e:
+                        error_msg = f"Inference error for series {series_uid}: {str(e)}"
+                        logger.error(error_msg)
+                        result_list.append(
+                            {
+                                "series_uid": series_uid,
+                                "status": "failed",
+                                "error": error_msg,
+                            }
                         )
+                        all_success = False
 
-                except subprocess.TimeoutExpired:
-                    error_msg = f"Inference timeout (>10 min) for series {series_uid}"
-                    logger.error(error_msg)
-                    process.kill()
-                    result_list.append(
-                        {
-                            "series_uid": series_uid,
-                            "status": "failed",
-                            "error": error_msg,
-                        }
-                    )
-                    all_success = False
-
-                except Exception as e:
-                    error_msg = f"Inference error for series {series_uid}: {str(e)}"
-                    logger.error(error_msg)
-                    result_list.append(
-                        {
-                            "series_uid": series_uid,
-                            "status": "failed",
-                            "error": error_msg,
-                        }
-                    )
-                    all_success = False
-
-    except Exception as e:
-        error_message = f"Fatal error during series inference: {str(e)}"
-        logger.error(error_message)
-        all_success = False
-
-    # Step 6: 發送 SERIES_INFERENCE_COMPLETE/FAILED 事件
-    result_json = Serialization.to_json_str(result_list)
-
-    if study_uid and study_id:
-        completion_status = (
-            DCOPStatus.SERIES_INFERENCE_COMPLETE.value
-            if all_success
-            else DCOPStatus.SERIES_INFERENCE_FAILED.value
-        )
-
-        dcop_event = DCOPEventRequest(
-            study_uid=study_uid,
-            series_uid=series_uids[0] if len(series_uids) == 1 else None,
-            study_id=study_id,
-            ope_no=completion_status,
-            tool_id="SERIES_INFERENCE_TOOL",
-            params_data={
-                "inference_item_cmd": all_inference_cmd_items,  # 與 Study Level 一致
-                "func_params": func_params,  # 與 Study Level 一致
-                "inference_id": inference_id,
-                "series_count": len(series_uids),
-                "series_uids": series_uids,
-                "model_id": model_id,
-                "task": fct.function_result_status.get_status_dict(),
-            },
-            result_data={
-                "result": result_json,
-                "all_success": all_success,
-                "error": error_message,
-            },
-        )
-
-        try:
-            call_post_httpx.push(
-                {
-                    "url": api_url,
-                    "data": dcop_event.model_dump_json(),
-                }
-            )
-            logger.info(f"Posted {completion_status} for inference_id={inference_id}")
         except Exception as e:
-            logger.error(f"Failed to post COMPLETE event: {e}")
+            error_message = f"Fatal error during series inference: {str(e)}"
+            logger.error(error_message)
+            all_success = False
 
-    return result_json
+        # Step 6: 發送 SERIES_INFERENCE_COMPLETE/FAILED 事件
+        result_json = json.dumps(result_list)
+
+        if study_uid and study_id:
+            completion_status = (
+                DCOPStatus.SERIES_INFERENCE_COMPLETE.value
+                if all_success
+                else DCOPStatus.SERIES_INFERENCE_FAILED.value
+            )
+
+            dcop_event = DCOPEventRequest(
+                study_uid=study_uid,
+                series_uid=series_uids[0] if len(series_uids) == 1 else None,
+                study_id=study_id,
+                ope_no=completion_status,
+                tool_id="SERIES_INFERENCE_TOOL",
+                params_data={
+                    "inference_item_cmd": all_inference_cmd_items,  # 與 Study Level 一致
+                    "func_params": func_params,  # 與 Study Level 一致
+                    "inference_id": inference_id,
+                    "series_count": len(series_uids),
+                    "series_uids": series_uids,
+                    "model_id": model_id,
+                    "task": fct.function_result_status.get_status_dict(),
+                },
+                result_data={
+                    "result": result_json,
+                    "all_success": all_success,
+                    "error": error_message,
+                },
+            )
+
+            try:
+                call_post_httpx.push(
+                    {
+                        "url": api_url,
+                        "data": dcop_event.model_dump_json(),
+                    }
+                )
+                logger.info(
+                    f"Posted {completion_status} for inference_id={inference_id}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to post COMPLETE event: {e}")
+
+        return result_json
+
+    # ==========================================================================
+    # 統一錯誤處理（Knuth 不變量 + Linus Good Taste）
+    # ==========================================================================
+    # 【Knuth】：所有錯誤都會觸發 DCOP 和平台通知（如果資料可用）
+    # 【Linus】：消除特殊情況，所有錯誤走同一條路徑
+    except ValueError as e:
+        return _handle_series_error(ctx, e, "ValueError")
+    except AssertionError as e:
+        return _handle_series_error(ctx, e, "AssertionError")
+    except Exception as e:
+        return _handle_series_error(ctx, e, "Exception")
