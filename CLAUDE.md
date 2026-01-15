@@ -252,6 +252,60 @@ rename_dicom_paths = [
 
 **Worker Simplification**: Worker no longer needs DWI sibling detection/conversion logic
 
+### Series-Level Error Handling Pattern (Knuth & Linus Principles)
+
+**Problem**: ValueError/AssertionError in `_task_series_pipeline_inference()` could occur before the try block, causing silent failures without DCOP events or platform notifications.
+
+**Solution**: Error Context First Pattern
+
+```python
+def _task_series_pipeline_inference(func_params: Dict[str, Any]):
+    # Step 0: Extract error context FIRST (never throws)
+    ctx = _extract_error_context(func_params)
+
+    try:
+        # All business logic here...
+        _validate_series_params(func_params)
+        # ...inference execution...
+    except ValueError as e:
+        return _handle_series_error(ctx, e, "ValueError")
+    except AssertionError as e:
+        return _handle_series_error(ctx, e, "AssertionError")
+    except Exception as e:
+        return _handle_series_error(ctx, e, "Exception")
+```
+
+**Key Components** (`code_ai/task/task_pipeline.py`):
+
+1. **`ErrorContext` (dataclass)**: Captures error handling data before any business logic
+   - `study_uid`, `study_id`, `inference_id`, `series_uids`, `model_id`
+   - `api_url` (for DCOP events), `ai_app_inference_complete` (for platform notification)
+
+2. **`_extract_error_context()`**: Extracts context from func_params + env vars
+   - **Never throws exceptions** - only reads dicts and env vars
+   - Must be the FIRST operation in the function
+
+3. **`_try_send_dcop_failed()`**: Sends `SERIES_INFERENCE_FAILED` DCOP event
+   - Has data → sends, no data → skips (no exception)
+
+4. **`_try_send_inference_failed()`**: Sends platform failure notification
+   - Has data → sends, no data → skips (no exception)
+
+5. **`_handle_series_error()`**: Unified error handler for all exception types
+   - Logs error with context
+   - Sends DCOP event (if data available)
+   - Sends platform notification (if data available)
+   - Returns structured JSON failure result
+
+**Design Principles Applied**:
+
+| Principle | Implementation |
+|-----------|----------------|
+| **Knuth Invariant** | All errors trigger DCOP + notification (if data available) |
+| **Knuth Precision** | ErrorContext explicitly defines minimum required data |
+| **Linus Data-First** | Build ErrorContext before any business logic |
+| **Linus Good Taste** | Eliminate special cases - all errors use same handler |
+
 ### Key Design Patterns
 
 **Module Structure** (backend services):
