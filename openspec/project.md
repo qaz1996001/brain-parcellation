@@ -105,6 +105,34 @@ logger.info(f"Processing study {study_id}")
    - Pure function design: accept explicit parameters, no side effects from environment
    - DICOM-SEG output generation with schema definitions
 
+**Error Handling Pattern** (Knuth & Linus Principles):
+
+The system uses an "Error Context First" pattern for robust error handling:
+
+1. **ErrorContext Extraction**: Before any business logic, extract all error handling data into an immutable context object
+2. **Unified Error Handler**: All exception types (ValueError, AssertionError, Exception) use the same handler
+3. **Fail-Safe Notifications**: DCOP events and platform notifications are sent if data is available, skipped otherwise (never throw)
+4. **Structured Failure Results**: Return JSON with error type, message, and context for debugging
+
+```python
+# Pattern in code_ai/task/task_pipeline.py
+ctx = _extract_error_context(func_params)  # FIRST operation
+try:
+    # Business logic...
+except ValueError as e:
+    return _handle_series_error(ctx, e, "ValueError")
+except AssertionError as e:
+    return _handle_series_error(ctx, e, "AssertionError")
+except Exception as e:
+    return _handle_series_error(ctx, e, "Exception")
+```
+
+Key components:
+- `ErrorContext` dataclass: study_uid, inference_id, model_id, api_url, etc.
+- `_try_send_dcop_failed()`: Sends SERIES_INFERENCE_FAILED event
+- `_try_send_inference_failed()`: Sends platform failure notification
+- `_handle_series_error()`: Unified error handler for all exception types
+
 **Configuration Pattern** (Pure Function Architecture):
 - **Single Source of Truth**: `backend/app/config/loader.py` reads all environment variables
 - **Immutable Config**: `BackendConfig`, `PathConfig`, `APIConfig` dataclasses (frozen=True)
