@@ -642,6 +642,8 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
             detect_result = self._detect_from_filesystem(study_uid, series_uid)
             if detect_result:
                 rename_type, study_id = detect_result
+            else:
+                continue
 
             if rename_type in ["DWI0", "DWI1000"] :
                 # 【DWI 扩展】：Series = (UID, TargetLabel)
