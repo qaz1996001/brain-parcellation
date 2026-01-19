@@ -14,6 +14,7 @@ import hashlib
 import json
 import datetime
 import os
+import traceback
 from typing import List, Dict, Tuple, Any, Optional
 
 from uuid import UUID, uuid4
@@ -638,7 +639,9 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         # 【主循环：对每个 series_uid 验证并扩展】
         for series_uid in series_uids:
             # 检测是否 DWI（从文件系统读取 DICOM）
-            rename_type, study_id = self._detect_from_filesystem(study_uid, series_uid)
+            detect_result = self._detect_from_filesystem(study_uid, series_uid)
+            if detect_result:
+                rename_type, study_id = detect_result
 
             if rename_type in ["DWI0", "DWI1000"] :
                 # 【DWI 扩展】：Series = (UID, TargetLabel)
@@ -961,7 +964,6 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         try:
             config = load_backend_config_from_env(fail_safe=True)
             raw_dicom_base = str(config.paths.path_raw_dicom)
-
             # Infer path: {PATH_RAW_DICOM}/{study_uid}/{series_uid}
             inferred_path = os.path.join(raw_dicom_base, study_uid, series_uid)
 
@@ -1380,6 +1382,8 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
                 result = await self.queue_series_inference(req, batch_id=batch_id)
                 results.append(result)
             except Exception as e:
+                logger.error(f"Failed to queue inference {batch_id}: {e}")
+                logger.error(traceback.format_exc())
                 logger.error(
                     f"Failed to process request for study {req.study_uid}: {e}"
                 )
