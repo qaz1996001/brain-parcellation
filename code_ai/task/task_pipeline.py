@@ -45,17 +45,15 @@ Usage:
 import json
 import os
 import pathlib
+import shutil
 import subprocess
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Any, Literal
+from uuid import uuid4
 
-import httpx
-from funboost import Booster,fct
-from funboost.core.serialization import Serialization
+import pydicom
+from funboost import Booster, fct
 import nb_log
-# 設置日誌記錄器
-logger = nb_log.LogManager('task_pipeline_inference_queue').get_logger_and_add_handlers(
-    log_filename='task_pipeline_inference_queue.log'
-)
 
 from backend.app.sync.schemas import DCOPStatus, DCOPEventRequest
 from backend.app.sync.urls import SYNC_PROT_OPE_NO
@@ -124,25 +122,303 @@ def _extract_error_context(func_params: Dict[str, Any]) -> ErrorContext:
     )
 
 
-@Booster(BoosterParamsMyAI(queue_name ='task_pipeline_inference_queue',
-                           user_custom_record_process_info_func = save_result_status_to_sqlalchemy,
-                           qps=1,
-                           ))
-def task_pipeline_inference(func_params  : Dict[str,any]):
-    from code_ai.task.task_dicom2nii import call_post_httpx
-    upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-    path_process   = os.getenv("PATH_PROCESS")
-    path_cmd_tools = os.path.join(path_process, 'Deep_cmd_tools')
-    path_json      = os.getenv("PATH_JSON")
-    path_log       = os.getenv("PATH_LOG")
-    # 建置資料夾
-    os.makedirs(path_json, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_cmd_tools, exist_ok=True)  # 如果資料夾不存在就建立，
-    os.makedirs(path_log, exist_ok=True)  # 如果資料夾不存在就建立，
+def _try_send_dcop_failed(ctx: ErrorContext, error_msg: str) -> bool:
+    """嘗試發送 DCOP 失敗事件 - 不會拋出異常。
 
-    nifti_study_path = func_params['nifti_study_path']
-    dicom_study_path = func_params['dicom_study_path']
+    【Linus Good Taste】：有資料就發，沒有就跳過，不需要 if/else 分支在呼叫端
+
+    Args:
+        ctx: 錯誤處理上下文
+        error_msg: 錯誤訊息
+
+    Returns:
+        bool: 是否成功發送
+    """
+    from code_ai.task.task_dicom2nii import call_post_httpx
+
+    # 檢查必要資料
+    if not ctx.api_url or not ctx.study_uid or not ctx.study_id:
+        logger.warning(
+            f"Cannot send DCOP_FAILED: missing required data "
+            f"(api_url={bool(ctx.api_url)}, study_uid={bool(ctx.study_uid)}, "
+            f"study_id={bool(ctx.study_id)})"
+        )
+        return False
+
+    try:
+        api_url = f"{ctx.api_url}{SYNC_PROT_OPE_NO}"
+        dcop_event = DCOPEventRequest(
+            study_uid=ctx.study_uid,
+            series_uid=ctx.series_uids[0] if len(ctx.series_uids) == 1 else None,
+            study_id=ctx.study_id,
+            ope_no=DCOPStatus.SERIES_INFERENCE_FAILED.value,
+            tool_id="SERIES_INFERENCE_TOOL",
+            params_data={
+                "inference_id": ctx.inference_id,
+                "series_uids": ctx.series_uids,
+                "model_id": ctx.model_id,
+                "error_source": "task_pipeline",
+            },
+            result_data={
+                "error": error_msg,
+                "all_success": False,
+            },
+        )
+        call_post_httpx.push(
+            {
+                "url": api_url,
+                "data": dcop_event.model_dump_json(),
+            }
+        )
+        logger.info(
+            f"Posted SERIES_INFERENCE_FAILED for inference_id={ctx.inference_id}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to send DCOP_FAILED event: {e}")
+        return False
+
+
+def _try_send_inference_failed(ctx: ErrorContext) -> bool:
+    """嘗試發送平台推論失敗通知 - 不會拋出異常。
+
+    【Linus Good Taste】：有資料就發，沒有就跳過
+
+    Args:
+        ctx: 錯誤處理上下文
+
+    Returns:
+        bool: 是否成功發送
+    """
+    from code_ai.pipeline.upload.inference_complete import upload_inference_failed
+
+    # 檢查必要資料
+    if not ctx.ai_app_inference_complete or not ctx.study_uid:
+        logger.debug(
+            f"Skipping inference_failed notification: "
+            f"ai_app_inference_complete={bool(ctx.ai_app_inference_complete)}, "
+            f"study_uid={bool(ctx.study_uid)}"
+        )
+        return False
+
+    try:
+        # 解析 model_id 到 model_name
+        model_name = _resolve_model_name_for_notification(ctx.model_id)
+
+        result = upload_inference_failed(
+            url=ctx.ai_app_inference_complete,
+            study_instance_uid=ctx.study_uid,
+            model_name=model_name,
+        )
+        if result:
+            logger.info(
+                f"Sent inference_failed notification for study_uid={ctx.study_uid}"
+            )
+            return True
+        else:
+            logger.warning("upload_inference_failed returned None")
+            return False
+
+    except Exception as e:
+        logger.error(f"Failed to send inference_failed notification: {e}")
+        return False
+
+
+# Type alias for model names used in notification API
+ModelNameLiteral = Literal["cmb_model", "aneurysm_model"]
+
+
+def _resolve_model_name_for_notification(model_id: str) -> ModelNameLiteral:
+    """解析 model_id 到通知用的 model_name。
+
+    【Knuth 精確性】：明確的映射關係
+
+    Args:
+        model_id: 模型識別碼（可能是 UUID 或名稱）
+
+    Returns:
+        ModelNameLiteral: 通知用的 model_name ("cmb_model" 或 "aneurysm_model")
+    """
+    # 嘗試解析為 InferenceEnum
+    try:
+        inference_enum = _resolve_model_id_to_inference_enum(model_id)
+        # 映射 InferenceEnum 到通知 API 的 model_name
+        # 注意：目前 API 只支援 "cmb_model" 和 "aneurysm_model"
+        enum_to_name: Dict[InferenceEnum, ModelNameLiteral] = {
+            InferenceEnum.CMB: "cmb_model",
+            InferenceEnum.Aneurysm: "aneurysm_model",
+        }
+        return enum_to_name.get(inference_enum, "cmb_model")
+    except (ValueError, KeyError):
+        # 無法解析，返回預設值
+        logger.warning(
+            f"Cannot resolve model_id '{model_id}' to model_name, using cmb_model"
+        )
+        return "cmb_model"
+
+
+def _handle_series_error(ctx: ErrorContext, error: Exception, error_type: str) -> str:
+    """統一的 Series Level 錯誤處理。
+
+    【Knuth 不變量】：保證所有錯誤都會觸發 DCOP 和通知（如果資料可用）
+    【Linus Good Taste】：消除所有特殊情況，所有錯誤走同一條路徑
+
+    Args:
+        ctx: 錯誤處理上下文
+        error: 捕獲的異常
+        error_type: 錯誤類型名稱 ("ValueError", "AssertionError", "Exception")
+
+    Returns:
+        str: JSON 格式的失敗結果
+    """
+    error_msg = str(error)
+
+    # 1. Log（永遠執行）
+    logger.error(
+        f"[{error_type}] Series inference failed: "
+        f"inference_id={ctx.inference_id}, study_uid={ctx.study_uid}, "
+        f"series_count={len(ctx.series_uids)}, error={error_msg}"
+    )
+
+    # 2. DCOP 事件（有資料就發）
+    _try_send_dcop_failed(ctx, error_msg)
+
+    # 3. 平台通知（有資料就發）
+    _try_send_inference_failed(ctx)
+
+    # 4. 返回結構化失敗結果
+    return json.dumps(
+        [
+            {
+                "status": "failed",
+                "error_type": error_type,
+                "error": error_msg,
+                "inference_id": ctx.inference_id,
+                "study_uid": ctx.study_uid,
+                "series_uids": ctx.series_uids,
+            }
+        ]
+    )
+
+
+# =============================================================================
+# Path Extraction Utilities
+# =============================================================================
+
+
+def _extract_path_from_params(
+    func_params: Dict[str, Any], param_name: str, env_var_name: str
+) -> str:
+    """Extract path from task parameters with fallback to environment variable.
+
+    This utility function implements the parameter injection attern for task path configuration.
+    It first checks func_params for the path, then falls back to environment variables if not found.
+    This enables dual deployment where backends can pass paths as parameters to shared workers.
+
+    Args:
+        func_params: Task parameters dictionary from dispatcher
+        param_name: Parameter key to extract (e.g., 'path_process')
+        env_var_name: Environment variable name for fallback (e.g., 'PATH_PROCESS')
+
+    Returns:
+        str: The path value from parameters or environment
+
+    Raises:
+        ValueError: If path not found in parameters or environment
+    """
+    path_value = func_params.get(param_name)
+
+    if path_value is None:
+        logger.warning(
+            f"Path parameter '{param_name}' not found in task parameters, "
+            f"falling back to environment variable '{env_var_name}'."
+        )
+        path_value = os.getenv(env_var_name)
+
+        if path_value is None:
+            raise ValueError(
+                f"{param_name} must be provided in task parameters or "
+                f"{env_var_name} environment variable must be set"
+            )
+
+    return path_value
+
+
+# =============================================================================
+# 統一入口 (Unified Entry Point)
+# =============================================================================
+
+
+@Booster(
+    BoosterParamsMyAI(
+        queue_name="task_pipeline_inference_queue",
+        qps=1,
+    )
+)
+def task_pipeline_inference(func_params: Dict[str, Any]):
+    """
+    統一推論入口：根據 func_params 結構判斷 Study/Series Level。
+
+    Linus: "Data structure is the documentation"
+    - 有 series_uids → Series Level（新功能）
+    - 沒有 series_uids → Study Level（原有邏輯）
+
+    單一 Queue + qps=1 = 天然 GPU 互斥，無需額外協調機制。
+    """
+    if "series_uids" in func_params:
+        logger.info(
+            f"[Series Level] Processing {len(func_params['series_uids'])} series"
+        )
+        return _task_series_pipeline_inference(func_params)
+    else:
+        study_id = func_params.get("study_id", "unknown")
+        logger.info(f"[Study Level] Processing study: {study_id}")
+        return _task_study_pipeline_inference(func_params)
+
+
+# =============================================================================
+# Study Level（原有邏輯，完全保留）
+# =============================================================================
+
+
+def _task_study_pipeline_inference(func_params: Dict[str, Any]):
+    """
+    Study Level 推論 - 處理整個 study 的所有 series。
+
+    這是原有的 task_pipeline_inference 邏輯，完全不變。
+    """
+    from code_ai.task.task_dicom2nii import call_post_httpx
+
+    upload_data_api_url = func_params.get("upload_data_api_url")
+    if upload_data_api_url is None:
+        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
+        if upload_data_api_url is None:
+            raise ValueError(
+                "upload_data_api_url must be provided in task parameters or "
+                "UPLOAD_DATA_API_URL environment variable must be set"
+            )
+
+    path_process = _extract_path_from_params(
+        func_params, "path_process", "PATH_PROCESS"
+    )
+    path_cmd_tools = os.path.join(path_process, "Deep_cmd_tools")
+    path_json = _extract_path_from_params(func_params, "path_json", "PATH_JSON")
+    path_log = _extract_path_from_params(func_params, "path_log", "PATH_LOG")
+    path_root = _extract_path_from_params(func_params, "path_root", "PATH_ROOT")
+
+    os.makedirs(path_json, exist_ok=True)
+    os.makedirs(path_log, exist_ok=True)
+    os.makedirs(path_cmd_tools, exist_ok=True)
+
+    nifti_study_path = func_params["nifti_study_path"]
+    dicom_study_path = func_params["dicom_study_path"]
+
+    inference_item_cmd = build_inference_cmd(
+        pathlib.Path(nifti_study_path),
+        pathlib.Path(dicom_study_path),
+        path_root=path_root,
+    )
 
     # 防禦性檢查：確保 build_inference_cmd 返回有效物件
     if inference_item_cmd is None:
@@ -160,9 +436,7 @@ def task_pipeline_inference(func_params  : Dict[str,any]):
         )
     else:
         temp_id = os.path.basename(dicom_study_path)
-        cmd_output_path = os.path.join(path_cmd_tools, f'{temp_id}_cmd.json')
-    with open(cmd_output_path, 'w') as f:
-        f.write(json.dumps(inference_item_cmd.model_dump()['cmd_items']))
+        cmd_output_path = os.path.join(path_cmd_tools, f"{temp_id}_cmd.json")
 
     with open(cmd_output_path, "w") as f:
         f.write(json.dumps(inference_item_cmd.model_dump()["cmd_items"]))
