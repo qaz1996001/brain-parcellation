@@ -967,6 +967,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
         try:
             config = load_backend_config_from_env(fail_safe=True)
             raw_dicom_base = str(config.paths.path_raw_dicom)
+            logger.info(f"_infer_raw_dicom_path {raw_dicom_base}")
             # Infer path: {PATH_RAW_DICOM}/{study_uid}/{series_uid}
             inferred_path = os.path.join(raw_dicom_base, study_uid, series_uid)
 
