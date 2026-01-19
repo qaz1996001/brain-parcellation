@@ -458,6 +458,7 @@ class DCOPEventInferenceService(BaseRepositoryService[DCOPEventModel]):
 
         # 1. 推断 raw_dicom 路径
         raw_dicom_path = self._infer_raw_dicom_path(study_uid, series_uid)
+        logger.info(f"_detect_from_filesystem raw_dicom_path {raw_dicom_path}")
         if not raw_dicom_path or not os.path.exists(raw_dicom_path):
             logger.debug(
                 f"Cannot detect DWI for {series_uid}: raw_dicom not found at {raw_dicom_path}"
