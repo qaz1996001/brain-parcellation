@@ -207,8 +207,8 @@ async def main():
     print("=== 開始下載 DICOM 檔案 ===\n")
 
     # 設定
-    UPLOAD_DATA_DICOM_SEG_URL = "http://10.103.51.1:28042"
-    output_directory = pathlib.Path("/home/david/ai-inference-dicom-file-testing")
+    UPLOAD_DATA_DICOM_SEG_URL = "http://10.103.51.1:8042"
+    output_directory = pathlib.Path("/home/david/ai-inference-dicom-file")
 
     # 創建客戶端
     async_client = AsyncOrthanc(
