@@ -219,20 +219,21 @@ async def main():
     )
 
     study_uid_list = [
-        "58e16e38-2e7f9a4a-9c26a415-f55b1725-ffa1288d",
+        "2f7f4996-7143fcff-47d700ec-a5b31fac-fb0b65be",
     ]
 
     series_uid_list = [
         # T1
-        ("2c4bc8a9-2cd5576d-776c485f-180b3212-5c708eb1", "T1"),
+        ("38dc9f10-b62b878f-762b3d23-9b7fe801-f78744b5", "T1"),
         # T2 FLAIR
-        ("a4e02ca3-f65e3730-4666e4da-992694b1-5a349090", "T2 FLAIR"),
+        # ("a4e02ca3-f65e3730-4666e4da-992694b1-5a349090", "T2 FLAIR"),
         # SWAN
-        ("fb9ec858-3790e92e-ddf5d73b-8cfcea20-63d5499f", "SWAN"),
+        ("639bcc76-d9215eea-2719c014-7be36d31-a4c4eb78", "SWAN"),
         # DWI
-        ("063e719-26189a06-6e7e1453-6f5fe3ef-972620f6", "DWI"),
-        # ADC
-        ("38acec51-987b6c78-9dce8ee1-0f1379e3-57d61fe7", "ADC")
+        # ("063e719-26189a06-6e7e1453-6f5fe3ef-972620f6", "DWI"),
+        # # ADC
+        # ("38acec51-987b6c78-9dce8ee1-0f1379e3-57d61fe7", "ADC")
+        ("eae888be-bedbb4e9-1d0c5185-2ad1709d-1e1f3212","MRA_BRAIN")
     ]
 
     try:
