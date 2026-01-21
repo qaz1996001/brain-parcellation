@@ -553,7 +553,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             for url, events in checkpoint_map.items():
                 try:
                     # Linus: 傳送完整 context（API 端 O(觸發) vs O(所有)）
-                    payload = {"events": [e.model_dump() for e in events]}
+                    # Router 期望 List[DCOPEventRequest] 作為 body
+                    payload = [e.model_dump() for e in events]
                     response = await client.post(url, json=payload)
 
                     # 處理 response（observability + return value）
