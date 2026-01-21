@@ -35,7 +35,7 @@ import logging
 import os
 import pathlib
 import traceback
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Set
 from collections import defaultdict
 import re
 import httpx
@@ -795,18 +795,92 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     # - "The dumbest but clearest way possible" → synchronous write
     # =========================================================================
 
+    async def _check_events_exist(
+        self,
+        session: AsyncSession,
+        events: List[DCOPEventRequest],
+    ) -> Set[Tuple[str, str, str, str]]:
+        """
+        批量檢查事件是否已存在（1 次查詢，消除 N+1）。
+
+        Linus: "Good programmers worry about data structures."
+
+        使用 tuple_ + in_ 進行批量查詢，避免逐個事件檢查造成的 N+1 問題。
+        回傳已存在的事件 key 集合，讓 caller 可以快速判斷是否需要跳過。
+
+        Parameters
+        ----------
+        session : AsyncSession
+            資料庫會話。
+        events : List[DCOPEventRequest]
+            待檢查的事件列表。
+
+        Returns
+        -------
+        Set[Tuple[str, str, str, str]]
+            已存在的事件 key 集合：{(tool_id, study_uid, series_uid, ope_no)}
+
+        Examples
+        --------
+        >>> existing = await self._check_events_exist(session, events)
+        >>> ("DICOM_TOOL", "abc-123", "def-456", "100.095") in existing
+        True  # 此事件已存在，應跳過
+        """
+        if not events:
+            return set()
+
+        # 構建查詢的 key 集合
+        keys = {
+            (
+                e.tool_id,
+                e.study_uid,
+                e.series_uid or "",
+                e.ope_no,
+            )
+            for e in events
+        }
+
+        # 批量查詢已存在的事件（1 次查詢）
+        stmt = select(
+            DCOPEventModel.tool_id,
+            DCOPEventModel.study_uid,
+            DCOPEventModel.series_uid,
+            DCOPEventModel.ope_no,
+        ).where(
+            tuple_(
+                DCOPEventModel.tool_id,
+                DCOPEventModel.study_uid,
+                DCOPEventModel.series_uid,
+                DCOPEventModel.ope_no,
+            ).in_(keys)
+        )
+
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        # 回傳已存在的 key 集合
+        return {(r.tool_id, r.study_uid, r.series_uid or "", r.ope_no) for r in rows}
+
     async def write_events_sync(
         self, data: List[DCOPEventRequest]
     ) -> List[DCOPEventModel]:
         """
-        同步寫入事件到資料庫。
+        同步寫入事件到資料庫（冪等）。
 
         此方法確保在返回前資料已持久化到資料庫。相比 post_ope_no_task 的
         背景任務模式，此方法保證：
         - 若返回成功，資料一定在資料庫中
         - 若發生錯誤，異常會被拋出（不會靜默失敗）
+        - **冪等性**：重複的事件會被自動跳過（不會重複寫入）
 
-        Linus: "The dumbest but clearest way possible."
+        Linus: "Good code has no special cases."
+
+        冪等性設計（2026-01-21）
+        -----------------------
+        使用批量查詢檢查事件是否已存在，避免重複寫入：
+        - 舊實現: 無檢查，重複事件會產生多筆記錄
+        - 新實現: 1 次批量查詢 + 跳過已存在事件
+        - 效果: 同一 (tool_id, study_uid, series_uid, ope_no) 只會有 1 筆記錄
 
         Parameters
         ----------
@@ -816,7 +890,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         Returns
         -------
         List[DCOPEventModel]
-            已寫入的事件記錄列表。
+            **新寫入**的事件記錄列表（已存在的不會包含在內）。
 
         Raises
         ------
@@ -828,15 +902,37 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         >>> events = [DCOPEventRequest(study_uid="abc", ope_no="100.095", ...)]
         >>> records = await service.write_events_sync(events)
         >>> # 此時資料已確定在資料庫中
+        >>>
+        >>> # 重複呼叫不會產生新記錄（冪等）
+        >>> records2 = await service.write_events_sync(events)
+        >>> len(records2)
+        0  # 已存在，跳過
         """
         if not data:
             return []
 
         written_records: List[DCOPEventModel] = []
+        skipped_count = 0
 
         async with self.session_manager.get_session() as session:
+            # Step 1: 批量檢查已存在的事件（1 次查詢，消除 N+1）
+            existing_keys = await self._check_events_exist(session, data)
+
             for dcop_event in data:
-                # 建立事件記錄
+                # Step 2: 構建 key 並檢查是否已存在
+                event_key = (
+                    dcop_event.tool_id,
+                    dcop_event.study_uid,
+                    dcop_event.series_uid or "",
+                    dcop_event.ope_no,
+                )
+
+                if event_key in existing_keys:
+                    # Linus: 資料結構告訴我們該做什麼 - 跳過已存在的事件
+                    skipped_count += 1
+                    continue
+
+                # Step 3: 建立新事件記錄
                 new_data_obj = await DCOPEventModel.create_event_ope_no(
                     tool_id=dcop_event.tool_id,
                     study_uid=dcop_event.study_uid,
@@ -858,14 +954,18 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 session.add(new_data_obj)
                 written_records.append(new_data_obj)
 
-            # 單次提交所有事件（原子性）
-            await session.commit()
+            # Step 4: 單次提交所有新事件（原子性）
+            if written_records:
+                await session.commit()
 
-            # 刷新所有記錄以獲取資料庫生成的值
-            for record in written_records:
-                await session.refresh(record)
+                # 刷新所有記錄以獲取資料庫生成的值
+                for record in written_records:
+                    await session.refresh(record)
 
-        self.logger.info(f"write_events_sync: wrote {len(written_records)} events")
+        self.logger.info(
+            f"write_events_sync: wrote {len(written_records)} events, "
+            f"skipped {skipped_count} duplicates"
+        )
         return written_records
 
     async def trigger_checkpoints_async(
@@ -1276,13 +1376,24 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
     async def study_series_nifti_tool(self, data: List[DCOPEventNIFTITOOLRequest]):
         """
-        建立
-           DCOPStatus.STUDY_CONVERTING
-           DCOPStatus.SERIES_CONVERTING
-           DCOPStatus.SERIES_CONVERSION_COMPLETE
-           DCOPStatus.STUDY_CONVERSION_COMPLETE
-        """
+        建立 NIFTI 轉檔相關事件（冪等）。
 
+        此方法處理 NIFTI 轉檔流程中的狀態轉遷事件：
+        - DCOPStatus.STUDY_CONVERTING (200.150)
+        - DCOPStatus.SERIES_CONVERTING (200.155)
+        - DCOPStatus.SERIES_CONVERSION_COMPLETE (200.195)
+        - DCOPStatus.STUDY_CONVERSION_COMPLETE (200.200)
+
+        冪等性設計（2026-01-21）
+        -----------------------
+        Linus: "Good code has no special cases."
+
+        對於 STUDY_CONVERTING 事件，會先檢查是否已存在：
+        - 若已存在：跳過建立，避免重複
+        - 若不存在：建立新事件並觸發後續轉檔流程
+
+        這解決了外部系統重複觸發導致的事件重複問題。
+        """
         from code_ai import load_dotenv
 
         load_dotenv()
@@ -1291,7 +1402,28 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             match dcop.ope_no:
                 case DCOPStatus.STUDY_CONVERTING.value:
                     async with self.session_manager.get_session() as session:
-                        # DICOM_TOOL
+                        # =====================================================
+                        # Step 1: 冪等性檢查 - STUDY_CONVERTING 是否已存在
+                        # Linus: "Good programmers worry about data structures."
+                        # =====================================================
+                        exists_query = select(DCOPEventModel).where(
+                            and_(
+                                DCOPEventModel.tool_id == dcop.tool_id,
+                                DCOPEventModel.study_id == dcop.study_id,
+                                DCOPEventModel.ope_no == DCOPStatus.STUDY_CONVERTING.value,
+                            )
+                        ).limit(1)
+
+                        if (await session.execute(exists_query)).first():
+                            self.logger.info(
+                                f"STUDY_CONVERTING already exists for study_id={dcop.study_id}, "
+                                f"skipping (idempotent)"
+                            )
+                            continue  # ← 已存在，跳過
+
+                        # =====================================================
+                        # Step 2: 查詢關聯的 DICOM_TOOL 事件以取得 study_uid
+                        # =====================================================
                         conf_query = select(
                             DCOPEventModel,
                         ).where(
@@ -1310,6 +1442,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         if first_result is None:
                             continue
                         dcop_event = first_result[0]
+
+                        # =====================================================
+                        # Step 3: 建立 STUDY_CONVERTING 事件
+                        # =====================================================
                         study_transfer_complete_data = (
                             await DCOPEventModel.create_event_ope_no(
                                 tool_id=dcop.tool_id,
@@ -1332,6 +1468,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         session.add(study_transfer_complete_data)
                         await session.commit()
                         await session.refresh(study_transfer_complete_data)
+
+                        self.logger.info(
+                            f"STUDY_CONVERTING created for study_id={dcop.study_id}, "
+                            f"study_uid={dcop_event.study_uid}"
+                        )
+
+                        # Step 4: 觸發後續轉檔流程
                         await self.nifti_tool_get_series_info(
                             dcop_event.study_uid, session
                         )
