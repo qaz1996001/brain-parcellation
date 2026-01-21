@@ -211,14 +211,15 @@ def get_study_folder_name(dicom_ds):
     '12345678_20240101_MR_ACC123456'
     """
     # Implement actual logic based on DICOM attributes
-    modality = dicom_ds[0x08, 0x60].value
-    patient_id = dicom_ds[0x10, 0x20].value
-    accession_number = dicom_ds[0x08, 0x50].value
+    # 使用 str().strip() 清理 DICOM 標籤值，移除可能的控制字符（如 \r）
+    modality = str(dicom_ds[0x08, 0x60].value).strip()
+    patient_id = str(dicom_ds[0x10, 0x20].value).strip()
+    accession_number = str(dicom_ds[0x08, 0x50].value).strip()
     study_date = dicom_ds.get((0x08, 0x20), None)
     if study_date is None:
         return None
     else:
-        study_date = study_date.value
+        study_date = str(study_date.value).strip()
     return f'{patient_id}_{study_date}_{modality}_{accession_number}'
 
 

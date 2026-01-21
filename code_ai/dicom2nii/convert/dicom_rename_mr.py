@@ -2490,15 +2490,15 @@ class ConvertManager:
         Returns:
         str: The generated study folder name.
         """
-        modality = dicom_ds[0x08, 0x60].value
-        patient_id = dicom_ds[0x10, 0x20].value
-        accession_number = dicom_ds[0x08, 0x50].value
+        modality = str(dicom_ds[0x08, 0x60].value).strip()
+        patient_id = str(dicom_ds[0x10, 0x20].value).strip()
+        accession_number = str(dicom_ds[0x08, 0x50].value).strip()
         # (0008,0020)	Study Date	20160722
         study_date = dicom_ds.get((0x08, 0x20), None)
         if study_date is None:
             return None
         else:
-            study_date = study_date.value
+            study_date = str(study_date.value).strip()
         return f"{patient_id}_{study_date}_{modality}_{accession_number}"
 
     def rename_dicom_path(self, dicom_ds: FileDataset):
