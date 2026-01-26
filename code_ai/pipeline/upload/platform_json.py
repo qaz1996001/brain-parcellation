@@ -8,7 +8,7 @@ import warnings
 import httpx
 import orjson
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 import os
 import argparse
 from code_ai import load_dotenv

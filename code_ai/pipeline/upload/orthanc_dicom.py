@@ -18,7 +18,7 @@ import aiofiles
 import warnings
 import pyorthanc
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 import os
 import argparse
 from pyorthanc import Orthanc, AsyncOrthanc
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 # import warnings
 # import pyorthanc
 #
-# warnings.filterwarnings("ignore")  # 忽略警告输出
+# warnings.filterwarnings("ignore")  # 忽略警告輸出
 # import os
 # import argparse
 # from pyorthanc import Orthanc,AsyncOrthanc
