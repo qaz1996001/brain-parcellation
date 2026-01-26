@@ -79,6 +79,7 @@ from fastapi import (
     Query,
     HTTPException,
 )
+from fastapi.responses import JSONResponse
 from fastapi_cache import FastAPICache
 from advanced_alchemy.extensions.fastapi import (
     service,
@@ -224,13 +225,16 @@ async def post_study_uuid(
     if not study_ids:
         raise HTTPException(
             status_code=422,
-            detail="缺少 Study UID（需提供 ids 或 study_uid 之一）"
+            detail="缺少 ids"
         )
 
     # 建立初始事件並返回
     # Convert OrthancID list to Optional[str] list
     study_ids_str: List[Optional[str]] = [str(uid) if uid is not None else None for uid in study_ids]
-    result_list = await dcop_event_service.schedule_new_studies(study_ids_str)
+    result_list = await dcop_event_service.schedule_new_studies(
+        study_ids_str,
+        request.needFollowup
+    )
     logger.info("post_study_uuid scheduled=%s", len(result_list))
 
     # 排程後台任務：擷取 Series 資訊
@@ -238,15 +242,6 @@ async def post_study_uuid(
         dcop_event_service.dicom_tool_get_series_info, result_list
     )
 
-    # 若指定了前驅 Study，建立時#序鏈結
-    #link_target = request.study_uid or (study_ids[0] if len(study_ids) == 1 else None)
-    #if request.prev_study_uid and link_target:
-     #   background_tasks.add_task(
-         #   dcop_event_service.link_prev_study,
-       #     link_target,
-    #        request.prev_study_uid,
-     #   )
-    # 將資料庫模型轉換為 Pydantic schema（from_attributes=True）
     return [DCOPEventRequest.model_validate(event) for event in result_list]
 
 
@@ -269,7 +264,7 @@ async def get_ope_no(
                 cast(
                     FilterConfig,
                     {
-                        "id_filter": str,  # type: ignore[dict-item]
+                        "id_filter": str,
                         "pagination_type": "limit_offset",
                         "search": "study_uid,study_id,ope_no,tool_id",
                         "search_ignore_case": True,
@@ -507,7 +502,7 @@ async def post_check_study_series_transfer_complete(
             dcop_event_service.check_study_series_transfer_complete, dcop_event_list
         )
     
-    return Response("post_check_study_series_transfer_complete")
+    return JSONResponse({"status": "ok", "message": "post_check_study_series_transfer_complete"})
 
 
 @router.post(
@@ -655,8 +650,8 @@ async def post_check_study_series_conversion_complete(
         background_tasks.add_task(
             dcop_event_service.check_study_series_conversion_complete, dcop_event_list
         )
-    
-    return Response("post_check_study_series_conversion_complete")
+
+    return JSONResponse({"status": "ok", "message": "post_check_study_series_conversion_complete"})
 
 
 @router.post(
@@ -726,7 +721,7 @@ async def get_events_complex(
                         "search": "params_data,result_data",
                         "search_ignore_case": True,
                         # 日期範圍過濾器
-                        "created_at": True,  # type: ignore[dict-item]
+                        "created_at": True,
                         # 集合過濾器
                         "in_fields": [
                             FieldNameType(name="tool_id", type_hint=str),
@@ -736,17 +731,17 @@ async def get_events_complex(
                             FieldNameType(name="series_uid", type_hint=str),
                         ],
                         # 排序配置
-                        "order_by": [  # type: ignore[dict-item]
+                        "order_by": [
                             "study_uid",
                             "ope_no",
                             "create_time",
                         ],
                         # 分頁配置
                         "pagination_type": "limit_offset",
-                        "limit": 50,  # type: ignore[dict-item]
-                        "offset": 0,  # type: ignore[dict-item]
+                        "limit": 50,
+                        "offset": 0,
                         # ID 過濾器
-                        "id_filter": str,  # type: ignore[dict-item]
+                        "id_filter": str,
                     },
                 )
             )

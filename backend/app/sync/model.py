@@ -96,7 +96,7 @@ class DCOPConfModel(base.DefaultBase):
         comment="操作編號，格式 xxx.xxx"
     )
     
-    # 基本信息欄位
+    # 基本資訊欄位
     ope_name = Column(
         String(36),
         nullable=True,

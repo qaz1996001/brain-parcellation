@@ -123,7 +123,7 @@ def get_sync_settings() -> SyncSettings:
     使用 @lru_cache 裝飾器確保：
     - 只創建一個設定實例（單例模式）
     - 提高性能（避免重複創建）
-    - 配置一致性（所有調用返回同一實例）
+    - 配置一致性（所有呼叫回傳同一實例）
     
     注意：環境變數變更不會自動反映，需要重啟應用程式。
     
@@ -134,7 +134,7 @@ def get_sync_settings() -> SyncSettings:
     >>> print(cache_prefix)
     inference_task
     
-    >>> # 多次調用返回同一實例
+    >>> # 多次呼叫回傳同一實例
     >>> settings1 = get_sync_settings()
     >>> settings2 = get_sync_settings()
     >>> assert settings1 is settings2  # True

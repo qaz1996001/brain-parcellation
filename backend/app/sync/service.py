@@ -126,7 +126,7 @@ def setup_dcop_event_logger() -> logging.Logger:
     log_filename = f"{date_str}.0001.DCOPEventDicomService.log"
     log_filepath = os.path.join(log_dir, log_filename)
 
-    # 創建文件 handler (最大 100MB，輪轉時保留 5 個備份)
+    # 建立檔案 handler (最大 100MB，輪轉時保留 5 個備份)
     file_handler = RotatingFileHandler(
         log_filepath,
         maxBytes=100 * 1024 * 1024,  # 100MB
@@ -142,7 +142,7 @@ def setup_dcop_event_logger() -> logging.Logger:
     )
     file_handler.setFormatter(formatter)
 
-    # 添加文件 handler
+    # 添加檔案 handler
     dcop_logger.addHandler(file_handler)
 
     # 同時輸出到控制台（用於實時監控）
@@ -161,7 +161,7 @@ def _cleanup_old_logs(log_dir: str, days: int = 7) -> None:
     """
     清理指定日期之前的日誌檔案。
 
-    此函數自動清理過期的日誌文件，防止磁盤空間耗盡。
+    此函數自動清理過期的日誌檔案，防止磁碟空間耗盡。
     使用檔案修改時間判斷是否過期。
 
     Parameters
@@ -261,7 +261,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
     ---------------
     對於 DWI (Diffusion Weighted Imaging) 等多輸出序列，系統：
     - 自動檢測序列類型
-    - 掃描文件系統找尋所有輸出（如 DWI0、DWI1000）
+    - 掃描檔案系統找尋所有輸出（如 DWI0、DWI1000）
     - 為每個輸出創建獨立的轉檔任務
     - 等待所有輸出完成後才進入下一階段
 
@@ -343,17 +343,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         self, session: AsyncSession, events: List[DCOPEventRequest]
     ) -> Dict[Tuple[str, str], Tuple[str, str]]:
         """
-        批量加载事件所需的所有配置（1 次查询，消除 N+1）。
+        批量載入事件所需的所有配置（1 次查詢，消除 N+1）。
 
-        此方法体现 Linus "资料结构优先" 哲学：正确的数据结构让代码简单。
-        使用 IN 查询一次性加载所有配置，避免逐个事件查询造成的 N+1 问题。
+        此方法體現 Linus "資料結構優先" 哲學：正確的資料結構讓程式碼簡單。
+        使用 IN 查詢一次性載入所有配置，避免逐個事件查詢造成的 N+1 問題。
 
         Parameters
         ----------
         session : AsyncSession
-            数据库会话。
+            資料庫會話。
         events : List[DCOPEventRequest]
-            待处理的事件列表。
+            待處理的事件列表。
 
         Returns
         -------
@@ -371,7 +371,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         # 提取唯一的 (tool_id, ope_no) 对
         pairs = {(e.tool_id, e.ope_no) for e in events}
 
-        # IN 查询：一次性加载所有配置
+        # IN 查詢：一次性載入所有配置
         stmt = select(
             DCOPConfModel.tool_id,
             DCOPConfModel.ope_no,
@@ -380,7 +380,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         ).where(
             and_(
                 DCOPConfModel.active == 1,
-                # 使用 tuple_ + in_ 进行批量查询
+                # 使用 tuple_ + in_ 進行批量查詢
                 tuple_(DCOPConfModel.tool_id, DCOPConfModel.ope_no).in_(pairs),
             )
         )
@@ -397,23 +397,23 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         config_map: Dict[Tuple[str, str], Tuple[str, str]],
     ) -> List[DCOPEventModel]:
         """
-        批量创建事件对象（0 次 commit，消除 N+1）。
+        批量建立事件物件（0 次 commit，消除 N+1）。
 
-        使用预加载的配置映射，避免逐个事件查询数据库。
+        使用預載入的配置映射，避免逐個事件查詢資料庫。
 
-        Linus 原则：不做不必要的工作（移除无用的 session 参数）。
+        Linus 原則：不做不必要的工作（移除無用的 session 參數）。
 
         Parameters
         ----------
         events : List[DCOPEventRequest]
-            待处理的事件列表。
+            待處理的事件列表。
         config_map : Dict[Tuple[str, str], Tuple[str, str]]
-            预加载的配置映射。
+            預載入的配置映射。
 
         Returns
         -------
         List[DCOPEventModel]
-            创建的事件对象列表（未提交）。
+            建立的事件物件列表（未提交）。
 
         Raises
         ------
@@ -424,7 +424,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         objs = []
         for e in events:
-            # 从预加载的映射查找配置（无查询）
+            # 從預載入的映射查找配置（無查詢）
             key = (e.tool_id, e.ope_no)
             if key not in config_map:
                 raise ValueError(f"No config for {key}")
@@ -435,7 +435,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             uid = e.series_uid if e.series_uid else e.study_uid
             pk = f"{e.tool_id}_{status}_{uid}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
 
-            # 创建事件对象（不提交）
+            # 建立事件物件（不提交）
             obj = DCOPEventModel(
                 VsPrimaryKey=pk,
                 tool_id=e.tool_id,
@@ -676,7 +676,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         此方法用於處理外部系統（如 Orthanc、NIFTI_TOOL）批次上報的事件。
         它會：
-        1. 批量加載配置（1 次查詢）
+        1. 批量載入配置（1 次查詢）
         2. 批量創建事件（無查詢）
         3. 批量提交（1 次 commit）
         4. 收集檢查點 URL（去重）
@@ -750,20 +750,20 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         load_dotenv()
 
         async with self.session_manager.get_session() as session:
-            # 步骤 1: 批量加载配置（1 次查询，消除 N+1）
+            # 步驟 1: 批量載入配置（1 次查詢，消除 N+1）
             config_map = await self._bulk_load_configs(session, data)
 
-            # 步骤 2: 批量创建事件（0 次查询，消除 N+1）
+            # 步驟 2: 批量建立事件（0 次查詢，消除 N+1）
             events = await self._bulk_create_events(data, config_map)
 
             # 步骤 3: 批量添加 + 单次提交（1 次 commit vs 原来的 N 次）
             session.add_all(events)
             await session.commit()
 
-            # 步骤 4: 收集需要触发检查点的 ope_no
+            # 步驟 4: 收集需要觸發檢查點的 ope_no
             checkpoint_ope_nos = self._collect_checkpoint_urls(events)
 
-        # 步骤 5: 获取 URL 并去重
+        # 步驟 5: 取得 URL 並去重
         check_url_set = set()
         for ope_no in checkpoint_ope_nos:
             url = self.get_check_url_by_ope_no(ope_no)
@@ -972,7 +972,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         self, data: List[DCOPEventRequest]
     ) -> Dict[str, Any]:
         """
-        非同步觸發檢查點 API（with response handling）。
+        非同步觸發檢查點 API（with counter-based filtering）。
 
         此方法在資料已持久化後調用，用於觸發下一階段的狀態檢查。
         因為檢查點具有以下特性，所以可以安全地在背景執行：
@@ -980,12 +980,12 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         2. 資料已持久化：即使失敗，資料仍在
         3. 自我修復：下一個事件會再次觸發檢查
 
-        Linus: "Good code has no special cases."
+        Linus: "Good programmers worry about data structures."
 
-        改進設計（2026-01-09）：
-        - 發送完整 event context 給 checkpoint API
-        - 處理並回傳 response data（observability）
-        - 分離關注點：資料準備 vs HTTP 執行
+        改進設計（2026-01-26）：
+        - 【計數器觸發】SERIES_CONVERSION_COMPLETE 使用 Redis 計數器
+        - 只有當所有 series 轉檔完成時才觸發 checkpoint
+        - 消除「最後一個 series」的特殊情況：每個 series 的處理邏輯一致
 
         Parameters
         ----------
@@ -1000,16 +1000,50 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         Notes
         -----
         失敗時只記錄警告，不拋出異常（非關鍵路徑）。
-
-        Examples
-        --------
-        >>> events = [DCOPEventRequest(ope_no="100.095", study_uid="abc", ...)]
-        >>> results = await service.trigger_checkpoints_async(events)
-        >>> results["http://api/sync/study/transfer/complete"]
-        {"completed_studies": ["abc"], "queued_conversions": 1}
         """
-        # Step 1: 資料準備（events → Dict[url, events]）
-        checkpoint_map = self._collect_checkpoint_data(data)
+        # 【計數器觸發】處理 SERIES_CONVERSION_COMPLETE 的計數邏輯
+        # Linus: "消除特殊情況，讓邊緣案例變成正常案例"
+        redis_backend = FastAPICache.get_backend()
+        redis_client = redis_backend.redis
+
+        # 過濾後的事件列表（排除未完成的 study 的 SERIES_CONVERSION_COMPLETE）
+        filtered_data = []
+        triggered_studies = set()  # 追蹤已觸發的 study（避免重複觸發）
+
+        for event in data:
+            if event.ope_no == DCOPStatus.SERIES_CONVERSION_COMPLETE.value:
+                study_id = event.study_id
+                if not study_id:
+                    continue
+
+                # 原子遞增完成計數
+                completed = await redis_client.incr(
+                    f"study:{study_id}:series_completed"
+                )
+                total_bytes = await redis_client.get(
+                    f"study:{study_id}:series_total"
+                )
+                total = int(total_bytes) if total_bytes else None
+
+                self.logger.info(
+                    f"[COUNTER] study={study_id}: completed={completed}/{total}"
+                )
+
+                # 只有全部完成且尚未觸發時才加入
+                if total and int(completed) >= total and study_id not in triggered_studies:
+                    self.logger.info(
+                        f"[TRIGGER] All {total} series completed for {study_id}, "
+                        "will trigger conversion complete check"
+                    )
+                    filtered_data.append(event)
+                    triggered_studies.add(study_id)
+                # else: 尚未完成，跳過觸發 checkpoint
+            else:
+                # 非 SERIES_CONVERSION_COMPLETE 事件，直接加入
+                filtered_data.append(event)
+
+        # Step 1: 資料準備（filtered events → Dict[url, events]）
+        checkpoint_map = self._collect_checkpoint_data(filtered_data)
 
         if not checkpoint_map:
             self.logger.debug("No checkpoints to trigger")
@@ -1117,8 +1151,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         # Process eligible studies for conversion
         if dcop_event_list:
-            if upload_data_api_url is not None:
-                await self._send_events(upload_data_api_url, dcop_event_dump_list)
+            # NOTE: 移除 _send_events 呼叫，避免無限迴圈
+            # 事件已經在資料庫中，重新發送會觸發相同的 checkpoint
             if (
                 upload_data_api_url is not None
                 and path_rename_dicom is not None
@@ -1134,7 +1168,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         return dcop_event_list
 
     async def schedule_new_studies(
-        self, study_ids: List[Optional[str]]
+        self,
+        study_ids: List[Optional[str]],
+        need_followup: Optional[List[Dict[str, Any]]] = None
     ) -> List[DCOPEventModel]:
         """
         排程新 Study 的同步任務（去重並過濾）。
@@ -1143,11 +1179,14 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         1. 自動去重：移除重複的 Study UID
         2. 過濾無效值：移除 None 和空字串
         3. 統一介面：提供更語義化的方法名稱
+        4. 建立 needFollowup 映射，使用 orthancStudyUid 作為鍵值
 
         Parameters
         ----------
         study_ids : list[Optional[str]]
             Study UID 清單（可能包含重複和 None）。
+        need_followup : list[dict], optional
+            需要追蹤的 Study 資訊列表，每個項目應包含 orthancStudyUid 欄位。
 
         Returns
         -------
@@ -1166,6 +1205,16 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         - 消除特殊情況：統一處理重複和無效值
         - 資料結構驅動：使用集合去重而非手動檢查
         """
+        if need_followup is None:
+            need_followup = []
+
+        # 建立 orthancStudyUid → followup 映射
+        followup_by_uid = {
+            entry["orthancStudyUid"]: entry
+            for entry in need_followup
+            if "orthancStudyUid" in entry
+        }
+
         # 去重並過濾無效值
         unique_study_ids = list({uid for uid in study_ids if uid})
 
@@ -1174,9 +1223,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             return []
 
         # 調用實際的建立方法
-        return await self.add_study_new(unique_study_ids)
+        return await self.add_study_new(unique_study_ids, followup_by_uid)
 
-    async def add_study_new(self, data_list: List[str]) -> List[DCOPEventModel]:
+    async def add_study_new(
+        self,
+        data_list: List[str],
+        followup_by_uid: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> List[DCOPEventModel]:
         """
         建立新 Study 的初始事件。
 
@@ -1190,6 +1243,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         ----------
         data_list : list[str]
             Study UID 清單。
+        followup_by_uid : dict[str, dict], optional
+            orthancStudyUid → followup 映射，用於在 params_data 中儲存 needFollowup。
 
         Returns
         -------
@@ -1223,6 +1278,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         """
         from code_ai.task.schema.intput_params import Dicom2NiiParams
         from code_ai import load_dotenv
+
+        if followup_by_uid is None:
+            followup_by_uid = {}
 
         load_dotenv()
 
@@ -1263,7 +1321,13 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                         status=DCOPStatus.STUDY_TRANSFERRING.name,
                         session=session,
                     )
-                    data_transferring.params_data = task_params.get_str_dict()
+                    params_dict = task_params.get_str_dict()
+
+                    # 若有對應的 followup，加入 params_data
+                    if ids in followup_by_uid:
+                        params_dict["needFollowup"] = followup_by_uid[ids]
+
+                    data_transferring.params_data = params_dict
                     session.add(data_transferring)
 
                     # 步驟 4: 提交事務
@@ -1338,7 +1402,11 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         nifti_path: str,
     ) -> None:
         """
-        Initiates the conversion process for each study.
+        Initiates the conversion process for each study (deduplicated).
+
+        Linus: "Good programmers worry about data structures."
+        使用 set 收集唯一的 study_id，消除重複的 HTTP POST 調用。
+        1 個 Study 有 18 個 Series → 18 個 events → 但只需 1 次 POST
 
         Args:
             api_url: Base URL for the upload data API.
@@ -1346,12 +1414,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             dicom_path: Path for renamed DICOM files.
             nifti_path: Path for NIFTI output.
         """
+        # 【去重】按 study_id 去重，避免重複觸發
+        # Linus: 資料結構（set）消除特殊情況
+        unique_study_ids = {event.study_id for event in events if event.study_id}
+
+        self.logger.info(
+            f"[DEDUP] _initiate_conversion_process: "
+            f"{len(events)} events → {len(unique_study_ids)} unique studies"
+        )
 
         url = f"{api_url}{SYNC_PROT_STUDY_NIFTI_TOOL}"
-        for event in events:
-            study_id = event.study_id
-            if study_id is None:
-                continue
+        for study_id in unique_study_ids:
             output_dicom_path = pathlib.Path(os.path.join(str(dicom_path), study_id))
             output_nifti_path = pathlib.Path(nifti_path)
 
@@ -1482,10 +1555,8 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     pass
                     # new_data_obj = await self.create(new_data, auto_commit=True)
 
-        upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
-        url = f"{upload_data_api_url}{SYNC_PROT_STUDY_CONVERSION_COMPLETE_UID}"
-        async with httpx.AsyncClient(timeout=180) as client:
-            await client.post(url=url)
+        # NOTE: SERIES_CONVERSION_COMPLETE 計數器邏輯已移至 trigger_checkpoints_async
+        # 因為 SERIES_CONVERSION_COMPLETE 事件通過 /sync/ope_no 路徑，不經過此方法
 
     async def nifti_tool_get_series_info(
         self, study_uid: str, session: AsyncSession
@@ -1497,7 +1568,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         對於 DWI (Diffusion Weighted Imaging) 等多輸出序列，系統會：
 
         1. 自動檢測序列類型
-        2. 掃描文件系統找尋所有輸出（如 DWI0、DWI1000）
+        2. 掃描檔案系統找尋所有輸出（如 DWI0、DWI1000）
         3. 為每個輸出創建獨立的 NIFTI 轉換任務
         4. 等待所有輸出完成後才進入下一階段
 
@@ -1538,7 +1609,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         - 警告級別: 潛在的問題（如缺失的輸出）
 
         特殊設計特點：
-        - 文件系統掃描容錯：若 result_data 不完整，自動掃描磁盤
+        - 檔案系統掃描容錯：若 result_data 不完整，自動掃描磁碟
         - 重複檢測：避免重複的 rename_dicom_path
         - 任務去重：若快取中已有推論任務，跳過
 
@@ -1548,7 +1619,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
 
         1. 輸入: STUDY_CONVERTING 狀態的 DWI 序列
         2. 檢測: 識別為多輸出序列 (DWI: [DWI0, DWI1000])
-        3. 掃描: 在文件系統中尋找 DWI0 和 DWI1000 目錄
+        3. 掃描: 在檔案系統中尋找 DWI0 和 DWI1000 目錄
         4. 建立: 為 DWI0 創建任務 + 為 DWI1000 創建任務
         5. 入隊: 兩個任務都推送到執行隊列
         6. 結果: 資料庫中有 2 個 SERIES_CONVERTING 記錄
@@ -1923,6 +1994,25 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                     log.info(f"[QUEUE] [{idx}/{len(task_params_list)}] ✅ 任務已發送")
 
                 log.info("[QUEUE] ✅ 所有任務已成功發送到佇列")
+
+                # 【計數器觸發】記錄總任務數到 Redis
+                # Linus: "Good programmers worry about data structures."
+                # 讓資料結構承載「總數」知識，消除「最後一個 series」的特殊情況
+                study_id = dcop_model_list[0].study_id
+                redis_backend = FastAPICache.get_backend()
+                redis_client = redis_backend.redis
+
+                total_tasks = len(dcop_model_list)
+                await redis_client.set(
+                    f"study:{study_id}:series_total", total_tasks, ex=86400
+                )
+                await redis_client.set(
+                    f"study:{study_id}:series_completed", 0, ex=86400
+                )
+                log.info(
+                    f"[COUNTER] 設定 series 計數器: study_id={study_id}, "
+                    f"total={total_tasks}, completed=0"
+                )
             else:
                 log.info("[RESULT] 沒有需要建立的 NIFTI 任務")
         except Exception as e:
@@ -2349,13 +2439,60 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         rename_nifti_path,
         task_pipeline_inference,
     ):
-        """Queue inference tasks for completed studies and send related events."""
+        """Queue inference tasks for completed studies and send related events.
+        
+        此方法負責：
+        1. 從 STUDY_TRANSFERRING 事件中取得 needFollowup 資料
+        2. 建立 STUDY_INFERENCE_READY 事件（含 needFollowup）
+        3. 建立 STUDY_INFERENCE_QUEUED 事件（含 needFollowup）
+        4. 將任務推送到推論佇列
+        """
         redis_backend = FastAPICache.get_backend()
         redis_client = redis_backend.redis  # type: ignore[attr-defined]
+
+        # 批量查詢所有 study 的 STUDY_TRANSFERRING 或 STUDY_TRANSFERRING_RE 事件以取得 needFollowup
+        # NOTE: 需要查詢兩種狀態，因為 rerun 流程會創建 STUDY_TRANSFERRING_RE 事件
+        study_uids = [e.study_uid for e in study_events]
+        followup_by_study = {}
+
+        if study_uids:
+            async with self.session_manager.get_session() as session:
+                sql = text("""
+                    SELECT study_uid, params_data
+                    FROM dcop_event_bt
+                    WHERE study_uid = ANY(:study_uids)
+                    AND ope_no IN (:ope_no, :ope_no_re)
+                """)
+                params = {
+                    "study_uids": study_uids,
+                    "ope_no": DCOPStatus.STUDY_TRANSFERRING.value,
+                    "ope_no_re": DCOPStatus.STUDY_TRANSFERRING_RE.value,
+                }
+                result = await session.execute(sql, params)
+                rows = result.all()
+
+                for row in rows:
+                    if row.params_data and "needFollowup" in row.params_data:
+                        followup_by_study[row.study_uid] = row.params_data["needFollowup"]
 
         for dcop_event in study_events:
             dicom_study_path = rename_dicom_path.joinpath(dcop_event.study_id)
             nifti_study_path = rename_nifti_path.joinpath(dcop_event.study_id)
+
+            # 取得此 study 的 needFollowup（若存在）
+            need_followup = followup_by_study.get(dcop_event.study_uid)
+
+            # 建立 params_data
+            inference_params = {
+                "nifti_study_path": str(nifti_study_path),
+                "dicom_study_path": str(dicom_study_path),
+                "study_uid": dcop_event.study_uid,
+                "study_id": dcop_event.study_id,
+            }
+            
+            # 若有 needFollowup，加入 params_data
+            if need_followup is not None:
+                inference_params["needFollowup"] = need_followup
 
             # Create STUDY_INFERENCE_READY event
             dcop_event_inference_ready = DCOPEventRequest(
@@ -2364,12 +2501,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 study_id=dcop_event.study_id,
                 ope_no=DCOPStatus.STUDY_INFERENCE_READY.value,
                 tool_id="INFERENCE_TOOL",
-                params_data={
-                    "nifti_study_path": str(nifti_study_path),
-                    "dicom_study_path": str(dicom_study_path),
-                    "study_uid": dcop_event.study_uid,
-                    "study_id": dcop_event.study_id,
-                },
+                params_data=inference_params,
             )
             inference_task_key = (
                 f"inference_task:{dcop_event.study_uid},{dcop_event.study_id}"
@@ -2391,6 +2523,10 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 f"Added study_uid: {dcop_event.study_uid} to cache with key: {inference_task_key}"
             )
 
+            # 建立 STUDY_INFERENCE_QUEUED 的 params_data（包含 task_pipeline_id）
+            queued_params = inference_params.copy()
+            queued_params["task_pipeline_id"] = task_pipeline_result.task_id
+
             # Create STUDY_INFERENCE_QUEUED event
             dcop_event_inference_queued = DCOPEventRequest(
                 study_uid=dcop_event.study_uid,
@@ -2398,13 +2534,7 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
                 study_id=dcop_event.study_id,
                 ope_no=DCOPStatus.STUDY_INFERENCE_QUEUED.value,
                 tool_id="INFERENCE_TOOL",
-                params_data={
-                    "nifti_study_path": str(nifti_study_path),
-                    "dicom_study_path": str(dicom_study_path),
-                    "study_uid": dcop_event.study_uid,
-                    "study_id": dcop_event.study_id,
-                    "task_pipeline_id": task_pipeline_result.task_id,
-                },
+                params_data=queued_params,
             )
 
             # Send inference events

@@ -18,7 +18,7 @@ import datetime
 import re
 from typing import List, Annotated, Dict, Any, Optional
 from enum import Enum
-from pydantic import BaseModel, Field, AfterValidator, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, Field, AfterValidator, ConfigDict, field_validator
 
 
 def validate_orthanc_id(v: str) -> str:
@@ -92,86 +92,28 @@ OpeNo = Annotated[
 
 class PostStudyRequest(BaseModel):
     """
-    Study 同步請求載體，支援新舊版本的相容性。
-    
-    此模型用於接收 API 客戶端的 Study 同步請求。為了維持
-    向後相容性，同時支援舊版本的 ids 欄位和新版本的 study_uid 欄位。
-    
-    內部驗證邏輯確保：
-    1. 兩種欄位至少提供一種
-    2. 空字符串被正規化為 None
-    3. None 列表被轉換為空列表
-    
+    Study 同步請求載體。
+
+    用於接收 POST /sync/prot/study 的請求資料，包含：
+    - ids: Study UID 列表（必須提供）
+    - needFollowup: 需要追蹤的 Study 資訊（可選，用於推論階段傳遞）
+
     Attributes
     ----------
     ids : list[OrthancID]
-        舊版本欄位，支援多個 Study UID（向後相容）。
-        預設為空列表。
-    study_uid : OrthancID, optional
-        新版本欄位，單個 Study UID，建議使用。
-    prev_study_uid : OrthancID, optional
-        前一個 Study UID，用於建立時序鏈結。
-    msg : str, optional
-        請求附帶的消息或說明。
-    
-    Methods
-    -------
-    resolved_ids()
-        將輸入正規化為統一的 OrthancID 列表。
-    
-    Examples
-    --------
-    使用新版本 study_uid：
-    
-    >>> req = PostStudyRequest(
-    ...     study_uid="ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30"
-    ... )
-    >>> req.resolved_ids()
-    ['ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30']
-    
-    使用舊版本 ids 列表：
-    
-    >>> req = PostStudyRequest(
-    ...     ids=[
-    ...         "ee5f44b1-e1f0dc1c-8825e04b-d5fb7bae-0373ba30",
-    ...         "11111111-22222222-33333333-44444444-55555555"
-    ...     ]
-    ... )
-    >>> len(req.resolved_ids())
-    2
-    
-    建立 Study 鏈結：
-    
-    >>> req = PostStudyRequest(
-    ...     study_uid="current-123",
-    ...     prev_study_uid="baseline-001"
-    ... )
-    >>> req.resolved_ids()
-    ['current-123']
-    
-    Notes
-    -----
-    Good Taste 設計：
-    - 驗證器消除了特殊情況（None vs []）
-    - resolved_ids() 提供統一的介面
-    - 支援多種輸入格式卻保持簡潔
+        Study UID 列表，使用 Orthanc 格式（40 碼十六進位）。
+    needFollowup : List[Dict[str, Any]]
+        需要追蹤的 Study 資訊列表，每個項目應包含 orthancStudyUid 欄位。
+        此資料會傳遞至 STUDY_INFERENCE_READY 等推論階段事件。
     """
 
     ids: list[OrthancID] = Field(
         default_factory=list,
-        description="舊版本欄位：多個 Study UID（向後相容）"
+        description="Study UID 列表"
     )
-    study_uid: Optional[OrthancID] = Field(
-        default=None,
-        description="新版本欄位：單個 Study UID（建議使用）"
-    )
-    prev_study_uid: Optional[OrthancID] = Field(
-        default=None,
-        description="前一個 Study UID，用於建立時序鏈結"
-    )
-    msg: Optional[str] = Field(
-        default=None,
-        description="請求附帶的消息"
+    needFollowup: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="需要追蹤的 Study 資訊列表（可選）"
     )
 
     @field_validator("ids", mode="before")
@@ -194,53 +136,9 @@ class PostStudyRequest(BaseModel):
             return []
         return value
 
-    @field_validator("study_uid", "prev_study_uid", mode="before")
-    @classmethod
-    def normalize_optional_uid(cls, value: Optional[str]) -> Optional[str]:
-        """
-        正規化可選 UID 欄位，將空字符串轉換為 None。
-        
-        Parameters
-        ----------
-        value : str or None
-            輸入值。
-        
-        Returns
-        -------
-        str or None
-            如果輸入是空字符串或 None，返回 None；否則返回原值。
-        """
-        if value in ("", None):
-            return None
-        return value
-
-    @model_validator(mode="after")
-    def ensure_payload(self) -> "PostStudyRequest":
-        """
-        驗證至少提供了一種必要的 Study 標識符。
-        
-        Raises
-        ------
-        ValueError
-            如果既未提供 ids 也未提供 study_uid。
-        
-        Returns
-        -------
-        PostStudyRequest
-            驗證成功時返回模型實例。
-        """
-        if not self.ids and not self.study_uid:
-            raise ValueError(
-                "至少需提供 ids 或 study_uid 中的一種"
-            )
-        return self
-
     def resolved_ids(self) -> List[OrthancID]:
         """
         將輸入正規化為統一的 OrthancID 清單。
-        
-        優先返回 ids 列表，若為空則返回 study_uid 作為單元素列表。
-        此方法確保調用方總能獲得一致的列表格式。
         
         Returns
         -------
@@ -249,17 +147,11 @@ class PostStudyRequest(BaseModel):
         
         Examples
         --------
-        >>> req = PostStudyRequest(study_uid="abc-123")
-        >>> req.resolved_ids()
-        ['abc-123']
-        
         >>> req = PostStudyRequest(ids=["abc-123", "def-456"])
         >>> req.resolved_ids()
         ['abc-123', 'def-456']
         """
-        if self.ids:
-            return self.ids
-        return [self.study_uid] if self.study_uid else []
+        return self.ids
 
 
 class DCOPEventRequest(BaseModel):
