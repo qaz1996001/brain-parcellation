@@ -16,10 +16,10 @@ import time
 import warnings
 from typing import Optional
 
-import pynvml  # 导包
+import pynvml  # 導入
 import tensorflow as tf
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 
 from code_ai import PYTHON3
 from code_ai.pipeline import pipeline_parser
@@ -85,8 +85,8 @@ def pipeline_aneurysm(
         pynvml.nvmlInit()  # 初始化
         handle = pynvml.nvmlDeviceGetHandleByIndex(
             gpu_n
-        )  # 获取GPU i的handle，后续通过handle来处理
-        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通过handle获取GPU i的信息
+        )  # 取得GPU i的handle，後續通過handle來處理
+        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通過handle取得GPU i的資訊
         gpumRate = memoryInfo.used / memoryInfo.total
         # print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
         if gpumRate < 0.6:

@@ -16,7 +16,7 @@ from code_ai.pipeline import (
 )
 from code_ai.utils.inference import InferenceEnum
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 
 from collections import OrderedDict
 import os
@@ -594,7 +594,7 @@ def pipeline_infarct(
             # print('Dback_v:', Dback_v)
             D_show[D_show == Dback_v] = min_value
 
-            # 正常显示中文字体
+            # 正常顯示中文字體
         # plt.rcParams['font.sans-serif']=['Microsoft YaHei']
         plt.style.use("dark_background")  # 使用黑色當背景色，繪圖風格
         fig = plt.figure()  # 開figure
@@ -661,7 +661,7 @@ def pipeline_infarct(
         # plt.show()   #最後把combine img顯示到jupyter notebook畫面上，以下展示影像，可進行隱藏
         plt.close("all")
 
-        # 正常显示中文字体
+        # 正常顯示中文字體
         # plt.rcParams['font.sans-serif']=['Microsoft YaHei']
         plt.style.use("dark_background")  # 使用黑色當背景色，繪圖風格
         fig = plt.figure()  # 開figure
@@ -740,7 +740,7 @@ def pipeline_infarct(
         plt.close("all")
 
         if len(Infarct_labels_show) > 0:
-            # 正常显示中文字体
+            # 正常顯示中文字體
             # plt.rcParams['font.sans-serif']=['Microsoft YaHei']
             plt.style.use("dark_background")  # 使用黑色當背景色，繪圖風格
             fig = plt.figure()  # 開figure

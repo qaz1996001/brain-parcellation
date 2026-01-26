@@ -18,7 +18,7 @@ import glob
 import shutil
 import warnings
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 import os
 from typing import Optional
 
@@ -26,7 +26,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import time
 import argparse
 import logging
-import pynvml  # 导包
+import pynvml  # 導入套件
 import tensorflow as tf
 from code_ai.pipeline import (
     study_id_pattern,
@@ -91,8 +91,8 @@ def pipeline_synthseg(
         pynvml.nvmlInit()  # 初始化
         handle = pynvml.nvmlDeviceGetHandleByIndex(
             gpu_n
-        )  # 获取GPU i的handle，后续通过handle来处理
-        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通过handle获取GPU i的信息
+        )  # 取得GPU i的handle，後續透過handle來處理
+        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 透過handle取得GPU i的資訊
         gpumRate = memoryInfo.used / memoryInfo.total
         # print('gpumRate:', gpumRate) #先設定gpu使用率小於0.2才跑predict code
 
@@ -186,7 +186,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ID = str(args.ID)
-    Inputs = args.Inputs  # 將列表合併為字符串，保留順序
+    Inputs = args.Inputs  # 將列表合併為字串，保留順序
     InputsDicomDir = args.InputsDicomDir
     # 下面設定各個路徑
     path_output = str(args.Output_folder)

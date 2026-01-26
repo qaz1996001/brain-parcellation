@@ -19,13 +19,13 @@ import shutil
 import warnings
 from code_ai.utils.inference import InferenceEnum
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 import os
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import time
 import logging
-import pynvml  # 导包
+import pynvml  # 導入套件
 import tensorflow as tf
 
 autotune = tf.data.experimental.AUTOTUNE
@@ -84,8 +84,8 @@ def pipeline_cmb(
         pynvml.nvmlInit()  # 初始化
         handle = pynvml.nvmlDeviceGetHandleByIndex(
             gpu_n
-        )  # 获取GPU i的handle，后续通过handle来处理
-        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通过handle获取GPU i的信息
+        )  # 取得GPU i的handle，後續通過handle來處理
+        memoryInfo = pynvml.nvmlDeviceGetMemoryInfo(handle)  # 通過handle取得GPU i的資訊
         gpumRate = memoryInfo.used / memoryInfo.total
 
         if gpumRate < 0.6:

@@ -10,7 +10,7 @@ Created on Tue Sep 22 13:18:23 2020
 import warnings
 from code_ai.utils.inference import InferenceEnum
 
-warnings.filterwarnings("ignore")  # 忽略警告输出
+warnings.filterwarnings("ignore")  # 忽略警告輸出
 import os
 import numpy as np
 import logging
