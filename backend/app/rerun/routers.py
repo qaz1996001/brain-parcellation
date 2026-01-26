@@ -5,7 +5,7 @@ Created on 2025-12-17
 
 ReRun 研究重新執行 API 路由模組
 
-此模組定義了供客户端調用的 HTTP API 端點，用於觸發研究重新執行功能。
+此模組定義了供客戶端呼叫的 HTTP API 端點，用於觸發研究重新執行功能。
 提供兩個主要路由：按 Study Rename ID 和按 Study UID 重新執行。
 
 API 端點：
@@ -17,7 +17,7 @@ API 端點：
    根據研究 UID 重新執行整個流程
 
 兩個端點都使用背景任務 (BackgroundTasks) 進行非同步執行，
-立即向客户端回傳成功，實際處理在後台進行。
+立即向客戶端回傳成功，實際處理在後台進行。
 
 模組依賴：
 --------
@@ -105,7 +105,7 @@ async def post_re_run_study_by_study_rename_id(
     Notes
     -----
     - 此端點使用 BackgroundTasks 進行非同步執行
-    - 客户端無需等待長時間的処理，立即返回成功響應
+    - 客戶端無需等待長時間的處理，立即回傳成功回應
     - 任何執行期間的錯誤都會被記錄到日誌，不會導致 HTTP 錯誤
     - 建議監控日誌或設定研究狀態輪詢機制來追蹤進度
     
@@ -119,12 +119,12 @@ async def post_re_run_study_by_study_rename_id(
             -H "Content-Type: application/json" \\
             -d '["study_rename_001", "study_rename_002"]'
     
-    Python 客户端：
-    
+    Python 客戶端：
+
     .. code-block:: python
-    
+
         import httpx
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "http://localhost:8000/rerun/study/by-rename_id",
@@ -205,9 +205,9 @@ async def post_re_run_study_by_study_uid(
     -----
     - 此端點為推薦使用的 API，相比 by-rename_id 更直接
     - 使用標準 DICOM UID 格式識別研究
-    - 所有執行都在後台進行，客户端立即返回
+    - 所有執行都在後台進行，客戶端立即回傳
     - 錯誤會被捕獲並記錄，不會導致 HTTP 錯誤回應
-    - 建議實現客户端側的狀態輪詢機制來監控進度
+    - 建議實現客戶端側的狀態輪詢機制來監控進度
     
     Examples
     --------
@@ -219,13 +219,13 @@ async def post_re_run_study_by_study_uid(
             -H "Content-Type: application/json" \\
             -d '{"ids": ["1.2.3.4.5", "1.2.3.4.6"]}'
     
-    Python 客户端：
-    
+    Python 客戶端：
+
     .. code-block:: python
-    
+
         import httpx
         from backend.app.sync.schemas import PostStudyRequest
-        
+
         async with httpx.AsyncClient() as client:
             request = PostStudyRequest(
                 ids=["1.2.3.4.5", "1.2.3.4.6"]
@@ -243,10 +243,15 @@ async def post_re_run_study_by_study_uid(
     """
     # 從請求體中提取 Study UID 列表
     # request.ids 應為 List[OrthancID] 格式的 UID 列表
-    
+
     # 將重新執行任務添加到後台任務隊列
+    # NOTE: 傳遞 needFollowup 以支援推論階段的追蹤資訊傳遞
+
     background_tasks.add_task(
-        re_event_service.re_run_by_study_uid, request.ids, dcop_event_service
+        re_event_service.re_run_by_study_uid,
+        request.ids,
+        dcop_event_service,
+        request.needFollowup,
     )
 
     # 立即回傳 200 OK，不等待任務完成

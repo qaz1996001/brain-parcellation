@@ -13,7 +13,7 @@ ReRun 研究重新執行服務模組
 1. 透過 Study ID 或 Study UID 重新執行研究流程
 2. 清理先前的結果和快取資料
 3. 建立新的處理事件記錄
-4. 触發 DICOM 工具的系列資訊取得
+4. 觸發 DICOM 工具的系列資訊取得
 
 類別：
 -----
@@ -22,7 +22,7 @@ ReRunStudyService : 研究重新執行服務的主要類別，包含所有相關
 模組依賴：
 --------
 - SQLAlchemy : 資料庫操作和 ORM
-- httpx : 非同步 HTTP 客户端
+- httpx : 非同步 HTTP 客戶端
 - aiofiles : 非同步檔案操作
 - advanced_alchemy : 進階 SQLAlchemy 擴展
 - backend.app.sync : 同步事件模型和服務
@@ -41,7 +41,7 @@ import os
 import pathlib
 import shutil
 import traceback
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles.os
 import httpx
@@ -56,6 +56,7 @@ from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from backend.app.service import BaseRepositoryService
 from code_ai.task.schema.intput_params import Dicom2NiiParams
 from code_ai import load_dotenv
+from fastapi_cache import FastAPICache
 
 
 logger = logging.getLogger(__name__)
@@ -159,50 +160,56 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
     """)
 
     async def get_study_new_re_model(
-        self, study_uid: str, session: AsyncSession
+        self,
+        study_uid: str,
+        session: AsyncSession,
+        followup_data: Optional[Dict[str, Any]] = None,
     ) -> Tuple[
         DCOPEventModel, DCOPEventModel, DCOPEventModel, DCOPEventModel, Dicom2NiiParams
     ]:
         """
         建立新的研究重新執行事件模型
-        
+
         此方法初始化重新執行流程所需的所有事件記錄和參數。
         建立四個事件：新增重新執行、新增、轉移重新執行、轉移。
-        
+
         Parameters
         ----------
         study_uid : str
             研究的唯一識別碼，格式為 DICOM UID (例如: 1.2.3.4.5)
-        
+
         session : AsyncSession
             SQLAlchemy 非同步資料庫會話，用於建立事件記錄
-        
+
+        followup_data : Optional[Dict[str, Any]]
+            需要追蹤的 Study 資訊（可選，用於推論階段傳遞）
+
         Returns
         -------
         Tuple[DCOPEventModel, DCOPEventModel, DCOPEventModel, DCOPEventModel, Dicom2NiiParams]
             包含以下元素的元組：
             - new_data_re (DCOPEventModel) : 標記為 STUDY_NEW_RE 的重新執行新增事件
-            - new_data (DCOPEventModel) : 標記為 STUDY_NEW 的新增事件  
+            - new_data (DCOPEventModel) : 標記為 STUDY_NEW 的新增事件
             - data_transferring_re (DCOPEventModel) : 標記為 STUDY_TRANSFERRING_RE 的重新執行轉移事件
               包含 DICOM 到 NIfTI 轉換的參數資訊
             - data_transferring (DCOPEventModel) : 標記為 STUDY_TRANSFERRING 的轉移事件
             - task_params (Dicom2NiiParams) : DICOM 轉 NIfTI 的任務參數
-        
+
         Raises
         ------
         ValueError
             如果從環境變數讀取的路徑無效或不存在
-        
+
         Notes
         -----
         環境變數依賴：
         - PATH_RAW_DICOM : 原始 DICOM 檔案的根目錄
         - PATH_RENAME_DICOM : 重命名後 DICOM 檔案的輸出目錄
         - PATH_RENAME_NIFTI : 轉換後 NIfTI 檔案的輸出目錄
-        
+
         所有事件記錄基於相同的 study_uid，但狀態不同。
         這些事件用於追蹤研究重新執行的各個階段。
-        
+
         Examples
         --------
         >>> service = ReRunStudyService()
@@ -213,7 +220,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         ...     )
         ...     new_data_re, new_data, data_transferring_re, data_transferring, task_params = models
         ...     print(f"新增重新執行事件: {new_data_re.vsprimarykey}")
-        
+
         See Also
         --------
         DCOPEventModel.create_event : 建立事件記錄的方法
@@ -272,10 +279,16 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
             output_nifti_path=rename_nifti_path,
         )
         
-        # 將參數序列化為字典格式，存入轉移重新執行事件
-        # 供後續任務讀取和使用
-        data_transferring_re.params_data = task_params.get_str_dict()
-        
+        # 將參數序列化為字典格式
+        params_dict = task_params.get_str_dict()
+
+        # 若有 followup_data，加入 params_data
+        if followup_data is not None:
+            params_dict["needFollowup"] = followup_data
+
+        # 存入轉移重新執行事件，供後續任務讀取和使用
+        data_transferring_re.params_data = params_dict
+
         # 回傳所有建立的事件和參數
         return (
             new_data_re,
@@ -332,7 +345,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         # 逐一處理每個研究重命名 ID
         for study_id in data_list:
             # 查詢該 study_id 對應的事件模型
-            # 限制最多返回 10 筆最近的記錄
+            # 限制最多回傳 10 筆最近的記錄
             models = await self.list(
                 DCOPEventModel.study_id == study_id, LimitOffset(limit=10, offset=0)
             )
@@ -348,34 +361,40 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 result_list.append((models[0].study_uid, flage))
 
     async def re_run_by_study_uid_on_one(
-        self, study_uid: str, dcop_event_service: DCOPEventDicomService
+        self,
+        study_uid: str,
+        dcop_event_service: DCOPEventDicomService,
+        followup_data: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         執行單一研究的重新執行流程
-        
+
         此方法是重新執行功能的核心，負責：
         1. 清理該研究的所有先前結果和快取
         2. 建立新的處理事件記錄
         3. 將事件記錄持久化到資料庫
         4. 觸發 DICOM 系列資訊取得程序
-        
+
         Parameters
         ----------
         study_uid : str
             研究的唯一識別碼 (DICOM UID 格式)
-        
+
         dcop_event_service : DCOPEventDicomService
             DCOP 事件 DICOM 服務，用於觸發系列資訊處理
-        
+
+        followup_data : Optional[Dict[str, Any]]
+            需要追蹤的 Study 資訊（可選，用於推論階段傳遞）
+
         Returns
         -------
         bool
             True 如果重新執行成功，False 如果發生異常
-        
+
         Raises
         ------
         捕獲所有異常但不重新拋出，改為記錄日誌和回傳 False
-        
+
         Notes
         -----
         重新執行流程步驟：
@@ -384,9 +403,9 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         3. 保存資料庫：使用 session 提交所有新事件
         4. 刷新物件：重新載入提交後的物件以獲取資料庫生成的 ID
         5. 觸發管道：呼叫 dicom_tool_get_series_info 啟動處理流程
-        
+
         如果任何步驟失敗，會回滾交易並回傳 False。
-        
+
         Examples
         --------
         >>> service = ReRunStudyService()
@@ -397,7 +416,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         ...     print("研究重新執行已啟動")
         >>> else:
         ...     print("重新執行失敗，請查看日誌")
-        
+
         See Also
         --------
         del_study_result_by_field : 清理研究結果
@@ -405,18 +424,20 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         DCOPEventDicomService.dicom_tool_get_series_info : 觸發系列資訊取得
         """
         logger.info("del_study_result_by_field 1")
-        
+
         # 第一步：清理該研究的所有先前結果和快取
         await self.del_study_result_by_field(
             field_name="study_uid", field_value=study_uid
         )
-        
+
         try:
             # 第二步：建立新的事件記錄並保存到資料庫
             async with self.session_manager.get_session() as session:
                 # 建立四個新事件和任務參數
                 data_tuple = await self.get_study_new_re_model(
-                    study_uid=study_uid, session=session
+                    study_uid=study_uid,
+                    session=session,
+                    followup_data=followup_data,
                 )
                 (
                     new_data_re,
@@ -457,37 +478,43 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         return flage
 
     async def re_run_by_study_uid(
-        self, data_list: List[OrthancID], dcop_event_service: DCOPEventDicomService
+        self,
+        data_list: List[OrthancID],
+        dcop_event_service: DCOPEventDicomService,
+        need_followup: Optional[List[Dict[str, Any]]] = None,
     ) -> Optional[str]:
         """
         根據 Study UID 批量執行研究重新執行
-        
+
         此方法是對外公開的主要入口點，接收 Study UID 列表並批量
         重新執行研究流程。為後台任務設計，可由 API 端點呼叫。
-        
+
         Parameters
         ----------
         data_list : List[OrthancID]
             Study UID 列表，每個元素為 OrthancID 型別的研究識別碼
-        
+
         dcop_event_service : DCOPEventDicomService
             DCOP 事件 DICOM 服務實例
-        
+
+        need_followup : Optional[List[Dict[str, Any]]]
+            需要追蹤的 Study 資訊列表，按陣列索引與 data_list 對應
+
         Returns
         -------
         Optional[str]
             None。此為火轉即忘 (fire-and-forget) 的後台任務。
-        
+
         Notes
         -----
         重新執行流程：
         1. 清理結果 : 刪除現有檔案和清理 SQL 資料庫記錄
         2. 新建 RERUN 紀錄 : 為每個研究建立新的重新執行事件
         3. 發送管道 : 觸發後續的 DICOM 處理管道
-        
+
         此方法對每個 Study UID 逐一呼叫 re_run_by_study_uid_on_one，
         收集所有執行結果，但不拋出異常。
-        
+
         Examples
         --------
         >>> service = ReRunStudyService()
@@ -496,29 +523,40 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         ...     study_uids, dcop_event_service
         ... )
         # 方法立即回傳，實際處理在後台執行
-        
+
         See Also
         --------
         re_run_by_study_uid_on_one : 執行單一研究的重新執行
         """
+        logger.info("re_run_by_study_uid_on_one, data_list {}".format(data_list))
+        logger.info("re_run_by_study_uid_on_one, need_followup {}".format(need_followup))
+
+        if need_followup is None:
+            need_followup = []
+
         # 收集執行結果列表 (雖然目前不回傳)
         result_list = []
-        
-        # 逐一處理每個 Study UID
-        for study_uid in data_list:
+
+        # 逐一處理每個 Study UID（使用索引映射 needFollowup）
+        for idx, study_uid in enumerate(data_list):
             logger.info("del_study_result_by_field 1")
-            
+
+            # 取得此 study 的 followup（按陣列索引映射）
+            followup_data = need_followup[idx] if idx < len(need_followup) else None
+
             # 執行單一研究的完整重新執行流程
             flage = await self.re_run_by_study_uid_on_one(
-                study_uid=study_uid, dcop_event_service=dcop_event_service
+                study_uid=study_uid,
+                dcop_event_service=dcop_event_service,
+                followup_data=followup_data,
             )
-            
+
             # 記錄執行結果: (study_uid, 成功標誌)
             result_list.append((study_uid, flage))
-        
+
         # 記錄所有執行結果到日誌
         logger.info(f"re_run_by_study_uid {result_list}")
-        
+
         # 回傳 None (fire-and-forget 模式)
         return
 
@@ -736,7 +774,28 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 ]:
                     # 使用非同步方法刪除路徑
                     await self.del_path(input_path)
-                
+
+                # 【清除 Redis 計數器快取】
+                # Linus: "Good programmers worry about data structures."
+                # Rerun 時必須清除舊的計數器，避免與新的轉檔流程衝突
+                try:
+                    redis_backend = FastAPICache.get_backend()
+                    redis_client = redis_backend.redis
+                    study_id = result.study_id
+
+                    # 刪除 series 計數器 keys
+                    await redis_client.delete(f"study:{study_id}:series_total")
+                    await redis_client.delete(f"study:{study_id}:series_completed")
+
+                    logger.info(
+                        f"[RERUN] 已清除 Redis 計數器: study_id={study_id}"
+                    )
+                except Exception as e:
+                    # Redis 清除失敗不應阻止 rerun 流程
+                    logger.warning(
+                        f"[RERUN] 清除 Redis 計數器失敗 (非致命): {e}"
+                    )
+
                 try:
                     # 將事件記錄從原始表複製到重新執行歷史表
                     # 標記 event_cate = 1 表示重新執行類別
@@ -759,7 +818,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
                 except Exception:
                     # 如果資料庫操作失敗，回滾交易
                     await session.rollback()
-                    # 記錄異常信息，但不中斷流程
+                    # 記錄異常資訊，但不中斷流程
                     logger.error(f"except {traceback.print_exc()}")
 
     async def del_study_cache(self, field_name: str, field_value: str):
@@ -784,7 +843,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         
         Notes
         -----
-        - 此方法使用非同步 HTTP 客户端，設定 180 秒超時
+        - 此方法使用非同步 HTTP 客戶端，設定 180 秒超時
         - API 端點為上游 API_URL + '/cache'
         - 參數透過 URL 查詢字符串傳遞
         - 如果 API 呼叫失敗，不會拋出異常，靜默失敗
@@ -809,7 +868,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         # 獲取上游 API 的基礎 URL
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         
-        # 使用非同步 HTTP 客户端進行 DELETE 請求
+        # 使用非同步 HTTP 客戶端進行 DELETE 請求
         async with httpx.AsyncClient(timeout=180) as client:
             # 構建快取清除端點 URL
             url = f"{upload_data_api_url}/cache"
@@ -842,8 +901,8 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         
         Notes
         -----
-        - 此為靜態方法，不需要服務實例即可調用
-        - 使用非同步 HTTP 客户端，設定 180 秒超時
+        - 此為靜態方法，不需要服務實例即可呼叫
+        - 使用非同步 HTTP 客戶端，設定 180 秒超時
         - 事件資料序列化為 JSON 格式在 POST body 中發送
         - 使用上游 API 的 SYNC_PROT_OPE_NO 端點
         - 如果發送失敗，不會拋出異常，靜默失敗
@@ -869,7 +928,7 @@ class ReRunStudyService(BaseRepositoryService[DCOPEventModel]):
         # 獲取上游 API 的基礎 URL
         upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
         
-        # 使用非同步 HTTP 客户端進行 POST 請求
+        # 使用非同步 HTTP 客戶端進行 POST 請求
         async with httpx.AsyncClient(timeout=180) as client:
             # 構建完整的 API 端點 URL
             url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
