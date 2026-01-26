@@ -9,6 +9,11 @@ source .venv/bin/activate
 export PYTHONPATH=$(pwd) && python3 backend/app/main.py
 ```
 
+```
+ conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
+ conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
+
+```
 
 ## system python install
 

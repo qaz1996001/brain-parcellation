@@ -1,36 +1,30 @@
-# Docker Compose - PgQueuer 版本
-# 移除 RabbitMQ 和 Redis，簡化為單純的 PostgreSQL 架構
-
 services:
-  # ❌ 已移除 RabbitMQ 服務
-  # rabbitmq_server:
-  #   restart: always
-  #   container_name: rabbitmq_server
-  #   image: rabbitmq:3-management
-  #   environment:
-  #     - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
-  #     - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-  #     - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-  #     - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
-  #   volumes:
-  #     - volume_rabbitmq_server:/var/lib/rabbitmq
-  #   ports:
-  #     - ${RABBITMQ_PORT}:5672
-  #     - ${RABBITMQ_UI_PORT}:15672
-
-  # ❌ 已移除 Redis 服務 (佇列用途)
-  # redis_server:
-  #   restart: always
-  #   container_name: redis_server
-  #   image: redis:7.4-alpine
-  #   ports:
-  #     - ${REDIS_PORT}:6379
-  #   volumes:
-  #     - volume_redis_server:/data
-
-  # ✅ 保留 PostgreSQL 服務 (核心資料庫 + 佇列儲存)
+  rabbitmq_server:
+    restart: always
+    container_name: rabbitmq_server
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+    volumes:
+      - volume_rabbitmq_server:/var/lib/rabbitmq
+    ports:
+      # Expose the port for the worker to add/get tasks
+      - ${RABBITMQ_PORT}:5672
+      # OPTIONAL: Expose the GUI port
+      - ${RABBITMQ_UI_PORT}:15672
+  redis_server:
+    restart: always
+    container_name: redis_server
+    image: redis:7.4-alpine
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - volume_redis_server:/data
   db_server:
-    image: postgres:15-alpine  # 升級到較新版本以支援更好的 LISTEN/NOTIFY
+    image: postgres
     restart: always
     container_name: db_server
     volumes:
@@ -39,102 +33,84 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # 優化 PostgreSQL 配置以支援佇列操作
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     ports:
       - ${POSTGRES_PORT}:5432
-    # 添加健康檢查
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    # PostgreSQL 效能調優 (針對佇列操作)
-    command: >
-      postgres
-      -c max_connections=200
-      -c shared_buffers=256MB
-      -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=4MB
-      -c min_wal_size=1GB
-      -c max_wal_size=4GB
-      -c max_worker_processes=8
-      -c max_parallel_workers_per_gather=4
-      -c max_parallel_workers=8
-      -c max_parallel_maintenance_workers=4
 
-  # 🔧 PgQueuer 佇列監控服務 (可選)
-  queue_monitor:
-    image: python:3.11-slim
-    container_name: queue_monitor
+  orthanc:
+    image: orthancteam/orthanc:24.7.1
     depends_on:
-      db_server:
-        condition: service_healthy
-    volumes:
-      - .:/app
-    working_dir: /app
-    environment:
-      - PYTHONPATH=/app/code_ai
-      - DATABASE_URL=postgresql://postgres_n:postgres_p@db_server:5432/dicom
-    command: >
-      bash -c "
-        pip install pgqueuer asyncpg &&
-        while true; do
-          echo '=== PgQueuer 佇列狀態 ===' &&
-          pgq dashboard --connection-string=postgresql://postgres_n:postgres_p@db_server:5432/dicom --interval 30 --tail 10 || true &&
-          sleep 60
-        done
-      "
-    restart: unless-stopped
-
-  # 🚀 醫學影像處理服務 (主要應用)
-  medical_ai_app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: medical_ai_app
-    depends_on:
-      db_server:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - ${PATH_PROCESS}:/app/process_data
-      - ${PATH_JSON}:/app/json_data
-      - ${PATH_LOG}:/app/logs
-    working_dir: /app
-    environment:
-      - PYTHONPATH=/app/code_ai
-      - DATABASE_URL=postgresql://postgres_n:postgres_p@db_server:5432/dicom
-      - PATH_PROCESS=${PATH_PROCESS}
-      - PATH_JSON=${PATH_JSON}
-      - PATH_LOG=${PATH_LOG}
-      - UPLOAD_DATA_API_URL=${UPLOAD_DATA_API_URL}
-    command: >
-      bash -c "
-        echo '🚀 啟動醫學影像處理系統 (PgQueuer 版本)' &&
-        python -m code_ai.queue.consumer
-      "
+      - db_server
+      - minio
     restart: unless-stopped
     ports:
-      - "8000:8000"  # 如果有 FastAPI web 服務
+      - "4242:4242"
+      - "8042:8042"
+    volumes:
+      - orthanc-storage:/var/lib/orthanc/db
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro  # 映射設定檔到宿主機
+    environment:
+      VERBOSE_STARTUP: "true"
+      VERBOSE_ENABLED: "true"
+      ORTHANC__NAME: "ORTHANC PostgreSQL and MinIO"
+      # PostgreSQL configuration
+      ORTHANC__POSTGRESQL: |
+        {
+          "Host": "db_server",
+          "EnableVerboseLogs": true
+        }
+      # MinIO/S3 configuration
+      ORTHANC__AWS_S3_STORAGE__BUCKET_NAME: "my-sample-bucket"
+      ORTHANC__AWS_S3_STORAGE__REGION: "us-east-1"
+      ORTHANC__AWS_S3_STORAGE__ACCESS_KEY: "minioadmin"
+      ORTHANC__AWS_S3_STORAGE__SECRET_KEY: "minioadmin"
+      ORTHANC__AWS_S3_STORAGE__ENDPOINT: "http://minio:9000"
+      ORTHANC__AWS_S3_STORAGE__VIRTUAL_ADDRESSING: "false"
+      # Optional hybrid mode - uncomment one if needed
+      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToObjectStorage"
+      # ORTHANC__AWS_S3_STORAGE__HYBRID_MODE: "WriteToFileSystem"
+
+      # Plugin configuration
+      OSIMIS_WEB_VIEWER1_PLUGIN_ENABLED: "true"
+      STONE_WEB_VIEWER_PLUGIN_ENABLED: "true"
+      DICOM_WEB_PLUGIN_ENABLED: "true"
+      ORTHANC__DICOM_WEB__PUBLIC_ROOT: "/dicom-web"
+      ORTHANC__ORTHANC_EXPLORER_2__UI_OPTIONS__ENABLE_OPEN_IN_OHIF_VIEWER_3: "true"
+      # Authentication
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+
+  # MinIO server
+  minio:
+    image: minio/minio
+    container_name: minio-backup-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
 
 volumes:
-  # ❌ 移除 RabbitMQ 和 Redis 的 volume
-  # volume_rabbitmq_server:
-  # volume_redis_server:
-  
-  # ✅ 保留 PostgreSQL volume
+  volume_rabbitmq_server:
+  volume_redis_server:
   volume_db_server:
+  minio_data:
     driver: local
-
-# 網路配置 (可選，用於服務間通信)
-networks:
-  default:
-    name: medical_ai_network
-    driver: bridge
+    driver_opts:
+      type: none
+      device: ${VOLUMES_PATH}/minio-data
+      o: bind
+  orthanc-storage:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${VOLUMES_PATH}/orthanc-storage
+      o: bind
