@@ -4,7 +4,7 @@ from funboost import BrokerEnum, BoosterParams, ConcurrentModeEnum
 
 class BoosterParamsMyRABBITMQ(
     BoosterParams
-):  # 传这个类就可以少每次都亲自指定使用rabbitmq作为消息队列，和重试改为4次,和消费发布日志写入自定义.log文件。
+):  # 傳這個類別就可以少每次都親自指定使用 RabbitMQ 作為訊息佇列，和重試改為 4 次，和消費發佈日誌寫入自定義 .log 檔案。
     broker_kind: str = BrokerEnum.RABBITMQ_AMQPSTORM
     concurrent_mode: str = ConcurrentModeEnum.THREADING
     concurrent_num: int = 10
@@ -14,14 +14,14 @@ class BoosterParamsMyRABBITMQ(
     retry_interval: typing.Union[float, int] = 20
     is_push_to_dlx_queue_when_retry_max_times: bool = True
 
-    # user_custom_record_process_info_func: typing.Callable = None  # 提供一个用户自定义的保存消息处理记录到某个地方例如mysql数据库的函数，函数仅仅接受一个入参，入参类型是 FunctionResultStatus，用户可以打印参数
+    # user_custom_record_process_info_func: typing.Callable = None  # 提供一個使用者自定義的儲存訊息處理記錄到某個地方（例如 MySQL 資料庫）的函數，函數僅接受一個輸入參數，參數類型是 FunctionResultStatus，使用者可以列印參數
     is_using_rpc_mode: bool = True
     rpc_result_expire_seconds: int = 1800
 
 
 class BoosterParamsMyAI(
     BoosterParamsMyRABBITMQ
-):  # 传这个类就可以少每次都亲自指定使用rabbitmq作为消息队列，和重试改为4次,和消费发布日志写入自定义.log文件。
+):  # 傳這個類別就可以少每次都親自指定使用 RabbitMQ 作為訊息佇列，和重試改為 4 次，和消費發佈日誌寫入自定義 .log 檔案。
     concurrent_mode: str = ConcurrentModeEnum.SOLO
     concurrent_num: int = 5
     qps: int = 1

@@ -542,6 +542,7 @@ def _send_status_event(
     - inference_item_cmd: 推論命令列表，包含所有要執行的命令
     - func_params: 任務參數的序列化結果，包含輸入路徑和識別資訊
     - task: funboost 任務狀態資訊，包含任務 ID 和執行狀態
+    - needFollowup: 若存在，包含需要追蹤的 Study 資訊（頂層欄位）
 
     result_data 僅在 COMPLETE 狀態時包含，格式為：
     {'result': <JSON 序列化的執行結果>}
@@ -590,6 +591,20 @@ def _send_status_event(
     upload_data_api_url = os.getenv("UPLOAD_DATA_API_URL")
     api_url = f"{upload_data_api_url}{SYNC_PROT_OPE_NO}"
     
+    # 取得 params 的完整 dict（包含額外欄位如 needFollowup）
+    params_dict = params.model_dump()
+    
+    # 建立 params_data，將 needFollowup 提升到頂層
+    params_data_dict = {
+        "inference_item_cmd": inference_cmd.cmd_items,  # 推論命令列表
+        "func_params": params_dict,  # 任務參數序列化
+        "task": fct.function_result_status.get_status_dict(),  # 任務狀態
+    }
+    
+    # 若 params 中有 needFollowup，提升到頂層
+    if "needFollowup" in params_dict:
+        params_data_dict["needFollowup"] = params_dict["needFollowup"]
+    
     # 建立事件請求物件
     dcop_event = DCOPEventRequest(
         study_uid=study_uid,
@@ -597,11 +612,7 @@ def _send_status_event(
         study_id=study_id,
         ope_no=status.value,  # 操作編號對應狀態值
         tool_id="INFERENCE_TOOL",  # 工具識別碼
-        params_data={
-            "inference_item_cmd": inference_cmd.cmd_items,  # 推論命令列表
-            "func_params": params.model_dump(),  # 任務參數序列化
-            "task": fct.function_result_status.get_status_dict(),  # 任務狀態
-        },
+        params_data=params_data_dict,
         result_data=result_data,  # 可選的結果資料
     )
     

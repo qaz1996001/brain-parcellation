@@ -1147,7 +1147,10 @@ def process_dir(func_params: Dict[str, Any]):
     # 先不去重，保留所有記錄以便後續處理
     df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x: pydicom.dcmread(x)[0x0020, 0x000E].value)
-    df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.parent.parent.name)
+    # Platform
+    # df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.parent.parent.name)
+    # Pc 4090
+    df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
 
 
