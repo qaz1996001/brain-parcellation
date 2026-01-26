@@ -71,9 +71,12 @@ router = APIRouter()
 
 # 整合所有子模組的路由
 # 每個模組使用獨立的標籤，便於 API 文檔組織
+
 router.include_router(series.router, tags=["series"])
 router.include_router(rerun.router, tags=["rerun"])
 router.include_router(sync.router, tags=["sync"])
+
+
 
 
 @router.post("/upload_json")

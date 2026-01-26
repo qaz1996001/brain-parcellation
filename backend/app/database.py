@@ -77,8 +77,8 @@ sqlalchemy_config = SQLAlchemyAsyncConfig(
 
     # 連接池配置：解決 QueuePool 連接耗盡問題
     engine_config=EngineConfig(
-        pool_size=20,        # 基本連接數（默認 5）
-        max_overflow=30,     # 額外連接數（默認 10）
+        pool_size=20,        # 基本連接數（預設 5）
+        max_overflow=30,     # 額外連接數（預設 10）
         pool_timeout=60,     # 等待連接超時（秒）
         pool_pre_ping=True,  # 連接健康檢查
     ),

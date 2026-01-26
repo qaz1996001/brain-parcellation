@@ -312,6 +312,7 @@ async def analyze_dicom_files_by_path(
     for file_path in file_path_list:
         # 讀取 DICOM 檔案（僅標頭，不載入像素）
         with open(file_path, mode="rb") as f:
+
             dcm_ds = pydicom.dcmread(f, stop_before_pixels=True)
             
             # 識別序列類型

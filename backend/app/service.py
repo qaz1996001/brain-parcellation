@@ -7,7 +7,7 @@
 
 核心功能
 --------
-- 非同步會話管理: 自動創建、使用和清理資料庫會話
+- 非同步會話管理: 自動建立、使用和清理資料庫會話
 - 事務支援: 支援常規和嵌套事務（savepoints）
 - 重試機制: 自動重試暫時性資料庫錯誤
 - 批次操作: 在單一事務中執行多個操作
@@ -18,12 +18,12 @@
 - 資源安全: 確保會話正確關閉，避免連接洩漏
 - 事務一致性: 支援原子性操作和自動回滾
 - 錯誤恢復: 自動重試暫時性錯誤
-- 靈活性: 支援使用現有會話或創建新會話
+- 靈活性: 支援使用現有會話或建立新會話
 
 Classes
 -------
 SessionManager
-    資料庫會話管理器，提供會話創建、事務管理和資源清理。
+    資料庫會話管理器，提供會話建立、事務管理和資源清理。
     
 BaseRepositoryService
     增強的服務基類，擴展 SQLAlchemyAsyncRepositoryService，
@@ -95,7 +95,7 @@ class SessionManager:
     Attributes
     ----------
     _session_factory : async_sessionmaker
-        會話工廠，用於創建新的資料庫會話。
+        會話工廠，用於建立新的資料庫會話。
     _active_sessions : dict[int, AsyncSession]
         當前活躍的會話字典，鍵為會話 ID，值為會話實例。
     _lock : asyncio.Lock
@@ -104,11 +104,11 @@ class SessionManager:
     Methods
     -------
     get_session()
-        創建並管理新的資料庫會話，自動清理。
+        建立並管理新的資料庫會話，自動清理。
     use_session(session)
-        使用現有會話或創建新會話。
+        使用現有會話或建立新會話。
     transaction(session, nested)
-        在會話中創建事務（支援嵌套）。
+        在會話中建立事務（支援嵌套）。
     execute_with_retry(func, *args, **kwargs)
         執行函數並在暫時性錯誤時自動重試。
     close_all_sessions()
@@ -119,12 +119,12 @@ class SessionManager:
     Notes
     -----
     會話追蹤：
-        所有創建的會話都會被追蹤，確保在應用程式關閉時
+        所有建立的會話都會被追蹤，確保在應用程式關閉時
         正確清理，避免連接洩漏。
     
     線程安全：
         使用 asyncio.Lock 保護會話字典的並發訪問，
-        確保多個協程同時創建會話時的安全性。
+        確保多個協程同時建立會話時的安全性。
     
     Examples
     --------
@@ -138,9 +138,9 @@ class SessionManager:
     >>>     await session.commit()
     
     使用現有會話：
-    
+
     >>> async with manager.use_session(existing_session) as session:
-    >>>     # 如果提供了會話，使用它；否則創建新的
+    >>>     # 如果提供了會話，使用它；否則建立新的
     >>>     await session.execute(query)
     
     嵌套事務：
@@ -362,9 +362,9 @@ class BaseRepositoryService(
     Attributes
     ----------
     session_manager : SessionManager
-        會話管理器實例，提供會話創建和事務管理。
+        會話管理器實例，提供會話建立和事務管理。
     _session_factory : async_sessionmaker
-        會話工廠，從儲存庫中提取或創建。
+        會話工廠，從儲存庫中提取或建立。
     
     Methods
     -------
