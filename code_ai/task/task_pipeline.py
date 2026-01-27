@@ -114,7 +114,6 @@ from backend.app.sync.urls import SYNC_PROT_OPE_NO
 from code_ai.task.params import BoosterParamsMyAI, BoosterParamsMyRABBITMQ
 from code_ai.task.schema.intput_params import InferenceTaskParams, SubprocessTaskParams
 from code_ai.utils.inference import build_inference_cmd, InferenceCmd
-from code_ai.utils.database import save_result_status_to_sqlalchemy
 
 # 設置日誌記錄器
 logger = nb_log.LogManager("task_pipeline_inference_queue").get_logger_and_add_handlers(
@@ -721,7 +720,7 @@ def _execute_inference_commands(
 @Booster(
     BoosterParamsMyAI(
         queue_name="task_pipeline_inference_queue",
-        user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+        # user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
         qps=1,
     )
 )

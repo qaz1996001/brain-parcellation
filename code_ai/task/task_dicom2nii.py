@@ -29,7 +29,6 @@ from code_ai.dicom2nii.convert import dicom_rename_mr_postprocess
 from code_ai.dicom2nii.convert import convert_nifti_postprocess
 from code_ai.task.schema import intput_params
 from code_ai.task.params import BoosterParamsMyRABBITMQ
-from code_ai.utils.database import save_result_status_to_sqlalchemy
 from backend.app.sync import urls as sync_urls
 from backend.app.sync.schemas import DCOPEventRequest, DCOPStatus
 
@@ -473,7 +472,7 @@ def call_post_httpx(func_params: Dict[str, Any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='call_dcm2niix_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
 def call_dcm2niix(func_params: Dict[str, Any]):
     """
@@ -1055,7 +1054,7 @@ def get_orthanc_series_uid(study_uid: str,
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='process_dir_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
 def process_dir(func_params: Dict[str, Any]):
     """
@@ -1209,7 +1208,7 @@ def process_dir(func_params: Dict[str, Any]):
 
 
 @Booster(BoosterParamsMyRABBITMQ(queue_name='dicom_to_nii_queue',
-                                 user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
+                                 # user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
                                  qps=10, ))
 def dicom_to_nii(func_params: Dict[str, Any]):
     """
