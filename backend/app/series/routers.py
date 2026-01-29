@@ -51,6 +51,7 @@ code_ai.dicom2nii.convert : DICOM 轉換管理器
 """
 
 import io
+import logging
 from typing import List, Optional, TYPE_CHECKING
 from pydantic import FilePath
 from fastapi import APIRouter, Depends, Response, UploadFile
@@ -61,8 +62,11 @@ if TYPE_CHECKING:
 
 from code_ai.dicom2nii.convert import ConvertManager
 from code_ai.dicom2nii.convert.base import ImageOrientationProcessingStrategy
+from code_ai.dicom2nii.convert.config import ImageOrientationEnum
 
 from backend.app.series.schemas import SeriesResponse
+
+logger = logging.getLogger(__name__)
 from backend.app.series.schemas import (
     series_special_sort,
     series_perfusion_sort,
@@ -310,26 +314,44 @@ async def analyze_dicom_files_by_path(
     
     # 逐一處理每個檔案
     for file_path in file_path_list:
-        # 讀取 DICOM 檔案（僅標頭，不載入像素）
-        with open(file_path, mode="rb") as f:
+        try:
+            # 讀取 DICOM 檔案（僅標頭，不載入像素）
+            with open(file_path, mode="rb") as f:
+                dcm_ds = pydicom.dcmread(f, stop_before_pixels=True)
 
-            dcm_ds = pydicom.dcmread(f, stop_before_pixels=True)
-            
-            # 識別序列類型
-            rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
-            
-            # 分析影像方向
-            orientation = dicom_orientation.process(dcm_ds)
+                # 識別序列類型（添加錯誤處理）
+                try:
+                    rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
+                except Exception as e:
+                    logger.warning(f"無法識別序列類型 {file_path}: {e}")
+                    rename_dicom = ""
 
-            # 建立響應物件
+                # 分析影像方向（添加錯誤處理）
+                try:
+                    orientation = dicom_orientation.process(dcm_ds)
+                except Exception as e:
+                    logger.warning(f"無法分析影像方向 {file_path}: {e}")
+                    orientation = ImageOrientationEnum.AXI
+
+                # 建立響應物件
+                rename_dicom_list.append(
+                    SeriesResponse(
+                        file_name=file_path.name,
+                        series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
+                        series_orientation=str(orientation.value),
+                    )
+                )
+        except Exception as e:
+            logger.error(f"無法讀取 DICOM 檔案 {file_path}: {e}")
+            # 檔案無法讀取時，使用預設值
             rename_dicom_list.append(
                 SeriesResponse(
                     file_name=file_path.name,
-                    series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
-                    series_orientation=str(orientation.value),
+                    series_type="unknown",
+                    series_orientation=str(ImageOrientationEnum.AXI.value),
                 )
             )
-    # series = pd.Series(rename_dicom_list,name='rename_dicom')
+
     return rename_dicom_list
 
 
@@ -460,25 +482,47 @@ async def analyze_dicom_files_by_upload(
     
     # 逐一處理每個上傳的檔案
     for dicom_file in dicom_file_list:
-        # 讀取檔案內容到記憶體（使用 BytesIO 進行串流處理）
-        bytes_io = io.BytesIO(await dicom_file.read())
-        bytes_io.seek(0)  # 重置指針到開頭
-        
-        # 讀取 DICOM 檔案（僅標頭，不載入像素）
-        dcm_ds = pydicom.dcmread(bytes_io, stop_before_pixels=True)
-        
-        # 識別序列類型
-        rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
-        
-        # 分析影像方向
-        orientation = dicom_orientation.process(dcm_ds)
+        file_name = dicom_file.filename if dicom_file.filename is not None else "unknown"
 
-        # 建立響應物件
-        rename_dicom_list.append(
-            SeriesResponse(
-                file_name=dicom_file.filename if dicom_file.filename is not None else "unknown",
-                series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
-                series_orientation=str(orientation.value),
+        try:
+            # 讀取檔案內容到記憶體（使用 BytesIO 進行串流處理）
+            bytes_io = io.BytesIO(await dicom_file.read())
+            bytes_io.seek(0)  # 重置指針到開頭
+
+            # 讀取 DICOM 檔案（僅標頭，不載入像素）
+            dcm_ds = pydicom.dcmread(bytes_io, stop_before_pixels=True)
+
+            # 識別序列類型（添加錯誤處理）
+            try:
+                rename_dicom = convert_manager.rename_dicom_path(dcm_ds)
+            except Exception as e:
+                logger.warning(f"無法識別序列類型 {file_name}: {e}")
+                rename_dicom = ""
+
+            # 分析影像方向（添加錯誤處理）
+            try:
+                orientation = dicom_orientation.process(dcm_ds)
+            except Exception as e:
+                logger.warning(f"無法分析影像方向 {file_name}: {e}")
+                orientation = ImageOrientationEnum.AXI
+
+            # 建立響應物件
+            rename_dicom_list.append(
+                SeriesResponse(
+                    file_name=file_name,
+                    series_type=rename_dicom if len(rename_dicom) > 0 else "unknown",
+                    series_orientation=str(orientation.value),
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"無法讀取上傳的 DICOM 檔案 {file_name}: {e}")
+            # 檔案無法讀取時，使用預設值
+            rename_dicom_list.append(
+                SeriesResponse(
+                    file_name=file_name,
+                    series_type="unknown",
+                    series_orientation=str(ImageOrientationEnum.AXI.value),
+                )
+            )
+
     return rename_dicom_list
