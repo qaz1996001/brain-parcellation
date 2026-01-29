@@ -61,7 +61,13 @@ if __name__ == '__main__':
     #     trigger='cron',
     #     minute='*/30'  # 每 30 分钟执行一次
     # )
-    BoostersManager.multi_process_consume_all_queues(1)
+
+    # AI 推論分組 - 獨立進程
+    BoostersManager.multi_process_consume_group('ai_inference', process_num=1)
+    # 其他 處理任務
+    BoostersManager.multi_process_consume_group('dicom_process', process_num=2)
+
+    # BoostersManager.multi_process_consume_all_queues(1)
 
 
 '''

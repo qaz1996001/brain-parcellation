@@ -720,7 +720,6 @@ def _execute_inference_commands(
 @Booster(
     BoosterParamsMyAI(
         queue_name="task_pipeline_inference_queue",
-        # user_custom_record_process_info_func=save_result_status_to_sqlalchemy,
         qps=1,
     )
 )
@@ -970,3 +969,4 @@ def task_subprocess_inference(func_params: Dict[str, Any]) -> str:
     
     # 步驟 5: 返回標準輸出
     return stdout.decode()
+# 請用任務清單 了解 ./funboost_合并教程.md ，如何設定，讓 ./code_ai/task/task_pipeline.py task_pipeline_inference_queue 有資料就開始消費，不會等待，也不會被其他的queue影響
