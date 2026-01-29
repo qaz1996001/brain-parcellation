@@ -744,28 +744,63 @@ def dicom_2_nii_series(func_params: Dict[str, Any]):
         call_dcm2niix_params = intput_params.CallDcm2niixParams(output_series_file_path=output_series_file_path,
                                                                 output_series_path=output_series_path,
                                                                 series_path=series_path)
-        if output_series_file_path.exists():
-            if output_series_file_path.stat().st_size < FILE_SIZE:
-                output_series_file_path.unlink()
-            async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
-        else:
-            async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
-        result = async_result.result
 
-        file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
-                                         post_process_manager=ConvertManager.nifti_post_process_manager))
+        # 【Bug Fix】添加異常處理，確保任務失敗時仍發送完成事件
+        # 問題：若 async_result.result 拋異常，事件不會發送，計數器無法正確遞增
+        # 解決：捕獲異常後仍發送帶錯誤狀態的事件
+        result = None
+        conversion_error = None
+
+        try:
+            if output_series_file_path.exists():
+                if output_series_file_path.stat().st_size < FILE_SIZE:
+                    output_series_file_path.unlink()
+                    async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+                    result = async_result.result
+                else:
+                    # 檔案已存在且大小足夠，跳過轉換
+                    result = {"status": "skipped", "message": "File already exists with valid size"}
+                    logger.info(f"[DICOM2NII] 跳過轉換，檔案已存在: {output_series_file_path}")
+            else:
+                async_result = call_dcm2niix.push(call_dcm2niix_params.get_str_dict())
+                result = async_result.result
+        except Exception as e:
+            conversion_error = str(e)
+            logger.error(f"[DICOM2NII] ❌ 轉換失敗 series_uid={task_params.series_uid}: {e}")
+            logger.exception("完整錯誤堆疊:")
+            result = {"status": "error", "message": conversion_error}
+
+        # 無論成功或失敗，都嘗試後處理和發送事件
+        try:
+            file_processing(func_params=dict(study_folder_path=nifti_study_folder_path,
+                                             post_process_manager=ConvertManager.nifti_post_process_manager))
+        except Exception as e:
+            logger.warning(f"[DICOM2NII] 後處理失敗（非致命）: {e}")
+
         dcop_event = DCOPEventRequest(study_uid=str(task_params.study_uid or ""),
                                       series_uid=str(task_params.series_uid or ""),
                                       ope_no=DCOPStatus.SERIES_CONVERSION_COMPLETE.value,
                                       study_id=series_path.parent.name,
                                       tool_id='NIFTI_TOOL',
                                       params_data=task_params.get_str_dict(),
-                                      result_data={'result': result})
+                                      result_data={'result': result, 'error': conversion_error})
 
+    # 發送事件到 API（確保計數器正確遞增）
     dcop_event_list_json = dcop_event.model_dump_json()
-    call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
-                          'data': dcop_event_list_json
-                          })
+    try:
+        logger.info(
+            f"[DICOM2NII] 發送事件: series_uid={task_params.series_uid}, "
+            f"ope_no={dcop_event.ope_no}, study_id={dcop_event.study_id}"
+        )
+        call_post_httpx.push({'url': "{}{}".format(UPLOAD_DATA_API_URL, sync_urls.SYNC_PROT_OPE_NO),
+                              'data': dcop_event_list_json
+                              })
+    except Exception as e:
+        logger.error(f"[DICOM2NII] ❌ 事件發送失敗: {e}")
+        logger.exception("事件發送錯誤堆疊:")
+        # 重新拋出以觸發任務重試機制
+        raise
+
     return nifti_study_folder_path
 
 
@@ -1147,9 +1182,9 @@ def process_dir(func_params: Dict[str, Any]):
     df['instance_dir_path'] = df['instance_dir_path'].map(lambda x: pathlib.Path(x))
     df['series_sop_uid'] = df['instance_path_str'].map(lambda x: pydicom.dcmread(x)[0x0020, 0x000E].value)
     # Platform
-    # df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.parent.parent.name)
+    df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.parent.parent.name)
     # Pc 4090
-    df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.name)
+    # df['study_uid'] = df['instance_path_str'].map(lambda x: pathlib.Path(x).parent.parent.name)
     df['study_id'] = df['rename_dicom_path'].map(lambda x: pathlib.Path(x).parent.parent.name)
 
 
