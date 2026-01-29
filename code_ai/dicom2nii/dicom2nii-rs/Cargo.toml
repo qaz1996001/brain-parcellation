@@ -1,0 +1,95 @@
+[package]
+name = "dicom2nii"
+version = "0.1.0"
+edition = "2021"
+description = "DICOM to NIfTI converter with Python bindings"
+license = "MIT"
+authors = ["Brain Parcellation Team"]
+repository = "https://github.com/qaz1996001/brain-parcellation"
+keywords = ["dicom", "nifti", "medical-imaging", "neuroimaging"]
+categories = ["science", "command-line-utilities"]
+
+[lib]
+name = "dicom2nii"
+crate-type = ["cdylib", "rlib", "staticlib"]
+
+[[bin]]
+name = "dicom2nii-cli"
+path = "src/main.rs"
+
+[dependencies]
+# DICOM processing
+dicom = "0.7"
+dicom-core = "0.7"
+dicom-object = "0.7"
+dicom-dictionary-std = "0.7"
+
+# NIfTI processing
+nifti = "0.16"
+
+# Data processing
+ndarray = "0.15"
+num-traits = "0.2"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Parallel processing
+rayon = "1.10"
+crossbeam = "0.8"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# File system
+walkdir = "2.5"
+glob = "0.3"
+
+# Regex
+regex = "1.10"
+lazy_static = "1.5"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Progress bar
+indicatif = "0.17"
+
+# Python bindings (optional)
+[dependencies.pyo3]
+version = "0.22"
+features = ["extension-module", "abi3-py38"]
+optional = true
+
+[features]
+default = []
+python = ["pyo3"]
+ffi = []
+
+[dev-dependencies]
+tempfile = "3.10"
+criterion = "0.5"
+
+[[bench]]
+name = "convert_benchmark"
+harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = true
+
+[profile.dev]
+opt-level = 1
+
+[package.metadata.maturin]
+features = ["python"]
+python-source = "python"
+module-name = "dicom2nii._native"
