@@ -17,16 +17,18 @@
 //! ## Example
 //!
 //! ```rust,ignore
-//! use dicom2nii::manager::ConvertManager;
+//! use dicom2nii::cli::{Cli, run};
+//! use clap::Parser;
 //!
-//! let manager = ConvertManager::new("./input", "./output");
-//! let results = manager.run(4)?;
-//! println!("Converted {} studies", results.len());
+//! let cli = Cli::parse();
+//! run(cli)?;
 //! ```
 //!
 //! ## Modules
 //!
 //! - [`config`]: Configuration and enum definitions
+//! - [`utils`]: Utility functions (filesystem, parallel processing, regex)
+//! - [`cli`]: Command-line interface
 //! - [`dicom`]: DICOM file parsing (TODO)
 //! - [`nifti`]: NIfTI file handling (TODO)
 //! - [`strategies`]: Processing strategies for different series types (TODO)
@@ -37,6 +39,8 @@
 #![warn(clippy::all)]
 
 pub mod config;
+pub mod utils;
+pub mod cli;
 
 // TODO: Implement these modules
 // pub mod dicom;
@@ -44,8 +48,6 @@ pub mod config;
 // pub mod strategies;
 // pub mod postprocess;
 // pub mod manager;
-// pub mod utils;
-// pub mod cli;
 
 // Conditional compilation for Python bindings
 #[cfg(feature = "python")]
@@ -63,8 +65,17 @@ pub fn version() -> &'static str {
     VERSION
 }
 
-// Re-export commonly used types
+// Re-export commonly used types from config
 pub use config::{
-    Contrast, ImageOrientation, MRAcquisitionType, MRSeriesRename, Modality, SeriesRename,
-    T1SeriesRename, T2SeriesRename,
+    ASLSeriesRename, BValue, BodyPart, CTSeriesRename, Contrast, DSCSeriesRename, DTISeries,
+    EchoTime, EnumExt, ImageOrientation, MRAcquisitionType, MRSeriesRename, Modality, NullEnum,
+    RepetitionTime, SeriesRename, SeriesType, T1SeriesRename, T2SeriesRename,
 };
+
+// Re-export CLI types
+pub use cli::{Cli, Commands};
+
+// Re-export utility functions
+pub use utils::fs::{collect_dicom_files, ensure_dir, is_dicom_file, DicomFileInfo};
+pub use utils::parallel::{ParallelConfig, ParallelExecutor, ProcessingStats};
+pub use utils::regex_patterns::PATTERNS;
