@@ -4,17 +4,20 @@
 
 use crate::cli::args::*;
 use crate::config::{EnumExt, Modality, MRSeriesRename, T1SeriesRename, T2SeriesRename, CTSeriesRename};
+use crate::manager::{ConvertManager, SeriesOrganizer};
+use crate::strategies::StrategyRegistry;
 use crate::utils::fs::{self, collect_dicom_files, ensure_dir, list_nifti_files};
 use crate::utils::parallel::{ParallelConfig, ParallelExecutor, ProcessingStats, ProcessingTimer};
 
 use anyhow::{Context, Result};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
 /// Run the CLI with the given arguments
 pub fn run(cli: Cli) -> Result<()> {
-    match cli.command {
+    match &cli.command {
         Commands::Rename(args) => run_rename(args, &cli),
         Commands::Convert(args) => run_convert(args, &cli),
         Commands::Pipeline(args) => run_pipeline(args, &cli),
@@ -28,7 +31,7 @@ pub fn run(cli: Cli) -> Result<()> {
 }
 
 /// Run the rename command
-fn run_rename(args: RenameArgs, cli: &Cli) -> Result<()> {
+fn run_rename(args: &RenameArgs, cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("DICOM rename");
 
     info!("Starting DICOM rename");
@@ -60,24 +63,46 @@ fn run_rename(args: RenameArgs, cli: &Cli) -> Result<()> {
 
     if args.dry_run {
         info!("Dry run mode - no files will be modified");
+
+        // Create organizer to show what would be done
+        let registry = Arc::new(StrategyRegistry::default());
+        let organizer = SeriesOrganizer::new(registry);
+
+        // Group files by series to show preview
+        let file_paths: Vec<_> = dicom_files.iter().map(|f| f.path.clone()).collect();
+        let groups = organizer.group_by_series(&file_paths)?;
+
         println!("\nDry run summary:");
         println!("  DICOM files found: {}", dicom_files.len());
+        println!("  Series identified: {}", groups.len());
+        for (series_name, files) in &groups {
+            println!("    - {}: {} files", series_name, files.len());
+        }
         println!("  Would process: {:?} -> {:?}", args.input, args.output);
         return Ok(());
     }
 
-    // TODO: Implement actual rename logic
-    // This requires the ConvertManager to be implemented
-    warn!("DICOM rename not fully implemented yet");
-    println!("\nRename command structure ready.");
-    println!("Actual rename logic requires ConvertManager implementation.");
+    // Create series organizer with strategy registry
+    let registry = Arc::new(StrategyRegistry::default());
+    let organizer = SeriesOrganizer::new(registry)
+        .with_copy_mode(args.copy)
+        .with_series_subfolder(true);
+
+    // Organize files
+    let file_paths: Vec<_> = dicom_files.iter().map(|f| f.path.clone()).collect();
+    let result = organizer.organize_files(&file_paths, &args.output)?;
+
+    println!("\nRename Results:");
+    println!("  Organized: {} files", result.success_count);
+    println!("  Skipped:   {} files", result.skip_count);
+    println!("  Failed:    {} files", result.fail_count);
 
     timer.stop();
     Ok(())
 }
 
 /// Run the convert command
-fn run_convert(args: ConvertArgs, cli: &Cli) -> Result<()> {
+fn run_convert(args: &ConvertArgs, cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("DICOM to NIfTI conversion");
 
     info!("Starting DICOM to NIfTI conversion");
@@ -93,18 +118,41 @@ fn run_convert(args: ConvertArgs, cli: &Cli) -> Result<()> {
     // Create output directory
     ensure_dir(&args.output)?;
 
-    // TODO: Implement actual conversion logic
-    // This requires the Dicm2NiixConverter to be implemented
-    warn!("DICOM to NIfTI conversion not fully implemented yet");
-    println!("\nConvert command structure ready.");
-    println!("Actual conversion requires dcm2niix integration.");
+    // Create conversion manager
+    let manager = ConvertManager::new();
+
+    // Process the directory
+    let result = manager.process_directory(&args.input, &args.output)?;
+
+    println!("\nConversion Results:");
+    println!("  Study folder: {}", result.study_folder);
+    println!("  Patient ID:   {}", result.patient_id.as_deref().unwrap_or("unknown"));
+    println!("  Study date:   {}", result.study_date.as_deref().unwrap_or("unknown"));
+    println!("  Total files:  {}", result.total_files);
+    println!("  Total series: {}", result.total_series);
+    println!("  Successful:   {}", result.successful);
+    println!("  Failed:       {}", result.failed);
+
+    if !result.series_results.is_empty() {
+        println!("\nSeries Details:");
+        for series in &result.series_results {
+            let status = if series.success { "✓" } else { "✗" };
+            println!("  {} {} ({} files)", status, series.series_name, series.file_count);
+            if let Some(ref output) = series.output_path {
+                println!("      -> {:?}", output);
+            }
+            if let Some(ref err) = series.error {
+                println!("      Error: {}", err);
+            }
+        }
+    }
 
     timer.stop();
     Ok(())
 }
 
 /// Run the full pipeline command
-fn run_pipeline(args: PipelineArgs, cli: &Cli) -> Result<()> {
+fn run_pipeline(args: &PipelineArgs, cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("Full pipeline");
 
     info!("Starting full pipeline");
@@ -140,7 +188,7 @@ fn run_pipeline(args: PipelineArgs, cli: &Cli) -> Result<()> {
         exclude: None,
         dry_run: false,
     };
-    run_rename(rename_args, cli)?;
+    run_rename(&rename_args, cli)?;
 
     // Step 2: Convert to NIfTI
     info!("\n=== Step 2: DICOM to NIfTI ===");
@@ -154,7 +202,7 @@ fn run_pipeline(args: PipelineArgs, cli: &Cli) -> Result<()> {
         compression: 6,
         filename_format: "%f".to_string(),
     };
-    run_convert(convert_args, cli)?;
+    run_convert(&convert_args, cli)?;
 
     // Step 3: Post-process NIfTI
     info!("\n=== Step 3: Post-processing ===");
@@ -164,19 +212,19 @@ fn run_pipeline(args: PipelineArgs, cli: &Cli) -> Result<()> {
         cleanup: true,
         min_size_kb: 100,
     };
-    run_postprocess(postprocess_args, cli)?;
+    run_postprocess(&postprocess_args, cli)?;
 
     // Step 4: Generate stats if requested
     if args.stats {
         info!("\n=== Step 4: Statistics ===");
         let stats_args = StatsArgs {
             path: args.output.clone(),
-            format: args.stats_format,
+            format: args.stats_format.clone(),
             output: None,
             recursive: true,
             include_hash: false,
         };
-        run_stats(stats_args, cli)?;
+        run_stats(&stats_args, cli)?;
     }
 
     // Cleanup intermediate files if not keeping
@@ -192,7 +240,7 @@ fn run_pipeline(args: PipelineArgs, cli: &Cli) -> Result<()> {
 }
 
 /// Run the postprocess command
-fn run_postprocess(args: PostprocessArgs, cli: &Cli) -> Result<()> {
+fn run_postprocess(args: &PostprocessArgs, _cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("NIfTI post-processing");
 
     info!("Starting NIfTI post-processing");
@@ -241,7 +289,7 @@ fn run_postprocess(args: PostprocessArgs, cli: &Cli) -> Result<()> {
 }
 
 /// Run the stats command
-fn run_stats(args: StatsArgs, cli: &Cli) -> Result<()> {
+fn run_stats(args: &StatsArgs, _cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("Statistics generation");
 
     info!("Generating statistics");
@@ -277,7 +325,7 @@ fn run_stats(args: StatsArgs, cli: &Cli) -> Result<()> {
     println!("Total DICOM size: {:.2} MB", total_dicom_size as f64 / 1024.0 / 1024.0);
 
     // Determine output file
-    let output_path = args.output.unwrap_or_else(|| {
+    let output_path = args.output.clone().unwrap_or_else(|| {
         let ext = match args.format {
             OutputFormat::Csv => "csv",
             OutputFormat::Json => "json",
@@ -295,7 +343,7 @@ fn run_stats(args: StatsArgs, cli: &Cli) -> Result<()> {
 }
 
 /// Run the nii2dcm command
-fn run_nii2dcm(args: Nii2dcmArgs, cli: &Cli) -> Result<()> {
+fn run_nii2dcm(args: &Nii2dcmArgs, _cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("NIfTI to DICOM conversion");
 
     info!("Starting NIfTI to DICOM conversion");
@@ -356,7 +404,7 @@ fn run_list_series() -> Result<()> {
 }
 
 /// Run the validate command
-fn run_validate(args: ValidateArgs, cli: &Cli) -> Result<()> {
+fn run_validate(args: &ValidateArgs, _cli: &Cli) -> Result<()> {
     let timer = ProcessingTimer::start("DICOM validation");
 
     info!("Validating DICOM files");
@@ -397,7 +445,7 @@ fn run_validate(args: ValidateArgs, cli: &Cli) -> Result<()> {
     println!("  Invalid: {}", invalid_count);
 
     // Write report if output specified
-    if let Some(output) = args.output {
+    if let Some(ref output) = args.output {
         info!("Validation report would be saved to: {:?}", output);
     }
 

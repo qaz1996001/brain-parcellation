@@ -184,7 +184,7 @@ impl ParallelExecutor {
     /// * `Vec<R>` - Flattened results from all batches
     pub fn execute_batched<T, R, F>(&self, items: Vec<T>, f: F) -> Vec<R>
     where
-        T: Send + Sync,
+        T: Send + Sync + Clone,
         R: Send,
         F: Fn(Vec<T>) -> Vec<R> + Send + Sync,
     {

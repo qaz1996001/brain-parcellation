@@ -17,11 +17,11 @@
 //! ## Example
 //!
 //! ```rust,ignore
-//! use dicom2nii::cli::{Cli, run};
-//! use clap::Parser;
+//! use dicom2nii::ConvertManager;
 //!
-//! let cli = Cli::parse();
-//! run(cli)?;
+//! let manager = ConvertManager::new();
+//! let result = manager.process_directory("input", "output")?;
+//! println!("Converted {} series", result.successful);
 //! ```
 //!
 //! ## Modules
@@ -29,11 +29,10 @@
 //! - [`config`]: Configuration and enum definitions
 //! - [`utils`]: Utility functions (filesystem, parallel processing, regex)
 //! - [`cli`]: Command-line interface
-//! - [`dicom`]: DICOM file parsing (TODO)
-//! - [`nifti`]: NIfTI file handling (TODO)
-//! - [`strategies`]: Processing strategies for different series types (TODO)
-//! - [`postprocess`]: Post-processing utilities (TODO)
-//! - [`manager`]: High-level conversion management (TODO)
+//! - [`dicom`]: DICOM file parsing and metadata extraction
+//! - [`nifti`]: NIfTI file handling via dcm2niix
+//! - [`strategies`]: Processing strategies for different series types
+//! - [`manager`]: High-level conversion management
 
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -41,13 +40,10 @@
 pub mod config;
 pub mod utils;
 pub mod cli;
-
-// TODO: Implement these modules
-// pub mod dicom;
-// pub mod nifti;
-// pub mod strategies;
-// pub mod postprocess;
-// pub mod manager;
+pub mod dicom;
+pub mod nifti;
+pub mod strategies;
+pub mod manager;
 
 // Conditional compilation for Python bindings
 #[cfg(feature = "python")]
@@ -88,3 +84,16 @@ pub use cli::{Cli, Commands};
 pub use utils::fs::{collect_dicom_files, ensure_dir, is_dicom_file, DicomFileInfo};
 pub use utils::parallel::{ParallelConfig, ParallelExecutor, ProcessingStats};
 pub use utils::regex_patterns::PATTERNS;
+
+// Re-export DICOM types
+pub use dicom::{DicomMetadata, DicomReader};
+
+// Re-export NIfTI types
+pub use nifti::NiftiConverter;
+
+// Re-export strategy types
+pub use strategies::{ProcessingStrategy, ProcessingResult, StrategyRegistry};
+pub use strategies::mr::{T1ProcessingStrategy, DwiProcessingStrategy, AdcProcessingStrategy};
+
+// Re-export manager types
+pub use manager::{ConvertManager, SeriesOrganizer};
