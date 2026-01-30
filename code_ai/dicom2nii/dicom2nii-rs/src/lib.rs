@@ -72,6 +72,15 @@ pub use config::{
     RepetitionTime, SeriesRename, SeriesType, T1SeriesRename, T2SeriesRename,
 };
 
+// Re-export configuration settings
+pub use config::{
+    get_config, init_config, init_default_config, Settings,
+    GeneralSettings, FilesystemSettings, Dcm2niixSettings,
+    ThresholdSettings, FileSizeThresholds, TrTeThreshold,
+    DwiSettings, OrientationSettings, DicomTagSettings,
+    ExclusionSettings, OutputSettings, PostprocessSettings,
+};
+
 // Re-export CLI types
 pub use cli::{Cli, Commands};
 
