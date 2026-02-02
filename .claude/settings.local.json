@@ -1,0 +1,148 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Skill(sc:git)",
+      "Bash(git restore:*)",
+      "Bash(git push:*)",
+      "Bash(tree:*)",
+      "Bash(openspec list:*)",
+      "Bash(openspec validate:*)",
+      "mcp__graph-memory__create_entities",
+      "mcp__graph-memory__create_relations",
+      "mcp__graph-memory__add_observations",
+      "mcp__graph-memory__search_nodes",
+      "Bash(python:*)",
+      "Bash(set:*)",
+      "Bash(openspec show:*)",
+      "Bash(cd:*)",
+      "Bash(test:*)",
+      "mcp__serena__write_memory",
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "WebSearch",
+      "Bash(openspec proposal parameterize-upload-api-url)",
+      "Bash(openspec --help:*)",
+      "Bash(openspec change --help:*)",
+      "mcp__serena__read_file",
+      "mcp__serena__list_dir",
+      "Bash(mkdir:*)",
+      "Bash(uvx ruff:*)",
+      "Bash(netstat:*)",
+      "Bash(ss -tuln:*)",
+      "Bash(dir:*)",
+      "mcp__serena__initial_instructions",
+      "mcp__serena__get_current_config",
+      "Bash(findstr:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(/opt/miniconda3/envs/tf_2_14/bin/python:*)",
+      "WebFetch(domain:docs.advanced-alchemy.litestar.dev)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git branch:*)",
+      "Bash(cat:*)",
+      "mcp__serena__find_symbol",
+      "mcp__serena__activate_project",
+      "Skill(openspec:proposal)",
+      "Skill(ralph-wiggum:ralph-loop)",
+      "Bash(tee:*)",
+      "mcp__serena__find_file",
+      "mcp__serena__search_for_pattern",
+      "mcp__sequential-thinking__sequentialthinking",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__insert_before_symbol",
+      "mcp__serena__replace_symbol_body",
+      "mcp__serena__find_referencing_symbols",
+      "mcp__serena__insert_after_symbol",
+      "Bash(source .venv/bin/activate)",
+      "mcp__serena__think_about_whether_you_are_done",
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "mcp__serena__list_memories",
+      "mcp__serena__think_about_collected_information",
+      "mcp__serena__read_memory",
+      "Bash(python3:*)",
+      "Bash(source:*)",
+      "Bash(conda activate:*)",
+      "Bash(export PYTHONPATH=/mnt/d/00_Chen/Task04_git:*)",
+      "Bash(conda:*)",
+      "Bash(conda info:*)",
+      "Bash(pkill -f \"grep -l ''''class SynthSeg''''\")",
+      "Bash(git -C /mnt/d/00_Chen/Task04_git log --oneline -5 --all)",
+      "Bash(PYTHONPATH=\"/mnt/d/00_Chen/Task04_git/pipelinecore/src:$PYTHONPATH\" python3:*)",
+      "Bash(grep:*)",
+      "Bash(for f in code_ai/parcellation/bullseye/parcellation.py code_ai/parcellation/david/run_inference.py code_ai/parcellation/wmh/run_inference.py code_ai/parcellation/dwi/run_inference.py code_ai/parcellation/cmb/run_inference.py code_ai/parcellation/run/cli.py code_ai/SynthSeg/run_inference.py code_ai/SynthSeg/evaluate.py code_ai/SynthSeg/predict.py)",
+      "WebFetch(domain:surfer.nmr.mgh.harvard.edu)",
+      "Bash(openspec archive:*)",
+      "Bash(git show:*)",
+      "Bash(git log:*)",
+      "Bash(git worktree:*)",
+      "mcp__serena__check_onboarding_performed",
+      "Bash(uv tool run ruff:*)",
+      "Bash(uv tool run:*)",
+      "Skill(ralph-loop:cancel-ralph)",
+      "Bash(xargs -I {} bash -c 'echo \"\"\"\"=== {} ===\"\"\"\" && grep -c \"\"\"\"[\\\\u4e00-\\\\u9fff]\"\"\"\" {} 2>/dev/null || echo \"\"\"\"0\"\"\"\"')",
+      "WebFetch(domain:refactoring.guru)",
+      "WebFetch(domain:martinfowler.com)",
+      "mcp__serena__think_about_task_adherence",
+      "mcp__serena__edit_memory"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/skill-force-eval.js"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-uv.js"
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/skill-force-eval.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/auto-lint.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/auto-lint.js"
+          }
+        ]
+      }
+    ]
+  }
+}
