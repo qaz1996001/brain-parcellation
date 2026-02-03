@@ -17,6 +17,7 @@ pynvml==12.0.0
 import glob
 import shutil
 import warnings
+from typing import Any, Dict, Optional, Tuple
 from code_ai.utils.inference import InferenceEnum
 
 warnings.filterwarnings("ignore")  # 忽略警告輸出
@@ -50,7 +51,8 @@ def pipeline_cmb(
     path_log="/mnt/d/wsl_ubuntu/pipeline/sean/log/",
     path_synthseg="/mnt/d/wsl_ubuntu/pipeline_synthseg/",
     gpu_n=0,
-):
+    needFollowup: Optional[Dict[str, Any]] = None,
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     # 當使用gpu有錯時才確認
     logger = tf.get_logger()
     logger.setLevel(logging.ERROR)
@@ -140,6 +142,17 @@ def pipeline_cmb(
                 output_json_path_str=output_json_path_str,
             )
             logging.info("!!! " + str(ID) + " gpu_cmb finish.")
+
+            # ===== Followup 觸發邏輯 =====
+            if needFollowup:
+                _trigger_followup_pipeline(
+                    current_study_id=ID,
+                    current_output_path=path_output,
+                    current_nii_path=output_nii_path_str,
+                    current_synthseg_path=synthseg_temp_path_basename,
+                    needFollowup=needFollowup,
+                )
+
             return (
                 synthseg_temp_path_basename,
                 output_nii_path_str,
@@ -153,6 +166,68 @@ def pipeline_cmb(
         logging.error("Catch an exception.", exc_info=True)
 
     return None, None, None
+
+
+def _trigger_followup_pipeline(
+    current_study_id: str,
+    current_output_path: str,
+    current_nii_path: str,
+    current_synthseg_path: str,
+    needFollowup: Dict[str, Any],
+) -> None:
+    """
+    觸發 followup 比對 pipeline
+
+    needFollowup 結構（由 API 傳入）：
+    {
+        "baseline_ID": str,
+        "baseline_Inputs": [pred_path, synthseg_path],
+        "baseline_DicomDir": str,
+        "baseline_DicomSegDir": str,
+        "baseline_json": str,
+        "followup_DicomSegDir": str,
+        "followup_json": str,
+        "model": str,  # "CMB"
+    }
+    """
+    from code_ai.pipeline.followup import pipeline_followup
+
+    model = needFollowup.get("model", "CMB")
+    path_process = os.getenv("PATH_PROCESS", "")
+    fsl_flirt_path = os.getenv("FSL_FLIRT_PATH", "/usr/local/fsl/bin/flirt")
+
+    # 組合 followup 的輸入路徑（來自當前 CMB 推論的輸出）
+    followup_pred = current_nii_path
+    followup_synthseg = current_synthseg_path
+
+    # followup JSON 可由 API 指定，或使用預設路徑
+    path_output_dir = os.path.join(current_output_path, current_study_id)
+    followup_json = needFollowup.get("followup_json") or os.path.join(
+        path_output_dir, f"Pred_{model}_platform_json.json"
+    )
+
+    logging.info(f"[Followup] 觸發 followup pipeline: baseline={needFollowup['baseline_ID']}, followup={current_study_id}")
+
+    try:
+        pipeline_followup(
+            baseline_ID=needFollowup["baseline_ID"],
+            baseline_Inputs=needFollowup["baseline_Inputs"],
+            baseline_DicomDir=needFollowup.get("baseline_DicomDir", ""),
+            baseline_DicomSegDir=needFollowup["baseline_DicomSegDir"],
+            baseline_json=needFollowup["baseline_json"],
+            followup_ID=current_study_id,
+            followup_Inputs=[followup_pred, followup_synthseg],
+            followup_DicomSegDir=needFollowup["followup_DicomSegDir"],
+            followup_json=followup_json,
+            path_output=current_output_path,
+            path_process=path_process,
+            model=model,
+            fsl_flirt_path=fsl_flirt_path,
+        )
+        logging.info(f"[Followup] 完成 followup pipeline: baseline={needFollowup['baseline_ID']}")
+    except Exception as e:
+        logging.error(f"[Followup] followup pipeline 失敗: {e}")
+        logging.error("Catch an exception.", exc_info=True)
 
 
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
@@ -185,6 +260,11 @@ if __name__ == "__main__":
     swan_path_str = Inputs[0]
     t1_path_str = Inputs[1]
 
+    # 讀取 needFollowup 環境變數（由 task_pipeline 傳入）
+    import json
+    needFollowup_json = os.getenv("NEED_FOLLOWUP_JSON")
+    needFollowup = json.loads(needFollowup_json) if needFollowup_json else None
+
     # 建置資料夾
     os.makedirs(
         path_processModel, exist_ok=True
@@ -205,6 +285,7 @@ if __name__ == "__main__":
         path_log,
         path_synthseg,
         gpu_n,
+        needFollowup=needFollowup,
     )
 
     if output_nii_path_str is not None:
