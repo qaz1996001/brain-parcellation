@@ -1176,17 +1176,17 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         排程新 Study 的同步任務（去重並過濾）。
 
         此方法是 `add_study_new` 的包裝方法，提供以下額外功能：
-        1. 自動去重：移除重複的 Study UID
+        1. 自動去重：移除重複的 Study UID（保持原始順序）
         2. 過濾無效值：移除 None 和空字串
         3. 統一介面：提供更語義化的方法名稱
-        4. 建立 needFollowup 映射，使用 orthancStudyUid 作為鍵值
+        4. 建立 needFollowup 映射，使用索引對應（study_ids[i] → need_followup[i]）
 
         Parameters
         ----------
         study_ids : list[Optional[str]]
             Study UID 清單（可能包含重複和 None）。
         need_followup : list[dict], optional
-            需要追蹤的 Study 資訊列表，每個項目應包含 orthancStudyUid 欄位。
+            需要追蹤的 Study 資訊列表，按陣列索引與 study_ids 對應。
 
         Returns
         -------
@@ -1196,27 +1196,37 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
         Examples
         --------
         >>> study_ids = ["study-uid-123", "study-uid-123", None, "study-uid-456"]
-        >>> events = await service.schedule_new_studies(study_ids)
-        >>> # 結果：只處理 "study-uid-123" 和 "study-uid-456"（去重並過濾 None）
+        >>> need_followup = [{"patient_id": "123"}, None, None, {"patient_id": "456"}]
+        >>> events = await service.schedule_new_studies(study_ids, need_followup)
+        >>> # 結果：處理 "study-uid-123"（對應 need_followup[0]）
+        >>> #       和 "study-uid-456"（對應 need_followup[3]）
 
         Notes
         -----
         此方法遵循 Good Taste 設計原則：
         - 消除特殊情況：統一處理重複和無效值
-        - 資料結構驅動：使用集合去重而非手動檢查
+        - 資料結構驅動：使用索引映射而非 key 映射（與 rerun 邏輯一致）
+        
+        修正說明（2026-02-03）：
+        - 原實現使用 orthancStudyUid 作為映射 key，但 orthancStudyUid 是「前次檢查」的 UID，
+          與當前傳入的 study_ids（當前檢查的 UID）不同，導致 needFollowup 永遠無法匹配。
+        - 現改為索引映射：study_ids[i] 對應 need_followup[i]，與 rerun 邏輯保持一致。
         """
         if need_followup is None:
             need_followup = []
 
-        # 建立 orthancStudyUid → followup 映射
-        followup_by_uid = {
-            entry["orthancStudyUid"]: entry
-            for entry in need_followup
-            if "orthancStudyUid" in entry
-        }
+        # 使用索引映射建立 followup_by_uid（保持原始順序進行去重）
+        unique_study_ids = []
+        seen = set()
+        followup_by_uid: Dict[str, Dict[str, Any]] = {}
 
-        # 去重並過濾無效值
-        unique_study_ids = list({uid for uid in study_ids if uid})
+        for idx, uid in enumerate(study_ids):
+            if uid and uid not in seen:
+                seen.add(uid)
+                unique_study_ids.append(uid)
+                # 使用索引映射：study_ids[idx] 對應 need_followup[idx]
+                if idx < len(need_followup) and need_followup[idx] is not None:
+                    followup_by_uid[uid] = need_followup[idx]
 
         # 如果沒有有效的 Study ID，返回空列表
         if not unique_study_ids:
