@@ -639,6 +639,7 @@ def build_inference_cmd(
     nifti_study_path: pathlib.Path,
     dicom_study_path: pathlib.Path,
     config_path: Optional[Union[str, os.PathLike[str]]] = None,
+    needFollowup: Optional[List[Dict[str, Any]]] = None,
 ) -> InferenceCmd:
     from code_ai.pipeline import pipelines
 
@@ -668,6 +669,7 @@ def build_inference_cmd(
             task,
             input_dicom_dir=input_dicom_dir,
             input_dicom_dirs=input_dicom_dirs,
+            needFollowup=needFollowup,
         )
         inference_item_list.append(
             InferenceCmdItem(

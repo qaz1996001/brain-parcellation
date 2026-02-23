@@ -203,7 +203,8 @@ def _prepare_directories() -> Dict[str, str]:
 
 def _build_inference_commands(
     nifti_study_path: str,
-    dicom_study_path: str
+    dicom_study_path: str,
+    needFollowup: Optional[List[Dict[str, Any]]] = None,
 ) -> InferenceCmd:
     """
     建立推論命令列表。
@@ -222,6 +223,10 @@ def _build_inference_commands(
         DICOM Study 目錄路徑。此路徑應包含原始 DICOM 檔案。
         用於推論任務的元資料提取和結果對應。
         格式範例："/path/to/dicom/study_id"
+    needFollowup : Optional[List[Dict[str, Any]]], optional
+        追蹤檢查資訊列表，用於 CMB 追蹤比對。
+        每個 Dict 包含 baseline Study 的資訊（patient_id, study_date 等）。
+        若為 None，則不會加入 --needFollowup 參數到命令中。
 
     Returns
     -------
@@ -300,7 +305,8 @@ def _build_inference_commands(
     """
     return build_inference_cmd(
         pathlib.Path(nifti_study_path),
-        pathlib.Path(dicom_study_path)
+        pathlib.Path(dicom_study_path),
+        needFollowup=needFollowup,
     )
 
 
@@ -825,9 +831,14 @@ def task_pipeline_inference(func_params: Dict[str, Any]) -> str:
     directories = _prepare_directories()
     
     # 步驟 3: 建立推論命令
+    # 提取 needFollowup（InferenceTaskParams 允許 extra fields）
+    params_dict = params.model_dump()
+    needFollowup = params_dict.get("needFollowup")
+
     inference_cmd = _build_inference_commands(
         params.nifti_study_path,
-        params.dicom_study_path
+        params.dicom_study_path,
+        needFollowup=needFollowup,
     )
     
     # 步驟 4: 儲存命令到檔案（用於審計和除錯）

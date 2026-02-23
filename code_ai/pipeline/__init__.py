@@ -1,7 +1,9 @@
 import argparse
+import json
 import os
 import pathlib
-from typing import Callable, List, Optional
+import shlex
+from typing import Any, Callable, Dict, List, Optional
 from code_ai.utils import study_id_pattern
 from code_ai.utils.inference import InferenceEnum, Task
 from code_ai.pipeline.upload import upload_json,platform_json
@@ -52,11 +54,12 @@ class PipelineConfig:
         task: Task,
         input_dicom_dir: Optional[str] = None,
         input_dicom_dirs: Optional[List[str]] = None,
+        needFollowup: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         input_paths = [str(path) for path in task.input_path_list]
         dicom_args = self._collect_dicom_args(input_dicom_dir, input_dicom_dirs)
         builder = self._resolve_command_builder()
-        return builder(study_id, task, input_paths, dicom_args)
+        return builder(study_id, task, input_paths, dicom_args, needFollowup)
 
     def _collect_dicom_args(
         self,
@@ -69,7 +72,7 @@ class PipelineConfig:
             return [input_dicom_dir]
         return []
 
-    def _resolve_command_builder(self) -> Callable[[str, Task, List[str], List[str]], str]:
+    def _resolve_command_builder(self) -> Callable[[str, Task, List[str], List[str], Optional[List[Dict[str, Any]]]], str]:
         if self.data_key in self.chuan_root_data_key:
             return self._build_chuan_command
         return self._build_python_command
@@ -80,6 +83,7 @@ class PipelineConfig:
         task: Task,
         input_paths: List[str],
         dicom_args: List[str],
+        needFollowup: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         path_root = pathlib.Path(os.getenv('PATH_ROOT') or "")
         chuan_root = path_root.parent.joinpath('chuan')
@@ -102,6 +106,7 @@ class PipelineConfig:
         task: Task,
         input_paths: List[str],
         dicom_args: List[str],
+        needFollowup: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         output_path = os.path.dirname(task.output_path)
         command_parts = [
@@ -116,6 +121,11 @@ class PipelineConfig:
 
         if dicom_args:
             command_parts.extend(['--InputsDicomDir', dicom_args[0]])
+
+        # 加入 needFollowup 參數（僅 CMB 使用）
+        if needFollowup:
+            needFollowup_json = json.dumps(needFollowup, ensure_ascii=False)
+            command_parts.extend(['--needFollowup', shlex.quote(needFollowup_json)])
 
         return " ".join(command_parts)
 
