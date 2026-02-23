@@ -18,7 +18,6 @@ class BoosterParamsMyRABBITMQ(
     is_using_rpc_mode: bool = True
     rpc_result_expire_seconds: int = 2700
     function_timeout: int = 2700
-    rpc_timeout: int = 2700
     booster_group: str = "dicom_process"  # 預設分組
 
 class BoosterParamsMyAI(BoosterParamsMyRABBITMQ):
