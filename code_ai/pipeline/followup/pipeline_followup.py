@@ -39,9 +39,10 @@ def pipeline_followup(
     followup_DicomSegDir: str,
     followup_json: str,
     path_output: str,
-    model: str = "CMB",
+    path_process: str,
+
+     model: str = "CMB",
     path_code: str = "",
-    path_process: str = "",
     path_json: str = "",
     path_log: str = "",
     gpu_n: int = 0,
@@ -85,8 +86,10 @@ def pipeline_followup(
     _overwrite_pred_geometry_from_synthseg(pred_file=baseline_pred, synthseg_file=baseline_synthseg)
     _overwrite_pred_geometry_from_synthseg(pred_file=followup_pred, synthseg_file=followup_synthseg)
 
-    _copy_dir(Path(baseline_DicomSegDir), baseline_dir / "dicom-seg")
-    _copy_dir(Path(followup_DicomSegDir), followup_dir / "dicom-seg")
+    if baseline_DicomSegDir:
+        _copy_dir(Path(baseline_DicomSegDir), baseline_dir / "dicom-seg")
+    if followup_DicomSegDir:
+        _copy_dir(Path(followup_DicomSegDir), followup_dir / "dicom-seg")
     if baseline_DicomDir:
         _copy_dir(Path(baseline_DicomDir), dicom_dir / "baseline")
 
@@ -141,8 +144,10 @@ def pipeline_followup(
 
     out_dicom_seg = output_root / "dicom-seg"
     _ensure_dirs([out_dicom_seg])
-    _copy_dir(baseline_dir / "dicom-seg", out_dicom_seg / "baseline")
-    _copy_dir(followup_dir / "dicom-seg", out_dicom_seg / "followup")
+    if (baseline_dir / "dicom-seg").exists():
+        _copy_dir(baseline_dir / "dicom-seg", out_dicom_seg / "baseline")
+    if (followup_dir / "dicom-seg").exists():
+        _copy_dir(followup_dir / "dicom-seg", out_dicom_seg / "followup")
 
     if upload_json:
         _upload_json_to_platform(output_root / followup_json_out.name)

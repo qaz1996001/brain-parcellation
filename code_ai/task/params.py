@@ -17,8 +17,8 @@ class BoosterParamsMyRABBITMQ(
     # user_custom_record_process_info_func: typing.Callable = None  # 提供一個使用者自定義的儲存訊息處理記錄到某個地方（例如 MySQL 資料庫）的函數，函數僅接受一個輸入參數，參數類型是 FunctionResultStatus，使用者可以列印參數
     is_using_rpc_mode: bool = True
     rpc_result_expire_seconds: int = 2700
-    function_timeout = 2700
-    rpc_timeout = 2700
+    function_timeout: int = 2700
+    rpc_timeout: int = 2700
     booster_group: str = "dicom_process"  # 預設分組
 
 class BoosterParamsMyAI(BoosterParamsMyRABBITMQ):
