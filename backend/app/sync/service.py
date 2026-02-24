@@ -2502,6 +2502,9 @@ class DCOPEventDicomService(BaseRepositoryService[DCOPEventModel]):
             
             # 若有 needFollowup，加入 params_data
             if need_followup is not None:
+                # 確保 needFollowup 總是 List[Dict] 格式（DB 儲存時是單一 Dict）
+                if isinstance(need_followup, dict):
+                    need_followup = [need_followup]
                 inference_params["needFollowup"] = need_followup
 
             # Create STUDY_INFERENCE_READY event

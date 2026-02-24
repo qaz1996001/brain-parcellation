@@ -339,7 +339,15 @@ if __name__ == "__main__":
     # 讀取 needFollowup: CLI > env var (backward compatible)
     import json
     needFollowup_json = args.needFollowup or os.getenv("NEED_FOLLOWUP_JSON")
-    needFollowup = json.loads(needFollowup_json) if needFollowup_json else None
+    if needFollowup_json:
+        # 移除可能的外層引號（shlex.quote 可能產生）
+        needFollowup_json = needFollowup_json.strip().strip("'\"")
+        needFollowup = json.loads(needFollowup_json)
+        # 正規化：若為單一 dict 則包裝成 list
+        if isinstance(needFollowup, dict):
+            needFollowup = [needFollowup]
+    else:
+        needFollowup = None
 
     # 建置資料夾
     os.makedirs(
