@@ -87,7 +87,8 @@
       "WebFetch(domain:refactoring.guru)",
       "WebFetch(domain:martinfowler.com)",
       "mcp__serena__think_about_task_adherence",
-      "mcp__serena__edit_memory"
+      "mcp__serena__edit_memory",
+      "Bash(ls -1 /mnt/d/00_Chen/Task04_git/code_ai/pipeline/*.py | xargs -I {} basename {})"
     ],
     "deny": [],
     "ask": []
