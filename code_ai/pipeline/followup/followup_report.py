@@ -265,6 +265,10 @@ def _update_baseline_instances_with_followup(
     transform_direction: TransformDirection,
 ) -> None:
     for baseline_label, inst in baseline_instances.items():
+        # 確保每個 instance 都有 followup 數組字段（PHP 後端必需）
+        if "followup" not in inst or not isinstance(inst.get("followup"), list):
+            inst["followup"] = []
+
         followup_label = baseline_to_followup.get(baseline_label)
         if followup_label is None:
             inst["status"] = "new"
@@ -370,6 +374,8 @@ def _append_disappeared_followup_instances(
             input_mat_direction=transform_direction,
             context="disappeared",
         )
+        # 確保 disappeared instance 也有 followup 數組字段（PHP 後端必需）
+        entry["followup"] = []
         instances.append(entry)
 
 
