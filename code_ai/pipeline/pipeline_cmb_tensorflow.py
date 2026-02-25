@@ -15,8 +15,10 @@ pynvml==12.0.0
 """
 
 import glob
+import json
 import shutil
 import warnings
+from pathlib import Path as PathlibPath
 from typing import Any, Dict, List, Optional, Tuple
 from code_ai.utils.inference import InferenceEnum
 
@@ -303,6 +305,68 @@ def _find_synthseg_file(output_dir: str) -> Optional[str]:
     return matches[0] if matches else None
 
 
+def _trigger_followup_v3_pipeline(
+    current_study_id: str,
+    current_output_path: str,
+    needFollowup: List[Dict[str, Any]],
+    path_process: str,
+    fsl_flirt_path: str = "/usr/local/fsl/bin/flirt",
+) -> None:
+    """
+    觸發 followup v3 pipeline（Platform JSON + NIfTI）。
+
+    與舊版差異：
+    - 單次呼叫處理所有 followup（不需外部迴圈）
+    - 支援多模型（Aneurysm, CMB, Infarct, WMH）
+    - 輸出 Platform JSON 格式（含 followup/sorted_slice 欄位）
+    """
+    from code_ai.pipeline.followup.chuan.pipeline_followup_v3_platform import (
+        pipeline_followup_v3_platform,
+    )
+
+    # 1. 組裝 input_json 內容
+    input_payload = {"needFollowup": needFollowup}
+
+    # 2. 寫入暫存 JSON 檔
+    followup_input_dir = os.path.join(path_process, "Deep_FollowUp", current_study_id)
+    os.makedirs(followup_input_dir, exist_ok=True)
+    input_json_path = PathlibPath(followup_input_dir) / f"{current_study_id}_followup_input.json"
+    input_json_path.write_text(
+        json.dumps(input_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"[Followup-v3] Written input json: {input_json_path}")
+
+    # 3. 呼叫 v3 pipeline（只處理 CMB model_type=2）
+    try:
+        outputs, has_model = pipeline_followup_v3_platform(
+            input_json=input_json_path,
+            path_process=PathlibPath(current_output_path),
+            model="CMB",
+            model_type=2,
+            case_id=current_study_id,
+            path_followup_root=PathlibPath(path_process),
+            fsl_flirt_path=fsl_flirt_path,
+        )
+        if not has_model:
+            print("[Followup-v3] Skip: model CMB not in needFollowup.models")
+            logging.warning("[Followup-v3] model CMB not in needFollowup.models")
+            return
+
+        # 4. 複製輸出檔案回 {current_output_path}/{current_study_id}/
+        dest_dir = os.path.join(current_output_path, current_study_id)
+        os.makedirs(dest_dir, exist_ok=True)
+        for output in outputs:
+            dest_path = os.path.join(dest_dir, os.path.basename(str(output)))
+            shutil.copy2(str(output), dest_path)
+            print(f"[Followup-v3] Output: {output} -> {dest_path}")
+            logging.info(f"[Followup-v3] Output: {output} -> {dest_path}")
+
+    except Exception as e:
+        print(f"[Followup-v3] Failed: {e}")
+        logging.error(f"[Followup-v3] Failed: {e}")
+        logging.error("Catch an exception.", exc_info=True)
+
+
 # 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == "__main__":
     # /mnt/e/pipeline/sean/rename_nifti/15397285_20260129_MR_21412080021/Pred_CMB_platform_json.json
@@ -318,6 +382,8 @@ if __name__ == "__main__":
     parser = pipeline_parser()
     parser.add_argument('--needFollowup', type=str, default=None,
                         help='Followup config as JSON string (priority: CLI > env var NEED_FOLLOWUP_JSON)')
+    parser.add_argument('--followup-legacy', action='store_true', default=False,
+                        help='Use legacy followup pipeline instead of v3')
     args = parser.parse_args()
 
     ID = str(args.ID)
@@ -337,7 +403,6 @@ if __name__ == "__main__":
     t1_path_str = Inputs[1]
 
     # 讀取 needFollowup: CLI > env var (backward compatible)
-    import json
     needFollowup_json = args.needFollowup or os.getenv("NEED_FOLLOWUP_JSON")
     if needFollowup_json:
         # 移除可能的外層引號（shlex.quote 可能產生）
@@ -377,14 +442,24 @@ if __name__ == "__main__":
         # ===== Followup 觸發邏輯（在 dicom_seg 之後執行）=====
         print(f"[Followup] needFollowup = {needFollowup}")
         if needFollowup:
-            _trigger_followup_pipeline(
-                current_study_id=ID,
-                current_output_path=path_output,
-                current_nii_path=output_nii_path_str,
-                current_synthseg_path=cmb_path_str,
-                needFollowup=needFollowup,
-                path_process=path_process,
-            )
+            if args.followup_legacy:
+                print("[Followup] Using legacy pipeline")
+                _trigger_followup_pipeline(
+                    current_study_id=ID,
+                    current_output_path=path_output,
+                    current_nii_path=output_nii_path_str,
+                    current_synthseg_path=cmb_path_str,
+                    needFollowup=needFollowup,
+                    path_process=path_process,
+                )
+            else:
+                print("[Followup] Using v3 pipeline")
+                _trigger_followup_v3_pipeline(
+                    current_study_id=ID,
+                    current_output_path=path_output,
+                    needFollowup=needFollowup,
+                    path_process=path_process,
+                )
     #     upload_dicom_seg(
     #         path_output,
     #         output_nii_path_str,
