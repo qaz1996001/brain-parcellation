@@ -1,127 +1,258 @@
-## new venv install
+# SHH AI
 
-``` bash
-pip install uv 
-git clone ....
-cd ./brain-parcellation
-uv sync
-source .venv/bin/activate
-export PYTHONPATH=$(pwd) && python3 backend/app/main.py
-```
+Medical imaging DICOM processing and AI inference platform for brain MRI analysis. The system bridges DICOM archives (Orthanc), format conversion (NIFTI), and deep learning inference pipelines with comprehensive state tracking and retry capabilities.
+
+## Architecture Overview
 
 ```
- conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
- conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
-
+                    ┌─────────────┐
+                    │   Orthanc   │  DICOM Archive (PACS)
+                    │  :4242/8042 │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │   Backend   │  FastAPI REST API (:8000)
+                    │  /api/v1/*  │  Event-driven state machine
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+       ┌──────▼───┐  ┌──────▼──┐  ┌──────▼───┐
+       │ RabbitMQ │  │  Redis  │  │PostgreSQL│
+       │  :5672   │  │  :6379  │  │  :5432   │
+       └──────┬───┘  └─────────┘  └──────────┘
+              │
+       ┌──────▼──────┐
+       │   Worker    │  funboost task consumer
+       │  code_ai/*  │  AI inference pipelines
+       └─────────────┘
 ```
 
-## system python install
+## Project Structure
 
-``` bash
+```
+.
+├── backend/                  # FastAPI backend service
+│   └── app/
+│       ├── main.py           # Uvicorn entry point
+│       ├── server.py         # FastAPI app, CORS, Redis cache, lifespan
+│       ├── database.py       # SQLAlchemy async + Advanced Alchemy (PostgreSQL)
+│       ├── service.py        # Base repository service, session management
+│       ├── config/
+│       │   ├── constants.py  # Status enums (StudyStatus, SeriesStatus, InferenceTaskStatus)
+│       │   └── deps.py       # Dynamic filter/pagination dependency injection
+│       ├── sync/             # Core DICOM sync module (event-sourced state machine)
+│       │   ├── model.py      # DCOPEventModel, DCOPConfModel, StudyPrevLinkModel
+│       │   ├── schemas.py    # Pydantic DTOs, DCOPStatus enum, OrthancID validator
+│       │   ├── service.py    # DCOPEventDicomService (orchestrates full workflow)
+│       │   └── routers.py    # POST /sync/study, GET /sync/ope_no, etc.
+│       ├── series/           # DICOM sequence classification & orientation analysis
+│       │   ├── schemas.py    # SeriesResponse, series type dictionaries
+│       │   ├── routers.py    # POST /series/dicom/analyze/by-path, by-upload
+│       │   └── deps.py       # ConvertManager, ImageOrientationStrategy providers
+│       └── rerun/            # Study rerun/retry module
+│           ├── service.py    # ReRunStudyService
+│           └── routers.py    # POST /rerun/study/by-uid, by-rename_id
+│
+├── code_ai/                  # AI inference engine & processing pipelines
+│   ├── __init__.py           # Environment config loader
+│   ├── task/                 # Task queue framework (funboost)
+│   │   ├── params.py         # Booster queue params (RabbitMQ, concurrency)
+│   │   ├── task_pipeline.py  # task_pipeline_inference() - main entry point
+│   │   └── schema/           # Input/output parameter schemas
+│   ├── pipeline/             # Inference pipelines
+│   │   ├── __init__.py       # PipelineConfig - command builder registry
+│   │   ├── pipeline_cmb_tensorflow.py       # Cerebral Microbleed detection
+│   │   ├── pipeline_aneurysm_tensorflow.py  # Aneurysm detection (MRA)
+│   │   ├── pipeline_infarct_tensorflow.py   # Acute infarction detection (DWI)
+│   │   ├── pipeline_wmh_tensorflow.py       # White Matter Hyperintensity
+│   │   ├── pipeline_synthseg_tensorflow.py  # SynthSeg brain segmentation
+│   │   ├── main.py           # Multi-algorithm CLI processing
+│   │   ├── followup/         # Baseline vs follow-up comparison
+│   │   ├── dicomseg/         # DICOM-SEG export
+│   │   ├── rdx/              # Radiomics data extraction
+│   │   └── upload/           # Results upload to API
+│   ├── dicom2nii/            # DICOM to NIfTI conversion
+│   │   ├── main.py           # Conversion entry point
+│   │   └── convert/          # Series renaming (MR/CT), NIfTI conversion
+│   ├── utils/
+│   │   ├── inference/        # Command builder + config.yaml task mapping
+│   │   ├── parcellation/     # Brain region parcellation (CerebroParcellation, NumPy)
+│   │   ├── gpu_env.py        # GPU configuration (pynvml)
+│   │   └── database.py       # Database utilities
+│   ├── SynthSeg/             # Brain tissue segmentation (TensorFlow)
+│   ├── ext/                  # External ML libs (VoxelMorph/Neuron, lab2im)
+│   ├── utils_synthseg.py     # SynthSeg wrapper (33-label, 5-class)
+│   └── utils_parcellation.py # White matter parcellation, CMB/DWI region extraction
+│
+├── funboost_cli_user.py      # Task worker entry point (funboost consumer)
+├── funboost_config.py        # Message broker connection config
+├── docker-compose.yml        # Infrastructure services
+├── pyproject.toml            # Python dependencies (uv)
+├── scripts/                  # Utility & diagnostic scripts
+├── docs/                     # Documentation
+└── tests/                    # Test suites
+```
+
+## Processing Workflow
+
+```
+1. Raw DICOM ──► Rename DICOM
+   DCOPEventDicomService.get_series_info
+   → dicom_to_nii.process_dir
+   → post_ope_no_task
+   → check_study_series_transfer_complete
+
+2. Rename DICOM ──► Rename NIfTI
+   check_study_series_transfer_complete
+   → dicom_to_nii.dicom_2_nii_file
+   → study_series_nifti_tool
+   → check_study_series_conversion_complete
+
+3. Rename NIfTI ──► Pipeline Inference
+   check_study_series_conversion_complete
+   → task_pipeline_inference (via RabbitMQ)
+   → study_series_inference_nifti_tool
+   → check_study_series_inference_complete
+
+4. Inference Results ──► Upload
+   check_study_upload_complete
+```
+
+State transitions tracked via `DCOPEventModel` (event sourcing):
+
+```
+Study:     NEW → TRANSFERRING → TRANSFER_COMPLETE → CONVERTING → CONVERSION_COMPLETE
+           → INFERENCE_READY → QUEUED → RUNNING → COMPLETE → RESULTS_SENT
+```
+
+## Supported Inference Tasks
+
+| Task | Input | Description |
+|------|-------|-------------|
+| **SynthSeg** | T1/T2 | Brain tissue segmentation (33 labels / 5 classes) |
+| **Aneurysm** | MRA_BRAIN | Aneurysm detection from MRA sequences |
+| **CMB** | SWI/SWAN | Cerebral microbleed detection (with follow-up comparison) |
+| **Infarct** | DWI | Acute infarction detection |
+| **WMH** | T2FLAIR | White matter hyperintensity segmentation |
+| **Area** | T1 + SynthSeg | Brain area/volume quantification |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Web Framework | FastAPI + Uvicorn |
+| ORM | SQLAlchemy 2.0 async + Advanced Alchemy |
+| Database | PostgreSQL 16 (asyncpg) |
+| Cache | Redis 7 (fastapi-cache2) |
+| Task Queue | funboost + RabbitMQ |
+| DICOM Archive | Orthanc (with MinIO S3 storage) |
+| Deep Learning | TensorFlow 2.14, Keras |
+| Medical Imaging | nibabel, SimpleITK, pydicom, pyorthanc |
+| Data | pandas, NumPy 1.26, scikit-image |
+
+## Quick Start
+
+### Prerequisites
+
+- Python >= 3.10 (conda `tf_2_14` environment recommended)
+- Docker & Docker Compose (for infrastructure services)
+- GPU with TensorFlow support (for inference)
+
+### 1. Start Infrastructure
+
+```bash
+docker compose up -d
+```
+
+This starts: PostgreSQL, Redis, RabbitMQ, MinIO, Orthanc.
+
+### 2. Install Dependencies
+
+```bash
 pip install uv
-git clone ....
-cd ./brain-parcellation
+git clone <repo-url> && cd brain-parcellation
+uv sync
+```
+
+Or with system Python:
+
+```bash
 uv pip install -r pyproject.toml --system
+```
+
+### 3. Configure Environment
+
+Create a `.env` file with required variables:
+
+```env
+# Database
+POSTGRES_DB=dicom
+POSTGRES_USER=postgres_n
+POSTGRES_PASSWORD=postgres_p
+POSTGRES_PORT=15433
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# RabbitMQ
+RABBITMQ_USER=guest
+RABBITMQ_PASS=guest
+RABBITMQ_HOST=127.0.0.1
+RABBITMQ_PORT=5672
+RABBITMQ_VIRTUAL_HOST=/
+
+# Processing paths
+PATH_PROCESS=/path/to/processing
+PATH_JSON=/path/to/json
+PATH_LOG=/path/to/logs
+UPLOAD_DATA_API_URL=http://127.0.0.1:8000/api/v1
+```
+
+### 4. Run Services
+
+```bash
+# Terminal 1: Backend API
 export PYTHONPATH=$(pwd) && python3 backend/app/main.py
 
-conda activate shhai
-conda deactivate
+# Terminal 2: Task Worker (inference consumer)
+export PYTHONPATH=$(pwd) && python3 funboost_cli_user.py
 ```
 
-```bash 
-conda activate tf_2_14
+## API Endpoints
 
-cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
-cd /var/www/brain-parcellation && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
+Base URL: `http://localhost:8000/api/v1`
 
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/sync/study` | Submit DICOM study for processing |
+| POST | `/sync/study/transfer/complete` | Check transfer completion |
+| POST | `/sync/study/convert` | Check conversion completion |
+| POST | `/sync/nifti_tool` | Receive NIFTI tool completion report |
+| GET | `/sync/ope_no` | Query event log (with search/pagination) |
+| GET | `/sync/cache` | List inference task cache |
+| DELETE | `/sync/cache` | Clear study cache |
+| POST | `/series/dicom/analyze/by-path` | Analyze DICOM by file path |
+| POST | `/series/dicom/analyze/by-upload` | Analyze uploaded DICOM files |
+| GET | `/series/types` | List supported series types |
+| POST | `/rerun/study/by-uid` | Rerun study by UID |
+| POST | `/rerun/study/by-rename_id` | Rerun study by rename ID |
 
-conda activate tf_2_14
+## Running Individual Pipelines
 
+```bash
+# Aneurysm detection
+export PYTHONPATH=$(pwd) && python3 code_ai/pipeline/pipeline_aneurysm_tensorflow.py \
+  --ID <study_id> \
+  --Inputs /path/to/MRA_BRAIN.nii.gz \
+  --Output_folder /path/to/output \
+  --InputsDicomDir /path/to/dicom/MRA_BRAIN
+
+# WMH detection
+export PYTHONPATH=$(pwd) && python3 code_ai/pipeline/pipeline_wmh_tensorflow.py \
+  --ID <study_id> \
+  --Inputs /path/to/T2FLAIR_AXI.nii.gz /path/to/WMH_PVS.nii.gz /path/to/synthseg5.nii.gz \
+  --Output_folder /path/to/output \
+  --InputsDicomDir /path/to/dicom/T2FLAIR_AXI
 ```
-
-#### MRA_BRAIN 
-
-```bash 
-cd ./brain-parcellation
-
-```
-
-```bash 
-export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_aneurysm_tensorflow.py \
- --ID 14914694_20220905_MR_21109050071 \
-  --Inputs /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/MRA_BRAIN.nii.gz \
-   --Output_folder /mnt/e/pipeline/sean/rename_nifti \
-   --InputsDicomDir /mnt/e/pipeline/sean/rename_dicom/14914694_20220905_MR_21109050071/MRA_BRAIN
-```
-#### WMH
-
-```bash 
-export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_synthseg_wmh_tensorflow.py \
- --ID 14914694_20220905_MR_21109050071 \
-  --Inputs /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/T2FLAIR_AXI.nii.gz \
-   --Output_folder /mnt/e/pipeline/sean/rename_nifti \
-   --InputsDicomDir /mnt/e/pipeline/sean/rename_dicom/14914694_20220905_MR_21109050071/T2FLAIR_AXI
-```
-```bash 
-export PYTHONPATH=$(pwd) &&  python3 code_ai/pipeline/pipeline_wmh_tensorflow.py \
- --ID 14914694_20220905_MR_21109050071 \
-  --Inputs /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/T2FLAIR_AXI.nii.gz \
-  /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/synthseg_T2FLAIR_AXI_original_WMH_PVS.nii.gz \
-   /mnt/e/pipeline/sean/rename_nifti/14914694_20220905_MR_21109050071/synthseg_T2FLAIR_AXI_original_synthseg5.nii.gz \
-   --Output_folder /mnt/e/pipeline/sean/rename_nifti \
-   --InputsDicomDir /mnt/e/pipeline/sean/rename_dicom/14914694_20220905_MR_21109050071/T2FLAIR_AXI
-```
-```bash 
-sudo apt install unzip
-conda activate tf_2_14
-uv pip install -r pyproject.toml --system
-
-cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 backend/app/main.py
-cd /mnt/d/00_Chen/Task04_git && conda activate tf_2_14 && export PYTHONPATH=$(pwd) &&  python3 funboost_cli_user.py
-
-
-conda activate tf_2_14
-
-cat <<EOF | xargs -I{} bash -c 'conda run -n tf_2_14 bash -c "
-cd /var/www/brain-parcellation && \
-&export PYTHONPATH=\$(pwd) & \
-python3 code_ai/pipeline/raw_diom_to_nii_inference.py \
-  --input_dicom \"{}\" \
-  --output_dicom /data/4TB1/pipeline/sean/rename_dicom \
-  --output_nifti /data/4TB1/pipeline/sean/rename_nifti" &' 
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/5cbf750a-90427da9-fca347a6-45ca1732-6893b6c6
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/8cfadfd6-fe04d6c7-2d1f2c12-9e852e40-ef6777c7
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/9c4a93b7-b06654b8-dfe4c530-607a39d1-b75f0672
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/45fd38e7-8822c36d-43d1302c-77d831de-d9dbc470
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/1823ce5c-7fc2efe7-fb7c042a-9fe3edea-0b1660d9
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/5069a078-75659a75-78bbdf0d-4adf4b42-d3981727
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/bb7d7abf-77552121-92b730aa-d874dfcb-1b026701
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/cb71cc54-a9d2d7c0-8e7b0b76-e222a8f5-50440dd4
-/data/4TB1/raw_dicom/ai_team/sync_orthanc/d6c3de1b-4356ed70-8cd30c60-5751ea45-f52934c0
-
-EOF
-
-```
-
-### 
-
-1. raw dicom -> rename dicom 
-   1. DCOPEventDicomService.get_series_info
-   2. dicom_to_nii - > process_dir
-   3. DCOPEventDicomService.post_ope_no_task 
-   4. DCOPEventDicomService.check_study_series_transfer_complete
-
-2. rename dicom -> rename nifti 
-   1. DCOPEventDicomService.check_study_series_transfer_complete
-   2. dicom_to_nii - > dicom_2_nii_file
-   3. DCOPEventDicomService.study_series_nifti_tool 
-   4. DCOPEventDicomService.check_study_series_conversion_complete
-   
-3. rename nifti -> pipeline_inference 
-   1. DCOPEventDicomService.check_study_series_conversion_complete 
-   2. 
-   3. DCOPEventDicomService.study_series_inference_nifti_tool
-   4. DCOPEventDicomService.check_study_series_inference_complete
-4. pipeline_inference -> upload 
-   1. DCOPEventDicomService.check_study_upload_complete 
-
