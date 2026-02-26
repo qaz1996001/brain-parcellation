@@ -83,12 +83,13 @@ class PipelineConfig:
         task: Task,
         input_paths: List[str],
         dicom_args: List[str],
-        needFollowup: Optional[List[Dict[str, Any]]] = None,
+        needFollowup: List[Dict[str, Any]] = [],
     ) -> str:
         path_root = pathlib.Path(os.getenv('PATH_ROOT') or "")
         chuan_root = path_root.parent.joinpath('chuan')
         chuan_code = chuan_root.joinpath('code')
 
+        needFollowup_json = json.dumps(needFollowup or [], ensure_ascii=False)
         command_parts = [
             f'cd {chuan_code}',
             '&&',
@@ -97,6 +98,7 @@ class PipelineConfig:
             *input_paths,
             *dicom_args,
             task.output_path,
+            shlex.quote(needFollowup_json),
         ]
         return " ".join(command_parts)
 
