@@ -22,8 +22,8 @@ class BoosterParamsMyRABBITMQ(
 
 class BoosterParamsMyAI(BoosterParamsMyRABBITMQ):
     concurrent_mode: str = ConcurrentModeEnum.THREADING
-    concurrent_num: int = 5
-    qps: int = 0.5
+    concurrent_num: int = 1
+    qps: int = 0.25
     booster_group: str = "ai_inference"  # 新增分組
 
 
