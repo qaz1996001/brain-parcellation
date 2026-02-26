@@ -90,15 +90,10 @@ def pipeline_cmb(
         gpumRate = memoryInfo.used / memoryInfo.total
 
         if gpumRate < 0.6:
-            # plt.ion()    # 開啟互動模式，畫圖都是一閃就過
-            # 一些記憶體的配置
-            # print(keras.__version__)
-            # print(tf.__version__)
             gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
             tf.config.experimental.set_visible_devices(
                 devices=gpus[gpu_n], device_type="GPU"
             )
-            # print(gpus, cpus)
             tf.config.experimental.set_memory_growth(gpus[gpu_n], True)
 
             gpu_line = (
@@ -305,6 +300,31 @@ def _find_synthseg_file(output_dir: str) -> Optional[str]:
     return matches[0] if matches else None
 
 
+def _upload_platform_json(json_path: str) -> None:
+    """直接上傳單一 platform JSON 檔案至 web server"""
+    import subprocess
+
+    cmd_str = (
+        "export PYTHONPATH={} && "
+        "{} code_ai/pipeline/upload/platform_json.py "
+        "--Inputs {} ".format(
+            PathlibPath(__file__).parent.parent.absolute(),
+            PYTHON3,
+            json_path,
+        )
+    )
+    print(f"[Followup-v3] upload_json {cmd_str}")
+    process = subprocess.Popen(
+        args=cmd_str,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = process.communicate()
+    print(f"[Followup-v3] upload_json stdout={stdout} stderr={stderr}")
+    logging.info(f"[Followup-v3] upload_json done: {json_path}")
+
+
 def _trigger_followup_v3_pipeline(
     current_study_id: str,
     current_output_path: str,
@@ -352,7 +372,7 @@ def _trigger_followup_v3_pipeline(
             logging.warning("[Followup-v3] model CMB not in needFollowup.models")
             return
 
-        # 4. 複製輸出檔案回 {current_output_path}/{current_study_id}/
+        # 4. 複製輸出檔案回 {current_output_path}/{current_study_id}/ 並上傳
         dest_dir = os.path.join(current_output_path, current_study_id)
         os.makedirs(dest_dir, exist_ok=True)
         for output in outputs:
@@ -361,24 +381,20 @@ def _trigger_followup_v3_pipeline(
             print(f"[Followup-v3] Output: {output} -> {dest_path}")
             logging.info(f"[Followup-v3] Output: {output} -> {dest_path}")
 
+            # 5. 上傳 followup platform JSON
+            _upload_platform_json(dest_path)
+
     except Exception as e:
         print(f"[Followup-v3] Failed: {e}")
         logging.error(f"[Followup-v3] Failed: {e}")
         logging.error("Catch an exception.", exc_info=True)
 
 
-# 其意義是「模組名稱」。如果該檔案是被引用，其值會是模組名稱；但若該檔案是(透過命令列)直接執行，其值會是 __main__；。
 if __name__ == "__main__":
-    # /mnt/e/pipeline/sean/rename_nifti/15397285_20260129_MR_21412080021/Pred_CMB_platform_json.json
-    # /mnt/e/pipeline/sean/rename_nifti/15397285_20260129_MR_21412080021
-    import tensorflow as tf
-
     gpus = tf.config.experimental.list_physical_devices(device_type="GPU")
     tf.config.experimental.set_visible_devices(devices=gpus, device_type="GPU")
-    # print(gpus, cpus)
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
-    # python /mnt/d/wsl_ubuntu/pipeline/sean/code/pipeline_cmb_tensorflow.py --ID 00971591_20160503_MR_250425032 --Inputs /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/SWAN.nii.gz /mnt/d/wsl_ubuntu/pipeline/sean/example_input/00971591_20160503_MR_250425032/T1FLAIR_AXI.nii.gz
     parser = pipeline_parser()
     parser.add_argument('--needFollowup', type=str, default=None,
                         help='Followup config as JSON string (priority: CLI > env var NEED_FOLLOWUP_JSON)')
@@ -392,7 +408,6 @@ if __name__ == "__main__":
     # 下面設定各個路徑
     path_output = str(args.Output_folder)
 
-    path_code = os.getenv("PATH_CODE")
     path_process = os.getenv("PATH_PROCESS")
     path_processModel = os.path.join(path_process, "Deep_CMB")
     path_json = os.getenv("PATH_JSON")
@@ -438,6 +453,11 @@ if __name__ == "__main__":
         stdout, stderr = dicom_seg_cmb_file(
             ID, InputsDicomDir, output_nii_path_str, path_output
         )
+        upload_dicom_seg(
+            path_output,
+            output_nii_path_str,
+        )
+        upload_json(ID, InferenceEnum.CMB)
 
         # ===== Followup 觸發邏輯（在 dicom_seg 之後執行）=====
         print(f"[Followup] needFollowup = {needFollowup}")
@@ -460,12 +480,3 @@ if __name__ == "__main__":
                     needFollowup=needFollowup,
                     path_process=path_process,
                 )
-    #     upload_dicom_seg(
-    #         path_output,
-    #         output_nii_path_str,
-    #     )
-    #     upload_json(ID, InferenceEnum.CMB)
-    # dicom_seg
-    # if cmb_path_str is not None:
-    #     stdout, stderr = dicom_seg_cmb_file(ID,InputsDicomDir,cmb_path_str,path_output )
-    #     upload_dicom_seg(path_output,cmb_path_str,)
