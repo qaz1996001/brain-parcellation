@@ -2,7 +2,7 @@ import datetime
 import os
 from typing import List, Optional
 import numpy as np
-from pydantic import BaseModel, PositiveInt, field_validator, ConfigDict
+from pydantic import BaseModel, Field, PositiveInt, field_validator, ConfigDict
 from code_ai import load_dotenv
 
 from code_ai.pipeline.dicomseg.schema.enum import SeriesTypeEnum, ModelTypeEnum
@@ -68,6 +68,7 @@ class MaskInstanceRequest(BaseModel):
 
     main_seg_slice: int = 1
     is_main_seg: int = 0
+    followup: List = Field(default_factory=list)
 
     @field_validator("diameter", mode="before")
     @classmethod
@@ -148,6 +149,7 @@ class StudyModelRequest(BaseModel):
     lession: str = "0"
     status: str = "1"
     report: str = ""
+    followup: List = Field(default_factory=list)
 
     @field_validator("lession", mode="before")
     @classmethod
