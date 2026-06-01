@@ -1,0 +1,413 @@
+# ============================================================================
+# DICOM2NII Configuration File
+# ============================================================================
+# This file contains all configurable parameters for the DICOM to NIfTI
+# conversion pipeline. Edit this file to customize the behavior.
+# ============================================================================
+
+[general]
+# Application name and version
+name = "dicom2nii"
+version = "0.1.0"
+
+# Default number of worker threads (1-16)
+default_workers = 4
+max_workers = 16
+min_workers = 1
+
+# Logging level: "trace", "debug", "info", "warn", "error"
+log_level = "info"
+
+# ============================================================================
+# File System Settings
+# ============================================================================
+[filesystem]
+# File extensions
+nifti_extension = ".nii.gz"
+json_extension = ".json"
+dicom_extension = ".dcm"
+jsonlines_extension = ".jsonlines"
+
+# Directory names
+meta_directory = ".meta"
+intermediate_directory = ".intermediate_dicom"
+
+# DICOM magic bytes offset
+dicom_magic_offset = 128
+
+# ============================================================================
+# DCM2NIIX Settings
+# ============================================================================
+[dcm2niix]
+# Path to dcm2niix executable (leave empty to use system PATH)
+executable = ""
+
+# Compression: "y" (gzip), "n" (no compression), "3" (3D NRRD)
+compression = "y"
+
+# Filename format (see dcm2niix documentation)
+# %f = folder name, %p = protocol, %s = series number, etc.
+filename_format = "%f"
+
+# Additional command line arguments
+extra_args = []
+
+# Output format: "nii" or "nii.gz"
+output_format = "nii.gz"
+
+# ============================================================================
+# File Size Thresholds (in KB)
+# ============================================================================
+[thresholds.file_size]
+# General minimum file size (KB)
+general = 1024  # 1 MB
+
+# Series-specific minimum file sizes (KB)
+adc = 100
+dwi = 100
+swan = 800
+t1 = 800
+t2 = 800
+eswan = 800
+eadc = 100
+
+# ============================================================================
+# MR Sequence Parameters
+# ============================================================================
+[thresholds.mr_parameters]
+
+# T1 FLAIR detection thresholds (milliseconds)
+[thresholds.mr_parameters.t1_flair]
+tr_min = 800
+tr_max = 3000
+te_max = 30
+
+# T1 standard detection thresholds (milliseconds)
+[thresholds.mr_parameters.t1_standard]
+tr_max = 800
+te_max = 30
+
+# T2 FLAIR detection thresholds (milliseconds)
+[thresholds.mr_parameters.t2_flair]
+tr_min = 5990
+tr_max = 10000
+te_min = 80
+
+# T2 standard detection thresholds (milliseconds)
+[thresholds.mr_parameters.t2_standard]
+tr_min = 1000
+tr_max = 5990
+te_min = 80
+
+# ============================================================================
+# DWI/DTI Parameters
+# ============================================================================
+[dwi]
+# B-values for DWI classification
+b_value_0 = 0
+b_value_1000 = 1000
+
+# DTI diffusion directions
+dti_directions_32 = 32
+dti_directions_64 = 64
+
+# ============================================================================
+# Orientation Detection
+# ============================================================================
+[orientation]
+# Axis codes for NIfTI to DICOM conversion
+target_axcodes = ["S", "P", "L"]  # Superior-Posterior-Left
+source_axcodes_ras = ["R", "A", "S"]  # Right-Anterior-Superior
+source_axcodes_las = ["L", "A", "S"]  # Left-Anterior-Superior
+
+# Orientation labels
+axial = "AXI"
+sagittal = "SAG"
+coronal = "COR"
+axial_reformatted = "AXIr"
+sagittal_reformatted = "SAGr"
+coronal_reformatted = "CORr"
+
+# ============================================================================
+# DICOM Tags
+# ============================================================================
+[dicom_tags]
+# Patient Information
+patient_id = [0x0010, 0x0020]
+patient_birth_date = [0x0010, 0x0030]
+patient_sex = [0x0010, 0x0040]
+patient_age = [0x0010, 0x1010]
+
+# Study Information
+study_date = [0x0008, 0x0020]
+study_time = [0x0008, 0x0030]
+accession_number = [0x0008, 0x0050]
+modality = [0x0008, 0x0060]
+study_description = [0x0008, 0x1030]
+
+# Series Information
+series_date = [0x0008, 0x0021]
+series_time = [0x0008, 0x0031]
+series_description = [0x0008, 0x103E]
+
+# Image Information
+image_type = [0x0008, 0x0008]
+instance_creation_time = [0x0008, 0x0013]
+image_orientation = [0x0020, 0x0037]
+image_position = [0x0020, 0x0032]
+
+# MR-specific Parameters
+mr_acquisition_type = [0x0018, 0x0023]
+repetition_time = [0x0018, 0x0080]
+echo_time = [0x0018, 0x0081]
+inversion_time = [0x0018, 0x0082]
+contrast_agent = [0x0018, 0x0010]
+pulse_sequence_name = [0x0019, 0x109C]
+
+# Diffusion Parameters (GE-specific)
+b_value = [0x0043, 0x1039]
+dti_diffusion_directions = [0x0019, 0x10E0]
+
+# Vendor-specific
+magnitude_phase_info = [0x0043, 0x102F]
+asl_technique = [0x0043, 0x10A4]
+functional_processing = [0x0051, 0x1002]
+manufacturer_model = [0x0008, 0x1090]
+conversion_type = [0x0008, 0x0064]
+
+# ============================================================================
+# Regex Patterns for Series Recognition
+# ============================================================================
+[patterns]
+# DWI/ADC patterns
+dwi = "(?i).*(DWI|AUTODIFF).*"
+adc = "(?i).*(?<!e)(ADC|Apparent Diffusion Coefficient).*"
+eadc = "(?i).*(eADC).*"
+
+# SWAN patterns
+swan = "(?i).*(?<!e)(SWAN).*"
+eswan = "(?i).*(eSWAN).*"
+
+# MRA patterns
+mra_brain = "(?i).+(TOF)(((?!Neck).)*)$"
+mra_neck = "(?i).*(TOF).*((Neck+).*)$"
+mravr_brain = "(?i)((?!TOF|Neck).)*(MRA)((?!Neck).)*$"
+mravr_neck = "(?i)((?!TOF).)*(Neck.*MRA)|(MRA.*Neck).*$"
+
+# T1/T2 patterns
+t1 = "(?i).*(T1).*"
+t1_with_orientation = "(?i).*(T1|AX|COR|SAG).*"
+t2 = "(?i).*(T2).*"
+flair = "(?i)(FLAIR)"
+cube = "(?i).*(CUBE).*"
+bravo = "(?i).*(BRAVO|FSPGR).*"
+
+# Functional patterns
+cvr = "(?i).*(CVR).*$"
+cvr_1000 = "(?i).*(CVR).*(1000).*$"
+cvr_2000 = "(?i).*(CVR).*(2000).*$"
+cvr_2000_ear = "(?i).*(CVR).*(2000).*(ear).*$"
+cvr_2000_eye = "(?i).*(CVR).*(2000).*(eye).*$"
+resting = "(?i).*(resting).*$"
+dti = "(?i).*(DTI).*"
+
+# ASL patterns
+asl_seq = "(?i)(multi-Delay ASL SEQ)"
+asl_att = "(?i)\\(Transit delay\\)"
+asl_att_color = "(?i)\\(Color Transit delay\\)"
+asl_cbf = "(?i)\\(Transit corrected CBF\\)"
+asl_cbf_color = "(?i)\\(Color Transit corrected CBF\\)"
+asl_pw = "(?i)\\(per del, mean PW, REF\\)"
+asl_prod = "(?i).*(ASL).*"
+asl_prod_cbf = "(?i).*((?<!r)CBF|Cerebral Blood Flow).*"
+asl_prod_cbf_color = "(?i).*((?<!r)CBF|SCREENSAVE).*"
+
+# DSC patterns
+dsc = "(?i).*(AUTOPWI|Perfusion).*"
+dsc_cbf = "(?i).*(CBF).*"
+dsc_cbv = "(?i).*(CBV).*"
+dsc_mtt = "(?i).*(MTT).*"
+
+# Contrast pattern
+contrast = "(?i)(\\+C|C\\+)"
+
+# File patterns for post-processing
+nifti_adc = "(?<!e)(ADC[a-z]{0,1}?)(\\.nii\\.gz)$"
+nifti_adc_suffix = "(?<!e)(ADC)([a-z]{0,1}?)(\\.nii\\.gz)$"
+nifti_dwi = "(?i)(DWI0)([a-z]{0,1}?)(\\.nii\\.gz)$"
+nifti_swan = "(?i)(?<!e)(SWAN[a-z]{0,2}?)(\\.nii\\.gz)$"
+nifti_swan_suffix = "(?i)(?<!e)(SWAN)([a-z]{0,2}?)(\\.nii\\.gz)$"
+nifti_t1 = "(T1.*)(\\.nii\\.gz)$"
+nifti_t1_suffix = "(T1.*)(AXIr?|CORr?|SAGr?)([a-z]{0,1})(\\.nii\\.gz)$"
+nifti_t2 = "(T2.*)(\\.nii\\.gz)$"
+nifti_t2_suffix = "(T2.*)(AXIr?|CORr?|SAGr?)([a-z]{0,1})(\\.nii\\.gz)$"
+nifti_dwi_bvalue = "(DWI0|DWI1000)(\\.nii\\.gz)$"
+nifti_dwi_bvalue_suffix = "(DWI0|DWI1000)([a-z]{0,2}?)(\\.nii\\.gz)$"
+
+# Utility patterns
+dcm2niix_output = "DICOM as (.*)\\s\\("
+study_folder = "(?i)^(\\d{8})_(\\d{8})_(MR|CT)_(.*)$"
+age_format = "^(\\d{3})Y$"
+date_format = "^(\\d{8})$"
+time_format = "^(\\d{6})$"
+
+# ============================================================================
+# Series Exclusions
+# ============================================================================
+[exclusions]
+# Series to exclude from conversion
+convert_exclude = ["MRAVR_BRAIN", "MRAVR_NECK"]
+
+# Series to exclude from DICOM post-processing
+dicom_postprocess_exclude = [
+    "RESTING", "RESTING2000",
+    "CVR", "CVR1000", "CVR2000", "CVR2000_EAR", "CVR2000_EYE",
+    "eADC", "eSWAN",
+    "DTI32D", "DTI64D",
+    "MRAVR_NECK", "MRAVR_BRAIN",
+    "DSC", "rCBV", "rCBF", "MTT",
+    "ASLSEQ"
+]
+
+# Series to exclude from NIfTI to DICOM conversion
+nii2dcm_exclude = [
+    "MRAVR_BRAIN", "MRAVR_NECK",
+    "DTI32D", "DTI64D",
+    "RESTING", "RESTING2000"
+]
+
+# ============================================================================
+# DICOM Tags to Exclude from Metadata Export
+# ============================================================================
+[exclusions.dicom_tags]
+# Tags to exclude when exporting DICOM metadata
+metadata_exclude = [
+    "00020012",  # Implementation Class UID
+    "00020013",  # Implementation Version Name
+    "00080005",  # Specific Character Set
+    "00080008",  # Image Type
+    "00080016",  # SOP Class UID
+    "00080018",  # SOP Instance UID
+    "00080020",  # Study Date
+    "00080021",  # Series Date
+    "00080022",  # Acquisition Date
+    "00080023",  # Content Date
+    "00080030",  # Study Time
+    "00080031",  # Series Time
+    "00080032",  # Acquisition Time
+    "00080033",  # Content Time
+    "00080050",  # Accession Number
+    "0018A001",  # Effective Echos
+    "00081070",  # Operator's Name
+    "00081110",  # Referenced Study Sequence
+]
+
+# ============================================================================
+# Output File Naming
+# ============================================================================
+[output]
+# Study folder name format: {patient_id}_{study_date}_{modality}_{accession}
+study_folder_format = "{patient_id}_{study_date}_{modality}_{accession}"
+
+# Character offset for suffix conversion (a=97, b=98, etc.)
+# suffix_a (97) - offset (95) = 2, suffix_b (98) - offset (95) = 3
+char_offset = 95
+
+# Statistics output formats
+stats_formats = ["csv", "json", "xlsx"]
+
+# ============================================================================
+# Post-Processing Settings
+# ============================================================================
+[postprocess]
+# Whether to delete JSON files after conversion
+delete_json = true
+
+# Whether to cleanup small/invalid files
+cleanup_small_files = true
+
+# ADC header correction: copy affine and pixdim from DWI0
+adc_header_correction = true
+
+# ============================================================================
+# NIfTI to DICOM Conversion Settings
+# ============================================================================
+[nii2dcm]
+# Data type for output DICOM
+data_type = "int16"
+
+# Maximum workers (limited for memory reasons)
+max_workers = 2
+
+# ============================================================================
+# Supported Modalities
+# ============================================================================
+[modalities]
+supported = ["CT", "MR"]
+
+# ============================================================================
+# Series Type Mappings
+# ============================================================================
+[series_types]
+# MR series with their string representations
+mr_series = [
+    "CVR", "CVR1000", "CVR2000", "CVR2000_EAR", "CVR2000_EYE",
+    "RESTING", "RESTING2000",
+    "DSC_RAW",
+    "DTI32D", "DTI64D",
+    "ADC", "DWI", "DWI0", "DWI1000",
+    "SWAN", "SWANmIP", "SWANPHASE",
+    "eADC", "eSWAN", "eSWANmag", "eSWANmIP",
+    "MRA_BRAIN", "MRA_NECK", "MRAVR_BRAIN", "MRAVR_NECK",
+    "MRV", "MRV_SAG"
+]
+
+# T1 series
+t1_series = [
+    "T1", "T1_AXI", "T1_COR", "T1_SAG",
+    "T1CE", "T1CE_AXI", "T1CE_COR", "T1CE_SAG",
+    "T1FLAIR", "T1FLAIR_AXI", "T1FLAIR_COR", "T1FLAIR_SAG",
+    "T1FLAIRCE", "T1FLAIRCE_AXI", "T1FLAIRCE_COR", "T1FLAIRCE_SAG",
+    "T1CUBE", "T1CUBE_AXI", "T1CUBE_COR", "T1CUBE_SAG",
+    "T1CUBECE", "T1CUBECE_AXI", "T1CUBECE_COR", "T1CUBECE_SAG",
+    "T1FLAIRCUBE", "T1FLAIRCUBE_AXI", "T1FLAIRCUBE_COR", "T1FLAIRCUBE_SAG",
+    "T1FLAIRCUBECE", "T1FLAIRCUBECE_AXI", "T1FLAIRCUBECE_COR", "T1FLAIRCUBECE_SAG",
+    "T1BRAVO", "T1BRAVO_AXI", "T1BRAVOCE_AXI", "T1BRAVO_SAG", "T1BRAVOCE_SAG",
+    "T1BRAVO_COR", "T1BRAVOCE_COR",
+    "T1CUBE_AXIr", "T1CUBE_CORr", "T1CUBE_SAGr",
+    "T1CUBECE_AXIr", "T1CUBECE_CORr", "T1CUBECE_SAGr",
+    "T1FLAIRCUBE_AXIr", "T1FLAIRCUBE_CORr", "T1FLAIRCUBE_SAGr",
+    "T1FLAIRCUBECE_AXIr", "T1FLAIRCUBECE_CORr", "T1FLAIRCUBECE_SAGr",
+    "T1BRAVO_AXIr", "T1BRAVOCE_AXIr", "T1BRAVO_SAGr", "T1BRAVOCE_SAGr",
+    "T1BRAVO_CORr", "T1BRAVOCE_CORr"
+]
+
+# T2 series
+t2_series = [
+    "T2", "T2_AXI", "T2_COR", "T2_SAG",
+    "T2CE", "T2CE_AXI", "T2CE_COR", "T2CE_SAG",
+    "T2FLAIR", "T2FLAIR_AXI", "T2FLAIR_COR", "T2FLAIR_SAG",
+    "T2FLAIRCE", "T2FLAIRCE_AXI", "T2FLAIRCE_COR", "T2FLAIRCE_SAG",
+    "T2CUBE", "T2CUBE_AXI", "T2CUBE_COR", "T2CUBE_SAG",
+    "T2CUBECE", "T2CUBECE_AXI", "T2CUBECE_COR", "T2CUBECE_SAG",
+    "T2FLAIRCUBE", "T2FLAIRCUBE_AXI", "T2FLAIRCUBE_COR", "T2FLAIRCUBE_SAG",
+    "T2FLAIRCUBECE", "T2FLAIRCUBECE_AXI", "T2FLAIRCUBECE_COR", "T2FLAIRCUBECE_SAG",
+    "T2CUBE_AXIr", "T2CUBE_CORr", "T2CUBE_SAGr",
+    "T2CUBECE_AXIr", "T2CUBECE_CORr", "T2CUBECE_SAGr",
+    "T2FLAIRCUBE_AXIr", "T2FLAIRCUBE_CORr", "T2FLAIRCUBE_SAGr",
+    "T2FLAIRCUBECE_AXIr", "T2FLAIRCUBECE_CORr", "T2FLAIRCUBECE_SAGr"
+]
+
+# CT series
+ct_series = ["NCCT5mm", "NCCT_COR", "NCCTBONE", "CECT5mm", "CTA"]
+
+# ASL series
+asl_series = [
+    "ASLSEQ", "ASLSEQATT", "ASLSEQATT_COLOR",
+    "ASLSEQCBF", "ASLSEQCBF_COLOR",
+    "ASLPROD", "ASLPRODCBF", "ASLPRODCBF_COLOR",
+    "ASLSEQPW", "ASL", "CBF", "COLOR"
+]
+
+# DSC series
+dsc_series = ["DSC", "rCBF", "rCBV", "MTT"]
